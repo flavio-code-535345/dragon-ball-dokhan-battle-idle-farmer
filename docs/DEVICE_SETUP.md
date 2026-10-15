@@ -107,7 +107,9 @@ The stack has three services:
    **Install Aurora Store** (an open-source Play Store client, downloaded from F-Droid), then
    **Open Aurora Store**. The farmer switches to the Screen tab with *Touch control* on.
    In Aurora Store go through the welcome screens (allow it to install apps), log in
-   **anonymously**, search for *Dokkan* and install *Dragon Ball Z Dokkan Battle*.
+   **anonymously**, search for *Dokkan* and install *Dragon Ball Z Dokkan Battle*. If Aurora
+   answers *"Access denied! Are you using VPN or Tor?"*, turn off a VPN on the server or log in
+   with a Google account instead (type with the text field under the screen).
    Alternatively install an `.apk`, `.xapk` or `.apks` file from a link or an upload in the *Apps*
    card. Uploads through Cloudflare are limited to 100 MB: use the server's local address for
    bigger files.
@@ -128,13 +130,20 @@ The stack has three services:
 
 ### Good to know
 
+- **What has been tested.** The
+  [Android end-to-end workflow](../.github/workflows/android-e2e.yml) runs this stack on a GitHub
+  runner: host-setup loads binder, Android boots in seconds, the farmer connects, installs
+  Aurora Store and opens it. The game itself could not be tested there (Aurora's anonymous login
+  refuses datacenter IPs), so the first real run of Dokkan on redroid is yours. Users of Waydroid
+  (a similar Android container) report that Dokkan runs with this kind of ARM translation, some
+  with occasional *"Download failed"* during the big data download (retry) or crashes. If Dokkan
+  does not work for you, use option A or B: the farmer works the same.
 - Only **64-bit ARM** code is translated. Install the game's `arm64-v8a` build: Aurora Store
   (Google Play) picks it by itself, and the *Apps* card refuses files that only contain 32-bit
   ARM code (`armeabi-v7a`, common on APK mirror sites). A 32-bit build would show *"This app
   isn't compatible with the latest version of Android"* and close.
 - redroid is a development build of Android (*userdebug*, with `su` inside). Games that refuse
-  rooted devices may notice that. Whether Dokkan accepts it has not been confirmed yet; a phone
-  (option A) remains the safe choice.
+  rooted devices may notice that.
 - ADB of redroid is an unprotected root shell. The compose file does not publish port 5555; if
   you open it for scrcpy, keep it inside your LAN.
 - To start over, remove the stack together with its `redroid-data` volume.

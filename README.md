@@ -130,7 +130,8 @@ one-shot `host-setup` service loads it. On Intel/AMD servers Android translates 
 
 Details, requirements and caveats: [docs/DEVICE_SETUP.md, option C](docs/DEVICE_SETUP.md#c-all-in-one-android-in-a-container-on-the-server-redroid).
 The [Android end-to-end workflow](.github/workflows/android-e2e.yml) boots this stack on a GitHub
-runner to test it.
+runner to test it (Android, ARM translation, Aurora Store). Dokkan itself has not been tested on
+redroid yet: see the caveats there.
 
 ## Configuration
 

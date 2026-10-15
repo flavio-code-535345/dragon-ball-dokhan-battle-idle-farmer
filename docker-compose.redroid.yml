@@ -3,6 +3,7 @@
 #
 # Needs a Linux server (x86_64 or ARM64) whose kernel has the "binder" driver: the
 # host-setup service below loads it. Plan ~4 GB RAM and ~15 GB disk for Android + Dokkan.
+# Dokkan itself has not been tested on redroid yet (see the docs); a phone always works.
 #
 # Portainer: Stacks -> Add stack -> Web editor (paste this file) or Repository with the
 # compose path "docker-compose.redroid.yml". Then open http://<your-server>:8080 ->

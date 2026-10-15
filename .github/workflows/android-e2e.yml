@@ -2,17 +2,14 @@ name: Android end-to-end (redroid)
 
 # Runs the all-in-one stack (docker-compose.redroid.yml) on a GitHub runner:
 # host-setup loads binder, Android 14 boots with ARM translation, the farmer
-# connects and installs Aurora Store from F-Droid through its own API.
-# With "game" ticked it also installs Dokkan from Google Play through Aurora
-# Store's UI (anonymous login) and starts it, to see whether the game runs on
-# redroid (screenshots and logs are kept as an artifact).
+# connects, installs Aurora Store from F-Droid through its own API, opens it and
+# walks it to its login screen. Screenshots are kept as an artifact.
+#
+# The game itself cannot be installed here: Aurora's anonymous login refuses
+# datacenter IPs, and APK mirrors only carry Dokkan's 32-bit build, which the
+# translation (64-bit ARM only) cannot run.
 on:
   workflow_dispatch:
-    inputs:
-      game:
-        description: Also install Dokkan with Aurora Store (Google Play) and start it
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -24,7 +21,7 @@ concurrency:
 jobs:
   redroid:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       IMAGE: dokkan-farmer
       IMAGE_TAG: e2e
@@ -93,7 +90,7 @@ jobs:
           jq -e '.connected and (.info.abilist | contains("arm64-v8a"))' device.json
           jq -e '.info.native_bridge | test("libnb|ndk")' device.json
 
-      - name: Install Aurora Store through the farmer (F-Droid)
+      - name: Install Aurora Store through the farmer (F-Droid) and open it
         run: |
           mkdir -p shots
           curl -sS --fail-with-body -X POST "$BASE/api/apps/install" -H 'Content-Type: application/json' \
@@ -114,36 +111,8 @@ jobs:
           docker exec -u farmer dokkan-farmer adb -s redroid:5555 shell \
             "dumpsys activity activities | grep -E 'ResumedActivity' | head -3"
 
-      - name: Install Dokkan with Aurora Store (Google Play, anonymous login)
-        if: inputs.game
-        run: bash .github/e2e/aurora_install.sh
-
-      - name: The farmer sees the game and its ABI
-        if: inputs.game
-        run: |
-          curl -sS --fail-with-body "$BASE/api/apps" | tee apps.json | jq .
-          jq -e '.installed and .abi_ok != false' apps.json
-
-      - name: Start Dokkan and watch it
-        if: inputs.game
-        run: |
-          adb() { docker exec -u farmer dokkan-farmer adb -s redroid:5555 "$@"; }
-          adb logcat -c || true
-          curl -sS --fail-with-body -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
-            -d '{"action": "launch"}'
-          for t in 15 30 60 90 150; do
-            sleep $((t - ${last:-0})); last=$t
-            id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
-            curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o "shots/dokkan-${t}s.jpg"
-            echo "== ${t}s: pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r')"
-            adb shell "dumpsys activity activities | grep -E 'ResumedActivity' | head -2"
-          done
-          adb shell "pm dump com.bandainamcogames.dbzdokkanww | grep -E 'primaryCpuAbi|versionName'" || true
-          adb logcat -d -b crash > shots/logcat-crash.txt || true
-          adb logcat -d > shots/logcat.txt || true
-          grep -iE "dokkan|bandai|native.?bridge|libnb|ndk_trans|FATAL|SIGILL|SIGSEGV|root" \
-            shots/logcat.txt | tail -150 || true
-          echo "== crash buffer"; tail -60 shots/logcat-crash.txt
+      - name: Aurora Store reaches its login screen
+        run: bash .github/e2e/aurora_login_screen.sh
 
       - name: Screenshots in the log (base64 JPEG, one per line)
         if: always()
@@ -153,7 +122,7 @@ jobs:
           done
           true
 
-      - name: Keep screenshots and logs
+      - name: Keep screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
