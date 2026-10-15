@@ -1,7 +1,7 @@
 # Dokkan Idle Farmer
 
-[![CI](https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/actions/workflows/ci.yml/badge.svg)](https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/actions/workflows/ci.yml)
-[![Docker image](https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/actions/workflows/docker.yml/badge.svg)](https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/actions/workflows/docker.yml)
+[![Build + Docker Hub](https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/actions/workflows/ci.yml/badge.svg)](https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/actions/workflows/ci.yml)
+[![Docker Hub](https://img.shields.io/docker/pulls/flavio11113/dokkan-idle-farmer?logo=docker&label=Docker%20Hub)](https://hub.docker.com/r/flavio11113/dokkan-idle-farmer)
 
 A self-hosted idle farmer for **Dragon Ball Z Dokkan Battle** that runs as a Docker container
 (Portainer-ready) on your home server. It drives an Android phone, emulator or redroid container
@@ -40,7 +40,7 @@ own Auto Mode, so the farmer is simple and does not try to play battles itself.
 ## Features
 
 - **Docker / Portainer native**: one container, a volume for your data, prebuilt multi-arch image
-  (amd64 + arm64, e.g. Raspberry Pi), healthcheck, runs as non-root (`PUID`/`PGID`).
+  on Docker Hub (amd64 + arm64, e.g. Raspberry Pi), healthcheck, runs as non-root (`PUID`/`PGID`).
 - **Mobile web UI** (add it to your home screen): start/pause/stop, live screen with the detected
   buttons, **remote touch control** of the device, logs, statistics.
 - **Template studio**: drag a box around a button on a live screenshot to teach it. A checklist shows
@@ -104,9 +104,11 @@ ADB_SERIAL=192.168.1.50:5555 WEB_PASSWORD=change-me docker compose up -d
 ```
 
 > [!NOTE]
-> The image is published to `ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer` by
-> GitHub Actions. If Portainer cannot pull it, make the package public (GitHub → your profile →
-> *Packages* → the package → *Package settings* → *Change visibility*). Or deploy
+> The compose files pull [`flavio11113/dokkan-idle-farmer`](https://hub.docker.com/r/flavio11113/dokkan-idle-farmer)
+> from Docker Hub, built by GitHub Actions (see [Publishing the image](#publishing-the-image)).
+> The same image is on GitHub's registry: set
+> `IMAGE=ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer` to use it (make that
+> package public first if Portainer can't pull it). Or deploy
 > [`docker-compose.build.yml`](docker-compose.build.yml), which builds the image on your server.
 
 ## Configuration
@@ -124,6 +126,7 @@ All settings are environment variables:
 | `TZ` | `UTC` | Time zone, e.g. `Europe/Berlin`. |
 | `WEB_USERNAME` / `WEB_PASSWORD` | `admin` / *(empty)* | HTTP basic auth for the web UI. **Set a password.** |
 | `HOST_PORT` | `8080` | Port on your server (compose files only). |
+| `IMAGE` / `IMAGE_TAG` | `flavio11113/dokkan-idle-farmer` / `latest` | Image to run (compose files only): a version like `0.1.0` or a commit SHA pins it. |
 | `NOTIFY_URLS` | *(empty)* | [Apprise URLs](https://github.com/caronc/apprise/wiki), space or comma separated. |
 | `NOTIFY_EVERY_RUNS` | `0` | Also send a progress message every N runs. |
 | `KEEP_SCREEN_ON` | `true` | Enable "stay awake" on the device while farming. |
@@ -158,7 +161,7 @@ screenshot), when the device is unreachable and, with `NOTIFY_EVERY_RUNS`, every
 ## Demo mode
 
 Deploy the stack with `DEVICE_BACKEND=sim` (or run
-`docker run -p 8080:8080 -e DEVICE_BACKEND=sim ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer`)
+`docker run -p 8080:8080 -e DEVICE_BACKEND=sim flavio11113/dokkan-idle-farmer`)
 to get a crude built-in fake game with results screens, ACT dialogs, battles, friend requests,
 errors and crashes. Its templates are generated automatically, so you can press Start right away and
 see how everything behaves.
@@ -167,6 +170,31 @@ see how everything behaves.
 
 In Portainer open the stack and use *Pull and redeploy* (or enable automatic updates for
 Git-based stacks), or run `docker compose pull && docker compose up -d`. Your data stays in the volume.
+
+## Publishing the image
+
+The **Build + Docker Hub** workflow ([`ci.yml`](.github/workflows/ci.yml)) lints and tests every
+push and pull request. On `main`, on `v*` tags and when started by hand, it then builds the image
+for amd64 and arm64, smoke-tests it in demo mode and pushes it to:
+
+| Registry | Image | Needs |
+|---|---|---|
+| Docker Hub | `<DOCKER_USERNAME>/dokkan-idle-farmer` | the `DOCKER_USERNAME` and `DOCKER_PASSWORD` secrets |
+| GitHub Container Registry | `ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer` | nothing (uses the workflow token) |
+
+Tags: `latest` for `main`, the full commit SHA for every build, and `1.2.3` plus `1.2` for a
+`v1.2.3` git tag. Pull requests only build and test the image.
+
+To enable Docker Hub, add two repository secrets once: *Settings → Secrets and variables →
+Actions → New repository secret*:
+
+- `DOCKER_USERNAME`: your Docker Hub user name,
+- `DOCKER_PASSWORD`: a Docker Hub [personal access token](https://docs.docker.com/security/for-developers/access-tokens/)
+  with *Read & Write* access (better than your password).
+
+Without them the workflow still publishes to GHCR and shows a notice. The Docker Hub repository is
+created on the first push. To use another name, change `DOCKERHUB_REPO` at the top of the workflow
+and `IMAGE` in the compose files.
 
 ## Troubleshooting
 

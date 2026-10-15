@@ -7,9 +7,13 @@
 # or paste this file into the Portainer "Web editor".
 #
 # Then open http://<your-server>:8080 on your phone.
+#
+# The image comes from Docker Hub. To use the GitHub Container Registry instead,
+# set IMAGE=ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer
 services:
   farmer:
-    image: ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer:${IMAGE_TAG:-latest}
+    image: ${IMAGE:-flavio11113/dokkan-idle-farmer}:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: dokkan-farmer
     restart: unless-stopped
     ports:

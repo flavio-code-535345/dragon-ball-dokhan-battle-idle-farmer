@@ -32,7 +32,8 @@ services:
     #   - "5555:5555"
 
   farmer:
-    image: ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer:${IMAGE_TAG:-latest}
+    image: ${IMAGE:-flavio11113/dokkan-idle-farmer}:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: dokkan-farmer
     restart: unless-stopped
     depends_on:
