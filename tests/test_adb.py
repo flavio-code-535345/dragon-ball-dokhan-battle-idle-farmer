@@ -64,6 +64,8 @@ elif cmd == "shell":
     elif "dumpsys" in script:
         print("  topResumedActivity=ActivityRecord{1a2b u0 com.bandainamcogames.dbzdokkanww/"
               "com.bandainamcogames.dbzdokkan.MainActivity t42}")
+    elif script == "getprop sys.boot_completed":
+        print("" if mode == "booting" else "1")
     elif "getprop" in script:
         if mode == "redroid":
             print("redroid\nredroid14_x86_64\n14\n34\nx86_64\n"
@@ -121,6 +123,8 @@ def test_apps_and_foreground(fake_adb):
     path, calls = fake_adb
     device = AdbDevice("192.168.1.50:5555", adb_path=path)
     device.launch_app("com.bandainamcogames.dbzdokkanww")
+    launch = next(c for c in calls() if "monkey" in c)
+    assert launch[3:7] == ["monkey", "--pct-syskeys", "0", "-p"]
     with pytest.raises(DeviceError, match="not installed"):
         device.launch_app("unknown.pkg")
     with pytest.raises(ValueError):
@@ -162,6 +166,9 @@ def test_connection_failures(fake_adb, monkeypatch):
     monkeypatch.setenv("FAKE_ADB_MODE", "unauthorized")
     with pytest.raises(DeviceError, match="Allow USB debugging"):
         AdbDevice("SERIAL123", adb_path=path).connect()
+    monkeypatch.setenv("FAKE_ADB_MODE", "booting")
+    with pytest.raises(DeviceError, match="still starting Android"):
+        AdbDevice("redroid:5555", adb_path=path).connect()
 
 
 def test_timeout_and_missing_binary(fake_adb, monkeypatch):

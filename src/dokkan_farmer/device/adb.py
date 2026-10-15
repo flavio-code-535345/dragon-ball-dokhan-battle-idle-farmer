@@ -143,6 +143,10 @@ class AdbDevice(Device):
         state = self.state()
         if state != "device":
             raise DeviceError(_state_hint(state, self._serial))
+        # adb answers before Android is up (redroid right after its start, phones after a reboot).
+        proc = self._exec(["shell", "getprop", "sys.boot_completed"], timeout=15, check=False)
+        if proc.stdout.decode("utf-8", "replace").strip() != "1":
+            raise DeviceError(f"{self._serial or 'The device'} is still starting Android")
 
     def disconnect(self) -> None:
         if self.is_network:
@@ -208,8 +212,19 @@ class AdbDevice(Device):
     # --------------------------------------------------------------------- apps
     def launch_app(self, package: str) -> None:
         validate_package(package)
+        # --pct-syskeys 0: without it monkey aborts on devices without hardware keys (redroid).
         proc = self._exec(
-            ["shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"],
+            [
+                "shell",
+                "monkey",
+                "--pct-syskeys",
+                "0",
+                "-p",
+                package,
+                "-c",
+                "android.intent.category.LAUNCHER",
+                "1",
+            ],
             check=False,
         )
         text = _output(proc)
@@ -261,7 +276,7 @@ class AdbDevice(Device):
             "getprop ro.product.manufacturer; getprop ro.product.model; "
             "getprop ro.build.version.release; getprop ro.build.version.sdk; "
             "getprop ro.product.cpu.abi; getprop ro.product.cpu.abilist; "
-            "getprop ro.dalvik.vm.native.bridge; wm size"
+            "getprop ro.dalvik.vm.native.bridge; wm size; true"
         )
         lines = [line.strip() for line in out.splitlines()]
         info: dict[str, Any] = {}

@@ -85,7 +85,7 @@ jobs:
       - name: The farmer sees Android with ARM translation
         run: |
           for i in $(seq 1 30); do
-            curl -fsS -X POST "$BASE/api/device/refresh" > device.json && jq -e .connected device.json >/dev/null && break
+            curl -sS --fail-with-body -X POST "$BASE/api/device/refresh" > device.json && jq -e .connected device.json >/dev/null && break
             sleep 5
           done
           jq . device.json
@@ -95,21 +95,21 @@ jobs:
       - name: Install Aurora Store through the farmer (F-Droid)
         run: |
           mkdir -p shots
-          curl -fsS -X POST "$BASE/api/apps/install" -H 'Content-Type: application/json' \
+          curl -sS --fail-with-body -X POST "$BASE/api/apps/install" -H 'Content-Type: application/json' \
             -d '{"source": "fdroid:com.aurora.store"}'
           for i in $(seq 1 150); do
-            job=$(curl -fsS "$BASE/api/apps/job")
+            job=$(curl -sS --fail-with-body "$BASE/api/apps/job")
             state=$(echo "$job" | jq -r .job.state)
             { [ "$state" = done ] || [ "$state" = error ]; } && break
             sleep 2
           done
           echo "$job" | jq .
           [ "$state" = done ]
-          curl -fsS -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
+          curl -sS --fail-with-body -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
             -d '{"action": "launch", "package": "com.aurora.store"}'
           sleep 20
-          id=$(curl -fsS -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
-          curl -fsS "$BASE/api/screen.jpg?frame=$id&w=360" -o shots/aurora.jpg
+          id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+          curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o shots/aurora.jpg
           docker exec -u farmer dokkan-farmer adb -s redroid:5555 shell \
             "dumpsys activity activities | grep -E 'ResumedActivity' | head -3"
 
@@ -127,28 +127,28 @@ jobs:
         if: inputs.game
         run: |
           file=$(ls game/* | head -n 1)
-          curl -fsS -T "$file" "$BASE/api/apps/upload?filename=$(basename "$file")"
+          curl -sS --fail-with-body -T "$file" "$BASE/api/apps/upload?filename=$(basename "$file")"
           for i in $(seq 1 300); do
-            job=$(curl -fsS "$BASE/api/apps/job")
+            job=$(curl -sS --fail-with-body "$BASE/api/apps/job")
             state=$(echo "$job" | jq -r .job.state)
             { [ "$state" = done ] || [ "$state" = error ]; } && break
             sleep 2
           done
           echo "$job" | jq .
           [ "$state" = done ]
-          curl -fsS "$BASE/api/apps" | jq .
+          curl -sS --fail-with-body "$BASE/api/apps" | jq .
 
       - name: Start Dokkan and watch it
         if: inputs.game
         run: |
           adb() { docker exec -u farmer dokkan-farmer adb -s redroid:5555 "$@"; }
           adb logcat -c || true
-          curl -fsS -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
+          curl -sS --fail-with-body -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
             -d '{"action": "launch"}'
           for t in 15 30 60 90 150; do
             sleep $((t - ${last:-0})); last=$t
-            id=$(curl -fsS -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
-            curl -fsS "$BASE/api/screen.jpg?frame=$id&w=360" -o "shots/dokkan-${t}s.jpg"
+            id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+            curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o "shots/dokkan-${t}s.jpg"
             echo "== ${t}s: pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r')"
             adb shell "dumpsys activity activities | grep -E 'ResumedActivity' | head -2"
           done
