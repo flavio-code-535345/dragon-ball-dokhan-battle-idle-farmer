@@ -61,9 +61,21 @@ elif cmd == "shell":
         if "unknown.pkg" in script:
             print("** No activities found to run, monkey aborted."); sys.exit(251)
         print("Events injected: 1")
+    elif script.startswith("dumpsys package"):
+        if "dbzdokkanww" in script:
+            print("    primaryCpuAbi=arm64-v8a")
+        else:
+            print("    primaryCpuAbi=null")
     elif "dumpsys" in script:
         print("  topResumedActivity=ActivityRecord{1a2b u0 com.bandainamcogames.dbzdokkanww/"
               "com.bandainamcogames.dbzdokkan.MainActivity t42}")
+    elif "lib64/arm64" in script:
+        if mode == "redroid":
+            print("x86_64,arm64-v8a,x86,armeabi-v7a,armeabi\nlibnb.so\narm64-libs")
+        elif mode == "emulator-odd":
+            print("x86_64,x86,arm64-v8a,armeabi-v7a\nlibhoudini.so")
+        else:
+            print("arm64-v8a,armeabi-v7a,armeabi\n0")
     elif script == "getprop sys.boot_completed":
         print("" if mode == "booting" else "1")
     elif "getprop" in script:
@@ -234,3 +246,16 @@ def test_install_push_and_is_installed(fake_adb, monkeypatch, tmp_path):
     monkeypatch.setenv("FAKE_ADB_MODE", "install_fail")
     with pytest.raises(DeviceError, match="INSTALL_FAILED_NO_MATCHING_ABIS"):
         device.install([base])
+
+
+def test_runnable_abis_and_app_abi(fake_adb, monkeypatch):
+    path, _ = fake_adb
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    assert device.runnable_abis() == ["arm64-v8a", "armeabi-v7a", "armeabi"]  # a phone
+    assert device.app_abi("com.bandainamcogames.dbzdokkanww") == "arm64-v8a"
+    assert device.app_abi("com.aurora.store") is None
+    monkeypatch.setenv("FAKE_ADB_MODE", "redroid")
+    # redroid 14 lists 32-bit ARM, but its translator only covers 64-bit ARM.
+    assert device.runnable_abis() == ["x86_64", "x86", "arm64-v8a"]
+    monkeypatch.setenv("FAKE_ADB_MODE", "emulator-odd")
+    assert device.runnable_abis() is None

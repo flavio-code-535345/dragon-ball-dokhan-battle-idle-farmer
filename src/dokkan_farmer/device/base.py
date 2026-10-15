@@ -93,6 +93,14 @@ class Device(abc.ABC):
         """Whether an app is installed (``None`` if unknown)."""
         return None
 
+    def app_abi(self, package: str) -> str | None:
+        """The CPU ABI an installed app runs with, e.g. ``arm64-v8a`` (``None`` if unknown)."""
+        return None
+
+    def runnable_abis(self) -> list[str] | None:
+        """ABIs whose native code really runs here, translation included (``None`` if unknown)."""
+        return None
+
     def set_stay_awake(self, enabled: bool) -> None:  # noqa: B027 - optional hook
         """Keep the screen on while farming (no-op where unsupported)."""
 

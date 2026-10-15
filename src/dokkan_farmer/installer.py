@@ -153,6 +153,33 @@ def unpack(path: Path, workdir: Path) -> Bundle:
     return bundle
 
 
+def native_abis(apks: list[Path]) -> set[str]:
+    """ABIs the app ships native code for (``lib/<abi>/*.so`` in any of its APKs)."""
+    abis: set[str] = set()
+    for apk in apks:
+        try:
+            with zipfile.ZipFile(apk) as archive:
+                for name in archive.namelist():
+                    parts = name.split("/")
+                    if len(parts) == 3 and parts[0] == "lib" and parts[2].endswith(".so"):
+                        abis.add(parts[1])
+        except (OSError, zipfile.BadZipFile):
+            continue
+    return abis
+
+
+def check_abis(apks: list[Path], runnable: list[str] | None) -> None:
+    """Refuse an app whose native code cannot run on the device (e.g. 32-bit ARM only)."""
+    abis = native_abis(apks)
+    if not abis or runnable is None or abis & set(runnable):
+        return
+    raise InstallError(
+        f"This file only contains {', '.join(sorted(abis))} code, but this Android runs "
+        f"{', '.join(runnable)} apps. Get the arm64-v8a version of the app (Aurora Store "
+        "picks the right one by itself)."
+    )
+
+
 @dataclass
 class InstallJob:
     id: int
@@ -269,6 +296,7 @@ class InstallManager:
                 path = provide(job, tmp)
                 self._set(job, state="installing", message=f"Installing {path.name}")
                 bundle = unpack(path, tmp)
+                check_abis(bundle.apks, self.run_on_device(lambda d: d.runnable_abis()))
                 log.info("Installing %s (%d APK file(s))", path.name, len(bundle.apks))
                 self.run_on_device(lambda d: d.install(bundle.apks))
                 for local, remote in bundle.obbs:

@@ -258,6 +258,38 @@ class AdbDevice(Device):
         proc = self._exec(["shell", "pm", "path", package], timeout=15, check=False)
         return "package:" in proc.stdout.decode("utf-8", "replace")
 
+    def app_abi(self, package: str) -> str | None:
+        validate_package(package)
+        out = self.shell(f"dumpsys package {package} | grep -m 1 primaryCpuAbi; true", timeout=15)
+        match = re.search(r"primaryCpuAbi=(\S+)", out)
+        return match.group(1) if match and match.group(1) != "null" else None
+
+    def runnable_abis(self) -> list[str] | None:
+        out = self.shell(
+            "getprop ro.product.cpu.abilist; getprop ro.dalvik.vm.native.bridge; "
+            "[ -d /system/lib64/arm64 ] && echo arm64-libs; "
+            "[ -d /system/lib/arm ] && echo arm32-libs; true",
+            timeout=15,
+        )
+        lines = [line.strip() for line in out.splitlines()]
+        abilist = [abi for abi in (lines[0] if lines else "").split(",") if abi]
+        if not abilist:
+            return None
+        if not abilist[0].startswith("x86"):
+            return abilist  # an ARM device runs what it lists
+        # x86 lists ARM ABIs as soon as a native bridge is configured, even when the
+        # translator only covers 64-bit ARM (the redroid 14 image): check its libraries.
+        bridge = len(lines) > 1 and lines[1] not in ("", "0")
+        arm64, arm32 = "arm64-libs" in lines[2:], "arm32-libs" in lines[2:]
+        if bridge and not (arm64 or arm32):
+            return None  # a translator laid out differently: don't guess
+        runnable = [abi for abi in abilist if abi.startswith("x86")]
+        if bridge and arm64:
+            runnable.append("arm64-v8a")
+        if bridge and arm32:
+            runnable += ["armeabi-v7a", "armeabi"]
+        return runnable
+
     def foreground_package(self) -> str | None:
         # One round-trip; grep keeps the output small. "; true" because grep exits 1 on no match.
         out = self.shell(

@@ -15,8 +15,10 @@ from dokkan_farmer.device.base import DeviceError
 from dokkan_farmer.installer import (
     InstallError,
     InstallManager,
+    check_abis,
     check_source,
     download,
+    native_abis,
     resolve_source,
     unpack,
 )
@@ -165,6 +167,7 @@ def test_unpack_explains_encrypted_bundles(tmp_path, monkeypatch):
 # ---------------------------------------------------------------- manager
 class FakeDevice:
     def __init__(self) -> None:
+        self.runnable: list[str] | None = None
         self.installed: list[list[bytes]] = []
         self.pushed: list[tuple[bytes, str]] = []
         self.fail: str | None = None
@@ -180,6 +183,9 @@ class FakeDevice:
 
     def push(self, local, remote):
         self.pushed.append((Path(local).read_bytes(), remote))
+
+    def runnable_abis(self):
+        return self.runnable
 
 
 @pytest.fixture
@@ -280,3 +286,38 @@ def test_leftovers_of_a_previous_run_are_removed(tmp_path, device):
     stale.write_bytes(b"half an upload")
     manager(tmp_path, device)
     assert not stale.exists()
+
+
+# -------------------------------------------------------------------- ABIs
+def test_native_abis_and_check(tmp_path):
+    base = make_zip(tmp_path / "base.apk", {"AndroidManifest.xml": b"m", "classes.dex": b"d"})
+    arm32 = make_zip(tmp_path / "config.armeabi_v7a.apk", {"lib/armeabi-v7a/libgame.so": b"so"})
+    arm64 = make_zip(tmp_path / "config.arm64_v8a.apk", {"lib/arm64-v8a/libgame.so": b"so"})
+    assert native_abis([base]) == set()
+    assert native_abis([base, arm32, arm64]) == {"armeabi-v7a", "arm64-v8a"}
+    redroid = ["x86_64", "x86", "arm64-v8a"]
+    check_abis([base], redroid)  # no native code: fine
+    check_abis([base, arm64], redroid)
+    check_abis([base, arm32], None)  # unknown device: don't block
+    with pytest.raises(InstallError, match="only contains armeabi-v7a code"):
+        check_abis([base, arm32], redroid)
+
+
+def test_32_bit_only_game_is_refused_on_redroid(tmp_path, device):
+    device.runnable = ["x86_64", "x86", "arm64-v8a"]
+    installer = manager(tmp_path, device)
+    upload = installer.upload_path("dokkan.xapk")
+    make_zip(
+        upload,
+        {
+            "com.bandainamcogames.dbzdokkanww.apk": make_apk(tmp_path / "b.apk").read_bytes(),
+            "config.armeabi_v7a.apk": make_zip(
+                tmp_path / "s.apk", {"lib/armeabi-v7a/libcocos2dcpp.so": b"so"}
+            ).read_bytes(),
+        },
+    )
+    installer.start_file(upload, "dokkan.xapk")
+    installer.wait(5)
+    job = installer.current()
+    assert job["state"] == "error" and "arm64-v8a version" in job["message"]
+    assert device.installed == []

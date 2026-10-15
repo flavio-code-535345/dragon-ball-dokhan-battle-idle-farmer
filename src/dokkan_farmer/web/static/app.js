@@ -1073,8 +1073,14 @@
     const res = await api("/api/apps").catch(() => null);
     if (!res) return;
     const badge = $("#game-installed");
-    badge.className = `badge ${res.installed ? "ok" : "required"}${res.installed === null ? " hidden" : ""}`;
-    badge.textContent = res.installed ? "✓ game installed" : "game not installed";
+    const broken = res.installed && res.abi_ok === false;
+    badge.className = `badge ${res.installed && !broken ? "ok" : "required"}${res.installed === null ? " hidden" : ""}`;
+    badge.textContent = res.installed ? `${broken ? "✗" : "✓"} game installed${res.abi ? ` (${res.abi})` : ""}` : "game not installed";
+    const warning = $("#game-abi-warning");
+    warning.classList.toggle("hidden", !broken);
+    warning.textContent = broken
+      ? `The game was installed as its ${res.abi} build, which this Android cannot run (it shows "This app isn't compatible"). Uninstall it in Android's settings and install the arm64-v8a version: Aurora Store picks that one by itself.`
+      : "";
     renderJob(res.job);
     if (res.job && JOB_ACTIVE.includes(res.job.state) && !ui.jobActive) {
       ui.jobActive = true;

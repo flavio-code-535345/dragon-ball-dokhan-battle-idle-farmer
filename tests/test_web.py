@@ -267,6 +267,8 @@ def test_apps_on_the_simulator(client):
     assert apps == {
         "package": client.ctx.settings.game_package,
         "installed": True,
+        "abi": None,
+        "abi_ok": None,
         "can_install": False,
         "job": None,
     }
@@ -298,6 +300,12 @@ class InstallableAdb(AdbDevice):
 
     def is_installed(self, package: str) -> bool:
         return bool(self.installed)
+
+    def app_abi(self, package: str) -> str:
+        return "armeabi-v7a"
+
+    def runnable_abis(self) -> list[str]:
+        return ["x86_64", "x86", "arm64-v8a"]
 
 
 def apk_bytes() -> bytes:
@@ -335,5 +343,6 @@ def test_upload_and_install_through_the_api(tmp_path):
         assert len(device.installed) == 1 and device.installed[0][0].endswith("Dokkan.apk")
         apps = client.get("/api/apps").json()
         assert apps["installed"] is True and apps["job"]["message"] == "Installed Dokkan.apk"
+        assert apps["abi"] == "armeabi-v7a" and apps["abi_ok"] is False
         info = client.get("/api/status").json()["device"]["info"]
         assert info["native_bridge"] == "libnb.so"

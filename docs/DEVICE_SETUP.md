@@ -128,6 +128,10 @@ The stack has three services:
 
 ### Good to know
 
+- Only **64-bit ARM** code is translated. Install the game's `arm64-v8a` build: Aurora Store
+  (Google Play) picks it by itself, and the *Apps* card refuses files that only contain 32-bit
+  ARM code (`armeabi-v7a`, common on APK mirror sites). A 32-bit build would show *"This app
+  isn't compatible with the latest version of Android"* and close.
 - redroid is a development build of Android (*userdebug*, with `su` inside). Games that refuse
   rooted devices may notice that. Whether Dokkan accepts it has not been confirmed yet; a phone
   (option A) remains the safe choice.

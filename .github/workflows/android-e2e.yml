@@ -120,7 +120,9 @@ jobs:
             https://github.com/EFForg/apkeep/releases/download/1.1.0/apkeep-x86_64-unknown-linux-gnu
           chmod +x apkeep
           mkdir game
-          ./apkeep -d apk-pure -o acknowledge_dangers=true -a com.bandainamcogames.dbzdokkanww game
+          # The 64-bit build: redroid's ARM translation only covers arm64-v8a.
+          ./apkeep -d apk-pure -o acknowledge_dangers=true,arch=arm64-v8a \
+            -a com.bandainamcogames.dbzdokkanww game
           ls -la game
 
       - name: Install Dokkan through the farmer (upload)
@@ -136,7 +138,8 @@ jobs:
           done
           echo "$job" | jq .
           [ "$state" = done ]
-          curl -sS --fail-with-body "$BASE/api/apps" | jq .
+          curl -sS --fail-with-body "$BASE/api/apps" | tee apps.json | jq .
+          jq -e '.installed and .abi_ok != false' apps.json
 
       - name: Start Dokkan and watch it
         if: inputs.game

@@ -512,17 +512,22 @@ def create_app(ctx: AppContext) -> FastAPI:
 
     @app.get("/api/apps")
     def apps_status() -> dict[str, Any]:
-        installed = None
+        package = ctx.settings.game_package
+        installed = abi = runnable = None
         if ctx.device_status["connected"]:
             try:
-                installed = ctx.farmer.device_call(
-                    lambda d: d.is_installed(ctx.settings.game_package)
-                )
+                installed = ctx.farmer.device_call(lambda d: d.is_installed(package))
+                if installed:
+                    abi = ctx.farmer.device_call(lambda d: d.app_abi(package))
+                    runnable = ctx.farmer.device_call(lambda d: d.runnable_abis())
             except DeviceError:
-                installed = None
+                pass
         return {
-            "package": ctx.settings.game_package,
+            "package": package,
             "installed": installed,
+            # The game's CPU code, and whether this Android can run it (None = unknown).
+            "abi": abi,
+            "abi_ok": None if abi is None or runnable is None else abi in runnable,
             "can_install": isinstance(ctx.device, AdbDevice),
             "job": ctx.installer.current(),
         }
