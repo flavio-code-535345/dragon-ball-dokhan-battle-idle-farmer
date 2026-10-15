@@ -3,13 +3,14 @@ name: Android end-to-end (redroid)
 # Runs the all-in-one stack (docker-compose.redroid.yml) on a GitHub runner:
 # host-setup loads binder, Android 14 boots with ARM translation, the farmer
 # connects and installs Aurora Store from F-Droid through its own API.
-# With "game" ticked it also installs Dokkan and starts it, to see whether the
-# game runs on redroid (screenshots and logs are kept as an artifact).
+# With "game" ticked it also installs Dokkan from Google Play through Aurora
+# Store's UI (anonymous login) and starts it, to see whether the game runs on
+# redroid (screenshots and logs are kept as an artifact).
 on:
   workflow_dispatch:
     inputs:
       game:
-        description: Also install Dokkan (from APKPure, via apkeep) and start it
+        description: Also install Dokkan with Aurora Store (Google Play) and start it
         type: boolean
         default: false
 
@@ -113,31 +114,13 @@ jobs:
           docker exec -u farmer dokkan-farmer adb -s redroid:5555 shell \
             "dumpsys activity activities | grep -E 'ResumedActivity' | head -3"
 
-      - name: Download Dokkan (APKPure via apkeep)
+      - name: Install Dokkan with Aurora Store (Google Play, anonymous login)
         if: inputs.game
-        run: |
-          curl -fsSL -o apkeep \
-            https://github.com/EFForg/apkeep/releases/download/1.1.0/apkeep-x86_64-unknown-linux-gnu
-          chmod +x apkeep
-          mkdir game
-          # The 64-bit build: redroid's ARM translation only covers arm64-v8a.
-          ./apkeep -d apk-pure -o acknowledge_dangers=true,arch=arm64-v8a \
-            -a com.bandainamcogames.dbzdokkanww game
-          ls -la game
+        run: bash .github/e2e/aurora_install.sh
 
-      - name: Install Dokkan through the farmer (upload)
+      - name: The farmer sees the game and its ABI
         if: inputs.game
         run: |
-          file=$(ls game/* | head -n 1)
-          curl -sS --fail-with-body -T "$file" "$BASE/api/apps/upload?filename=$(basename "$file")"
-          for i in $(seq 1 300); do
-            job=$(curl -sS --fail-with-body "$BASE/api/apps/job")
-            state=$(echo "$job" | jq -r .job.state)
-            { [ "$state" = done ] || [ "$state" = error ]; } && break
-            sleep 2
-          done
-          echo "$job" | jq .
-          [ "$state" = done ]
           curl -sS --fail-with-body "$BASE/api/apps" | tee apps.json | jq .
           jq -e '.installed and .abi_ok != false' apps.json
 
