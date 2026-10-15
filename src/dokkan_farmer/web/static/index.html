@@ -4,10 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101217">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Dokkan Farmer</title>
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon-192.png">
   <link rel="stylesheet" href="/static/style.css">
@@ -100,6 +101,7 @@
           <img id="screen-img" alt="Device screen">
           <canvas id="screen-overlay"></canvas>
         </div>
+        <p id="screen-offline" class="notice warn hidden">No device connected, so there is no screen to show yet. Pair or connect your phone in the <a href="#device">Device tab</a>.</p>
         <p id="screen-empty" class="muted small">No screenshot yet. Press Refresh.</p>
         <p class="muted small" id="screen-hint">Turn on <b>Touch control</b> to tap or swipe on the picture to control the device.</p>
         <div class="keys">

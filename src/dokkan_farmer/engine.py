@@ -301,7 +301,7 @@ class Farmer:
         """Take a fresh screenshot (or reuse the farm loop's latest one)."""
         if self.is_running and self.frames.latest_id() is not None:
             return self.frames.latest_id()  # type: ignore[return-value]
-        frame = self._with_device(lambda d: d.screenshot())
+        frame = self.device_call(lambda d: d.screenshot())
         return self.frames.add(frame, self.wall())
 
     def tap_relative(self, x: float, y: float) -> tuple[int, int]:
@@ -312,7 +312,7 @@ class Farmer:
         assert entry is not None
         height, width = entry[1].shape[:2]
         px, py = to_pixels(x, y, width, height)
-        self._with_device(lambda d: d.tap(px, py))
+        self.device_call(lambda d: d.tap(px, py))
         return px, py
 
     def swipe_relative(self, x1: float, y1: float, x2: float, y2: float, ms: int = 300) -> None:
@@ -323,7 +323,23 @@ class Farmer:
         assert entry is not None
         height, width = entry[1].shape[:2]
         a, b = to_pixels(x1, y1, width, height), to_pixels(x2, y2, width, height)
-        self._with_device(lambda d: d.swipe(a[0], a[1], b[0], b[1], ms))
+        self.device_call(lambda d: d.swipe(a[0], a[1], b[0], b[1], ms))
+
+    def device_call(self, fn: Callable[[Device], Any]) -> Any:
+        """Run a device action for the web UI, reconnecting once if the device dropped."""
+        try:
+            result = self._with_device(fn)
+        except DeviceError:
+            try:
+                self._with_device(lambda d: d.connect())
+            except DeviceError as exc:
+                self._device_status(False, str(exc))
+                raise
+            # Reachable again; if the action still fails it is the action's fault.
+            self._device_status(True, None)
+            return self._with_device(fn)
+        self._device_status(True, None)
+        return result
 
     def _with_device(self, fn: Callable[[Device], Any]) -> Any:
         with self.device_lock:

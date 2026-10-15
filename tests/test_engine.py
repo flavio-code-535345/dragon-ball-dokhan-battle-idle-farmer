@@ -288,3 +288,39 @@ def test_frame_store_pins_frames():
 )
 def test_to_pixels(x, y, expected):
     assert to_pixels(x, y, 720, 1280) == expected
+
+
+def test_ui_device_actions_reconnect_once(make_sim):
+    from dokkan_farmer.device.base import DeviceError
+    from dokkan_farmer.device.sim import SimDevice
+
+    class DroppedConnection(SimDevice):
+        """Like a network phone after a restart: commands fail until `adb connect`."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.connected = False
+            self.connects = 0
+
+        def connect(self):
+            self.connects += 1
+            self.connected = True
+
+        def screenshot(self):
+            if not self.connected:
+                raise DeviceError("device '192.168.1.50:5555' not found")
+            return super().screenshot()
+
+    env = make_sim()
+    device = DroppedConnection(env.game, package=env.settings.game_package)
+    statuses = []
+    farmer = Farmer(
+        device,
+        Matcher(env.store),
+        env.settings,
+        on_device_status=lambda ok, err: statuses.append(ok),
+    )
+    assert farmer.capture() is not None
+    assert device.connects == 1 and statuses[-1] is True
+    farmer.capture()  # still connected: no second connect needed
+    assert device.connects == 1

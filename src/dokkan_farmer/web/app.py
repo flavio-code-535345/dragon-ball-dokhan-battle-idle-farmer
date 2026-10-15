@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -247,7 +247,16 @@ def create_app(ctx: AppContext) -> FastAPI:
 
     @app.exception_handler(DeviceError)
     async def _device_error(_: Any, exc: DeviceError) -> JSONResponse:
-        return JSONResponse({"detail": f"Device error: {exc}"}, status_code=502)
+        # 503 rather than 502: a 502 looks like a broken reverse proxy (Cloudflare, nginx...).
+        return JSONResponse({"detail": f"Device error: {exc}"}, status_code=503)
+
+    @app.middleware("http")
+    async def _revalidate_static(request: Request, call_next: Any) -> Response:
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            # Make browsers and CDNs (e.g. Cloudflare) pick up new versions after an update.
+            response.headers.setdefault("Cache-Control", "no-cache")
+        return response
 
     # ----------------------------------------------------------------- status
     @app.get("/api/health")
@@ -428,18 +437,16 @@ def create_app(ctx: AppContext) -> FastAPI:
             key = normalize_key(body.key)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        with ctx.farmer.device_lock:
-            ctx.device.key(key)
+        ctx.farmer.device_call(lambda d: d.key(key))
         return {"ok": True}
 
     @app.post("/api/device/app")
     def device_app(body: AppRequest) -> dict[str, Any]:
         package = ctx.settings.game_package
-        with ctx.farmer.device_lock:
-            if body.action in ("stop", "restart"):
-                ctx.device.stop_app(package)
-            if body.action in ("launch", "restart"):
-                ctx.device.launch_app(package)
+        if body.action in ("stop", "restart"):
+            ctx.farmer.device_call(lambda d: d.stop_app(package))
+        if body.action in ("launch", "restart"):
+            ctx.farmer.device_call(lambda d: d.launch_app(package))
         return {"ok": True, "package": package}
 
     @app.post("/api/device/refresh")

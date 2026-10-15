@@ -221,3 +221,26 @@ def test_cross_site_requests_are_blocked(client):
     assert client.post(url, headers={"Origin": "http://testserver"}).status_code == 200
     assert client.post(url).status_code == 200  # curl & co. send neither header
     assert client.get("/api/status", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 200
+
+
+def test_device_errors_are_503_and_update_the_status(client):
+    def connected() -> bool:
+        return client.get("/api/status").json()["device"]["connected"]
+
+    assert wait_for(connected)  # the startup check has finished
+    client.ctx.device.reachable = False
+    response = client.post("/api/screen/capture")
+    assert response.status_code == 503
+    assert "unreachable" in response.json()["detail"]
+    assert connected() is False
+    client.ctx.device.reachable = True
+    assert client.post("/api/screen/capture").status_code == 200
+    assert connected() is True
+
+
+def test_static_files_revalidate_and_manifest_sends_credentials(client):
+    assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert 'rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials"' in (
+        client.get("/").text
+    )

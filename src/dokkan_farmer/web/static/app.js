@@ -201,6 +201,7 @@
     ui.lastState = farm.state;
 
     if (ui.tab === "farm") updatePreview(false);
+    $("#screen-offline").classList.toggle("hidden", status.device.connected);
     if (ui.tab === "screen" && active && farm.frame_id && farm.frame_id !== ui.shownFrameId
         && $("#toggle-live").checked) {
       ui.screenDetections = farm.detections || [];
@@ -381,8 +382,14 @@
   }
 
   let screenBusy = false;
+  function deviceConnected() {
+    return Boolean(ui.status && ui.status.device && ui.status.device.connected);
+  }
+
   async function refreshScreen(force) {
     if (screenBusy) return;
+    // Without a device every capture fails: wait for a manual Refresh or a connection.
+    if (!force && ui.status && !deviceConnected()) return;
     screenBusy = true;
     try {
       const farm = ui.status && ui.status.farm;
