@@ -1,0 +1,46 @@
+# Dokkan Idle Farmer: Portainer stack / docker compose file.
+#
+# Portainer: Stacks -> Add stack -> "Repository"
+#   Repository URL: https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer
+#   Compose path:   docker-compose.yml
+#   Environment variables: at least ADB_SERIAL (see .env.example for all of them)
+# or paste this file into the Portainer "Web editor".
+#
+# Then open http://<your-server>:8080 on your phone.
+services:
+  farmer:
+    image: ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer:${IMAGE_TAG:-latest}
+    container_name: dokkan-farmer
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      # Address of your phone / emulator with ADB over network, e.g. 192.168.1.50:5555.
+      # Can also be set later in the web UI (Device tab).
+      ADB_SERIAL: ${ADB_SERIAL:-}
+      # "global", "jp" or a full Android package name.
+      GAME_PACKAGE: ${GAME_PACKAGE:-global}
+      # resume = continue farming after a restart if it was running, true = always, false = never.
+      AUTOSTART: ${AUTOSTART:-resume}
+      # Only farm in these windows, e.g. "23:00-07:00, 13:00-14:00" (empty = always).
+      ACTIVE_HOURS: ${ACTIVE_HOURS:-}
+      TZ: ${TZ:-UTC}
+      # Protect the web UI with HTTP basic auth (user "admin" unless WEB_USERNAME is set).
+      WEB_USERNAME: ${WEB_USERNAME:-admin}
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+      # Apprise URLs, e.g. "tgram://bottoken/ChatID" or "discord://id/token" or "ntfy://topic".
+      NOTIFY_URLS: ${NOTIFY_URLS:-}
+      NOTIFY_EVERY_RUNS: ${NOTIFY_EVERY_RUNS:-0}
+      # "sim" runs a built-in fake game to try the UI without a phone.
+      DEVICE_BACKEND: ${DEVICE_BACKEND:-adb}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - farmer-data:/data
+    # USB instead of network ADB: uncomment both lines below.
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+    # and add RUN_AS_ROOT: "true" to the environment.
+
+volumes:
+  farmer-data:

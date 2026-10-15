@@ -1,0 +1,29 @@
+# Same as docker-compose.yml, but builds the image from this repository instead of
+# pulling it from GHCR (useful for forks or a private copy of the repo).
+#   docker compose -f docker-compose.build.yml up -d --build
+services:
+  farmer:
+    build: .
+    image: dokkan-idle-farmer:local
+    container_name: dokkan-farmer
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      ADB_SERIAL: ${ADB_SERIAL:-}
+      GAME_PACKAGE: ${GAME_PACKAGE:-global}
+      AUTOSTART: ${AUTOSTART:-resume}
+      ACTIVE_HOURS: ${ACTIVE_HOURS:-}
+      TZ: ${TZ:-UTC}
+      WEB_USERNAME: ${WEB_USERNAME:-admin}
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+      NOTIFY_URLS: ${NOTIFY_URLS:-}
+      NOTIFY_EVERY_RUNS: ${NOTIFY_EVERY_RUNS:-0}
+      DEVICE_BACKEND: ${DEVICE_BACKEND:-adb}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - farmer-data:/data
+
+volumes:
+  farmer-data:

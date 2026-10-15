@@ -1,0 +1,59 @@
+# EXPERIMENTAL: fully self-hosted, with Android running in a redroid container.
+# Read docs/DEVICE_SETUP.md ("Option C") first. In short:
+#   * the HOST kernel needs binder:  sudo modprobe binder_linux devices="binder,hwbinder,vndbinder"
+#   * Dokkan is an ARM app. On an ARM64 host (Raspberry Pi 5, Ampere, ...) it runs natively;
+#     on x86_64 the image needs ARM translation (see the commented lines below).
+#   * Nobody has confirmed that Dokkan runs on redroid; it may detect the rooted/emulated system.
+#     A real phone (docker-compose.yml) is the reliable option.
+#
+# Portainer: Stacks -> Add stack -> Repository -> compose path "docker-compose.redroid.yml".
+services:
+  redroid:
+    image: ${REDROID_IMAGE:-redroid/redroid:12.0.0_64only-latest}
+    container_name: dokkan-redroid
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - redroid-data:/data
+    command:
+      - androidboot.redroid_width=720
+      - androidboot.redroid_height=1280
+      - androidboot.redroid_dpi=320
+      - androidboot.redroid_fps=15
+      - androidboot.use_memfd=1
+      # x86_64 hosts with a libndk image (built with github.com/ayasa520/redroid-script -n):
+      # - ro.product.cpu.abilist=x86_64,arm64-v8a
+      # - ro.product.cpu.abilist64=x86_64,arm64-v8a
+      # - ro.dalvik.vm.isa.arm64=x86_64
+      # - ro.enable.native.bridge.exec=1
+      # - ro.dalvik.vm.native.bridge=libndk_translation.so
+    # Expose ADB to your PC as well (e.g. for scrcpy or `adb install`):
+    # ports:
+    #   - "5555:5555"
+
+  farmer:
+    image: ghcr.io/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer:${IMAGE_TAG:-latest}
+    container_name: dokkan-farmer
+    restart: unless-stopped
+    depends_on:
+      - redroid
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      ADB_SERIAL: redroid:5555
+      GAME_PACKAGE: ${GAME_PACKAGE:-global}
+      AUTOSTART: ${AUTOSTART:-resume}
+      ACTIVE_HOURS: ${ACTIVE_HOURS:-}
+      TZ: ${TZ:-UTC}
+      WEB_USERNAME: ${WEB_USERNAME:-admin}
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+      NOTIFY_URLS: ${NOTIFY_URLS:-}
+      NOTIFY_EVERY_RUNS: ${NOTIFY_EVERY_RUNS:-0}
+      # redroid's screen never sleeps; no need to touch its power settings.
+      KEEP_SCREEN_ON: "false"
+    volumes:
+      - farmer-data:/data
+
+volumes:
+  redroid-data:
+  farmer-data:

@@ -1,0 +1,178 @@
+# Routines
+
+A routine is a YAML file in `/data/routines` (edit it in the **Routine** tab of the web UI). The
+bundled [`dokkan_auto_farm.yaml`](../src/dokkan_farmer/routines/dokkan_auto_farm.yaml) is a
+complete, commented example. Bundled routines are copied into the volume once. Your edits are never
+overwritten, and *Restore default* brings back the original.
+
+## How the engine runs a routine
+
+Every `tick_interval` seconds the engine:
+
+1. takes a screenshot,
+2. updates the **counters** (e.g. counts a finished run when the results screen appears),
+3. checks the stop conditions (`stop_after_runs`, `stop_after_minutes`),
+4. every `foreground_check_seconds` checks that the game is in front, and relaunches it if not,
+5. fires the **first rule** (top to bottom) whose `when` conditions all hold and whose `cooldown`
+   has passed, runs its `do` actions and waits `action_delay` (or the rule's `delay`),
+6. checks whether it is **stuck** (see below).
+
+So **order matters**: put specific, important rules (errors, ACT empty, defeats) first and generic
+ones (an OK button, "tap to continue") last.
+
+## Structure
+
+```yaml
+name: My routine                 # shown in the UI
+description: What it does
+version: 1
+
+options:                         # shown as a form on the Farm tab
+  max_runs:
+    label: Stop after N runs (0 = never)
+    type: number                 # number | choice | bool | text
+    default: 0
+    min: 0
+  policy:
+    type: choice
+    choices: [wait, stop]
+    default: wait
+    help: Shown under the field
+
+settings:
+  tick_interval: 1.0             # seconds between screenshots
+  action_delay: 1.5              # pause after a rule fired
+  stop_after_runs: $max_runs     # 0 = never; "$name" refers to an option
+  stop_after_minutes: 0
+  run_counter: runs              # which counter counts as "runs" (stats, stop, notifications)
+  ensure_foreground: true        # relaunch the game if another app is in front
+  foreground_check_seconds: 30
+  stuck:
+    static_seconds: 180          # screen unchanged this long -> recovery
+    idle_seconds: 1500           # no rule fired this long -> recovery (> your longest battle!)
+    recovery:                    # actions of one recovery attempt
+      - key: BACK
+      - wait: 3
+    restart_after: 2             # after this many recoveries without a finished run: restart the game
+    max_restarts: 3              # after this many restarts without a finished run: stop with an error
+
+counters:
+  runs:
+    label: Runs finished
+    appears: attempt_again       # +1 when this template appears...
+    rearm: start_button          # ...but only once per appearance of this one
+
+templates:                       # documentation for the checklist in the Templates tab
+  attempt_again:
+    level: required              # required | recommended | optional
+    description: The Attempt Again button on the results screen.
+  start_button: The Start! button  # short form = description only
+
+rules:
+  - name: Attempt again
+    when: {visible: attempt_again}
+    do: [{tap: attempt_again}]
+    cooldown: 8                  # seconds before this rule may fire again
+    # delay: 3                   # override action_delay for this rule
+    # enabled: false             # keep the rule but skip it
+```
+
+Rules that use a template you have not captured are skipped (they are listed on the Farm tab).
+If a template marked `required` is missing, the farm does not start.
+
+## Conditions (`when`)
+
+All listed conditions must hold.
+
+| Condition | Meaning |
+|---|---|
+| `visible: name` or `[a, b]` | all of these templates are on screen |
+| `any_visible: [a, b]` | at least one of them is on screen |
+| `not_visible: name` or `[a, b]` | none of them is on screen |
+| `static_for: 6` | the screen has not changed for 6 seconds |
+| `idle_for: 60` | no rule fired for 60 seconds |
+| `option: {policy: wait}` | the option currently has this value |
+| `counter_below: {stone_refills: $max_stone_refills}` | counter < value |
+| `counter_at_least: {runs: 10}` | counter ≥ value |
+| `always: true` | always (use with a cooldown) |
+
+## Actions (`do`)
+
+| Action | Meaning |
+|---|---|
+| `tap: name` | tap the template where it was found (random offset within the button, see `TAP_JITTER`) |
+| `tap: {template: name, offset: [0.0, 0.8]}` | tap relative to the template: offset in template widths/heights from its centre |
+| `tap_xy: [0.5, 0.15]` | tap a point: values ≤ 1 are fractions of the screen, larger values are pixels |
+| `swipe: {from: [0.5, 0.8], to: [0.5, 0.3], ms: 400}` | swipe (also `[x1, y1, x2, y2, ms]`) |
+| `key: BACK` | press a key: `BACK`, `HOME`, `ENTER`, `ESCAPE`, `MENU`, `APP_SWITCH`, `WAKEUP`, `POWER` |
+| `wait: 2.5` | wait seconds |
+| `wait_minutes: $act_wait_minutes` | wait minutes (shown as a countdown in the UI) |
+| `count: stone_refills` | add 1 to a counter (`{counter: x, by: 2}` to add more) |
+| `reset: stone_refills` | set a counter to 0 |
+| `notify: "Out of ACT after {runs} runs"` | send a notification (with a screenshot) |
+| `log: "text"` | write to the log |
+| `stop: "reason"` | stop farming |
+| `launch_app` / `stop_app` / `restart_app` | start, force-stop or restart the game |
+| `screenshot: label` | save a debug screenshot in `/data/screenshots` |
+
+Any number value can be an option reference like `$max_runs`. Texts of `notify`, `log` and `stop`
+can use `{placeholders}`: option names, counter names, `{runs}`, `{elapsed}` and `{routine}`.
+
+## The safety net
+
+On top of your rules the engine:
+
+- **Detects stuck screens.** If the screen does not change for `static_seconds`, or no rule fires
+  for `idle_seconds`, it runs the `recovery` actions. After `restart_after` recoveries without a
+  finished run it restarts the game. After `max_restarts` restarts without a finished run it gives
+  up, stops and notifies you (with a screenshot). Screenshots of stuck screens are saved.
+- **Pauses rules that have no effect.** A rule that fires 3 times in a row while the screen stays
+  identical is skipped for 2 minutes, so lower rules (fallbacks) get a chance. Example: the "use ACT
+  item" button when you have no items left.
+- **Keeps the game in front.** If another app is in front twice in a row, it relaunches the game.
+- **Wakes the screen.** After a few black screenshots it sends `WAKEUP`.
+- **Reconnects.** When the device is unreachable it retries with back-off (5 s up to 60 s) and
+  notifies you after the third failure.
+- **Respects active hours** (`ACTIVE_HOURS`): outside the windows it waits without touching the device.
+
+## Example: a minimal routine
+
+```yaml
+name: Just attempt again
+rules:
+  - name: Attempt again
+    when: {visible: attempt_again}
+    do: [{tap: attempt_again}]
+    cooldown: 8
+  - name: OK
+    when: {visible: ok_button, not_visible: attempt_again}
+    do: [{tap: ok_button}]
+  - name: Start
+    when: {visible: start_button}
+    do: [{tap: start_button}]
+  - name: Tap to continue
+    when: {static_for: 6}
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4
+counters:
+  runs: {appears: attempt_again, rearm: start_button}
+```
+
+## Example: alternate between two stages
+
+Counters and options let you build simple state machines, e.g. 10 runs of one stage, then
+navigate elsewhere:
+
+```yaml
+rules:
+  - name: Switch stage after 10 runs
+    when: {visible: attempt_again, counter_at_least: {runs_here: 10}}
+    do:
+      - tap: ok_button          # leave the results screen instead of Attempt Again
+      - reset: runs_here
+  - name: Attempt again
+    when: {visible: attempt_again}
+    do: [{tap: attempt_again}, {count: runs_here}]
+    cooldown: 8
+  # ... navigation rules with your own templates ...
+```

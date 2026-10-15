@@ -1,0 +1,290 @@
+# Dokkan Auto Farm: the default routine.
+#
+# How it works: in Dokkan Battle, clear the stage you want to farm once, turn
+# on the in-game Auto Mode and finish a run, so you are on the results
+# screen with the "Attempt Again" button. Press Start in the farmer. Every
+# second it takes a screenshot and fires the FIRST rule below whose `when`
+# matches, then waits for the rule's cooldown. Dokkan's own Auto Mode plays
+# the map and the battles; this routine only presses the buttons between
+# runs and cleans up popups, errors and crashes.
+#
+# Templates are small screenshots of buttons that YOU capture in the web UI
+# (Templates tab). Rules whose templates are missing are skipped, so you can
+# start with the three "required" ones and add more later.
+#
+# Full reference: docs/ROUTINES.md
+name: Dokkan Auto Farm
+description: >-
+  Repeats your last cleared stage with Dokkan's built-in Auto Mode: Attempt
+  Again, confirm ACT, Start!, keep Auto on, decline friend requests, handle
+  ACT running out, defeats, connection errors and game restarts.
+version: 1
+
+options:
+  max_runs:
+    label: Stop after N runs (0 = never)
+    type: number
+    default: 0
+    min: 0
+  act_policy:
+    label: When ACT runs out
+    type: choice
+    choices: [wait, item, stone, stop]
+    default: wait
+    help: >-
+      wait = let ACT regenerate, item = use ACT recovery items,
+      stone = spend Dragon Stones (up to the limit below), stop = stop farming.
+  act_wait_minutes:
+    label: Minutes to wait for ACT to regenerate
+    type: number
+    default: 60
+    min: 1
+    max: 1440
+  max_stone_refills:
+    label: Max Dragon Stones spent on ACT per session
+    type: number
+    default: 0
+    min: 0
+    max: 50
+  on_defeat:
+    label: After a defeat
+    type: choice
+    choices: [stop, continue]
+    default: stop
+    help: The farmer always taps "Give up", never a paid revive.
+  tap_to_continue:
+    label: Tap through "tap to continue" screens
+    type: bool
+    default: true
+  continue_after:
+    label: Seconds of a still screen before tapping to continue
+    type: number
+    default: 6
+    min: 2
+    max: 120
+  stuck_after:
+    label: Recover if no rule matched for (seconds)
+    type: number
+    default: 1500
+    min: 120
+    help: Must be longer than your longest stage on Auto (1500 s = 25 min).
+
+settings:
+  tick_interval: 1.0
+  action_delay: 1.5
+  stop_after_runs: $max_runs
+  run_counter: runs
+  ensure_foreground: true
+  stuck:
+    static_seconds: 180
+    idle_seconds: $stuck_after
+    recovery:
+      - key: BACK
+      - wait: 3
+    restart_after: 2
+    max_restarts: 3
+
+counters:
+  runs:
+    label: Runs finished
+    appears: attempt_again
+    rearm: start_button
+
+# What to capture in the Templates tab. Crop a part that only exists in that
+# place: the text of a button, the title of a dialog.
+templates:
+  attempt_again:
+    level: required
+    description: The "Attempt Again" button on the results screen after a clear.
+  start_button:
+    level: required
+    description: The "Start!" button on the team screen before a quest.
+  ok_button:
+    level: required
+    description: >-
+      An "OK" button (for example in the dialog after Attempt Again). Tick
+      "search the whole screen" so it is found in any dialog.
+  cancel_button:
+    level: recommended
+    description: >-
+      A "Cancel" / "No" button. Search the whole screen. Used to decline friend
+      requests and to close the not-enough-ACT dialog.
+  act_empty_dialog:
+    level: recommended
+    description: >-
+      The title of the "not enough ACT" dialog. Strongly recommended, so that
+      the farmer never presses a Dragon Stone button by accident.
+  friend_request:
+    level: recommended
+    description: The title of the "send a friend request?" popup after a run.
+  auto_off:
+    level: recommended
+    description: The Auto button while Auto is OFF (the farmer taps it to turn Auto on).
+  error_retry:
+    level: recommended
+    description: The "Retry" button of connection error dialogs.
+  defeat_give_up:
+    level: recommended
+    description: >-
+      The "Give up" / "No" button when your team is defeated and Dokkan offers a
+      revive for Dragon Stones.
+  act_use_item:
+    level: optional
+    description: The "use ACT recovery item" button (only with ACT policy = item).
+  act_use_stone:
+    level: optional
+    description: The "restore with Dragon Stone" button (only with ACT policy = stone).
+  title_screen:
+    level: optional
+    description: Something unique on the title screen, to tap past it after a game restart.
+  resume_yes:
+    level: optional
+    description: The "Yes" button when the game asks to resume an interrupted quest.
+  close_button:
+    level: optional
+    description: The "Close" / "X" of news and login-bonus popups after a restart.
+  nav_1:
+    level: optional
+    description: "Back to your stage after a restart, step 1: e.g. the Events/Quest button on the home screen."
+  nav_2:
+    level: optional
+    description: "Step 2: e.g. your event's banner."
+  nav_3:
+    level: optional
+    description: "Step 3: e.g. the stage."
+  nav_4:
+    level: optional
+    description: "Step 4: e.g. the difficulty."
+  select_support:
+    level: optional
+    description: The first entry of the "select a support" list, if the game asks for one.
+
+rules:
+  # --- Errors and dangerous dialogs first -----------------------------------
+  - name: Connection error → Retry
+    when: {visible: error_retry}
+    do: [{tap: error_retry}]
+    cooldown: 3
+
+  - name: Defeat → give up and stop
+    when: {visible: defeat_give_up, option: {on_defeat: stop}}
+    do:
+      - tap: defeat_give_up
+      - count: defeats
+      - screenshot: defeat
+      - stop: Team was defeated after {runs} runs. Pick an easier stage or a stronger team.
+
+  - name: Defeat → give up and continue
+    when: {visible: defeat_give_up}
+    do:
+      - tap: defeat_give_up
+      - count: defeats
+      - notify: "Defeat #{defeats} (after {runs} runs), continuing"
+    cooldown: 5
+
+  # --- ACT (stamina) ran out ---------------------------------------------------
+  - name: Out of ACT → stop
+    when: {visible: act_empty_dialog, option: {act_policy: stop}}
+    do:
+      - tap: cancel_button
+      - stop: Out of ACT after {runs} runs
+
+  - name: Out of ACT → use item
+    when: {visible: [act_empty_dialog, act_use_item], option: {act_policy: item}}
+    do: [{tap: act_use_item}, {count: item_refills}]
+    cooldown: 5
+
+  - name: Out of ACT → use Dragon Stone
+    when:
+      visible: [act_empty_dialog, act_use_stone]
+      option: {act_policy: stone}
+      counter_below: {stone_refills: $max_stone_refills}
+    do:
+      - tap: act_use_stone
+      - count: stone_refills
+      - notify: "Spent a Dragon Stone on ACT ({stone_refills}/{max_stone_refills})"
+    cooldown: 5
+
+  - name: Out of ACT → wait
+    when: {visible: act_empty_dialog}
+    do:
+      - tap: cancel_button
+      - count: act_waits
+      - notify: "Out of ACT after {runs} runs, waiting {act_wait_minutes} min"
+      - wait_minutes: $act_wait_minutes
+
+  # --- The farm loop ---------------------------------------------------------
+  - name: Decline friend request
+    when: {visible: friend_request}
+    do: [{tap: cancel_button}]
+    cooldown: 3
+
+  - name: Attempt again
+    when: {visible: attempt_again}
+    do: [{tap: attempt_again}]
+    cooldown: 8
+
+  - name: Start quest
+    when: {visible: start_button}
+    do: [{tap: start_button}]
+    cooldown: 5
+
+  - name: Turn Auto on
+    when: {visible: auto_off}
+    do: [{tap: auto_off}]
+    cooldown: 5
+
+  # --- After a game restart ----------------------------------------------------
+  - name: Resume interrupted quest
+    when: {visible: resume_yes}
+    do: [{tap: resume_yes}]
+    cooldown: 5
+
+  - name: Title screen
+    when: {visible: title_screen}
+    do: [{tap: title_screen}]
+    cooldown: 5
+
+  - name: Close popup
+    when: {visible: close_button}
+    do: [{tap: close_button}]
+    cooldown: 2
+
+  - name: Confirm (OK)
+    when: {visible: ok_button, not_visible: [attempt_again, act_empty_dialog, defeat_give_up]}
+    do: [{tap: ok_button}]
+    cooldown: 2
+
+  - name: Pick the first support
+    when: {visible: select_support}
+    do: [{tap: select_support}]
+    cooldown: 4
+
+  - name: Navigate (difficulty)
+    when: {visible: nav_4}
+    do: [{tap: nav_4}]
+    cooldown: 4
+
+  - name: Navigate (stage)
+    when: {visible: nav_3}
+    do: [{tap: nav_3}]
+    cooldown: 4
+
+  - name: Navigate (event)
+    when: {visible: nav_2}
+    do: [{tap: nav_2}]
+    cooldown: 4
+
+  - name: Navigate (home → events)
+    when: {visible: nav_1}
+    do: [{tap: nav_1}]
+    cooldown: 4
+
+  # --- Fallback ----------------------------------------------------------------
+  - name: Tap to continue
+    when:
+      static_for: $continue_after
+      option: {tap_to_continue: true}
+      not_visible: [act_empty_dialog, defeat_give_up]
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4

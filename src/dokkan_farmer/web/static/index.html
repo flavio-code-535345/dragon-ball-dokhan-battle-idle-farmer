@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101217">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Dokkan Farmer</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/icon.svg" alt="" width="28" height="28">
+      <span>Dokkan Farmer</span>
+    </div>
+    <div class="topbar-right">
+      <span id="device-dot" class="dot" title="Device"></span>
+      <span id="state-pill" class="pill pill-stopped">…</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================== FARM ============================== -->
+    <section id="tab-farm" class="tab" data-tab="farm">
+      <div class="card" id="status-card">
+        <div class="row space">
+          <h2>Farm</h2>
+          <span id="farm-routine-name" class="muted small"></span>
+        </div>
+        <p id="farm-message" class="message">Loading…</p>
+        <p id="farm-countdown" class="countdown hidden"></p>
+        <div class="stats">
+          <div class="stat"><span class="stat-value" id="stat-runs">0</span><span class="stat-label">Runs</span></div>
+          <div class="stat"><span class="stat-value" id="stat-rate">–</span><span class="stat-label">Runs / hour</span></div>
+          <div class="stat"><span class="stat-value" id="stat-elapsed">–</span><span class="stat-label">Running</span></div>
+        </div>
+        <div class="facts" id="farm-facts"></div>
+        <div class="buttons" id="farm-buttons">
+          <button class="btn primary big" id="btn-start" type="button">▶ Start farming</button>
+          <button class="btn big hidden" id="btn-pause" type="button">⏸ Pause</button>
+          <button class="btn big hidden" id="btn-resume" type="button">▶ Resume</button>
+          <button class="btn danger big hidden" id="btn-stop" type="button">■ Stop</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row space">
+          <h3>Routine</h3>
+          <select id="routine-select" aria-label="Routine"></select>
+        </div>
+        <div id="routine-ready" class="notice hidden"></div>
+        <p id="routine-description" class="muted small"></p>
+        <form id="options-form" class="options" autocomplete="off"></form>
+        <div class="buttons end">
+          <button class="btn small" id="btn-save-options" type="button">Save options</button>
+        </div>
+      </div>
+
+      <div class="card clickable" id="preview-card" title="Open the live screen">
+        <div class="row space"><h3>Screen</h3><span class="muted small">tap to open</span></div>
+        <div class="preview-wrap"><img id="preview-img" alt="Latest screenshot" class="preview hidden"></div>
+        <p id="preview-empty" class="muted small">No screenshot yet.</p>
+      </div>
+
+      <div class="card" id="disabled-rules-card" hidden>
+        <h3>Skipped rules</h3>
+        <p class="muted small">These rules need templates you have not captured yet.</p>
+        <ul id="disabled-rules" class="plain-list small"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Lifetime</h3>
+        <div class="stats">
+          <div class="stat"><span class="stat-value" id="life-runs">0</span><span class="stat-label">Runs</span></div>
+          <div class="stat"><span class="stat-value" id="life-sessions">0</span><span class="stat-label">Sessions</span></div>
+          <div class="stat"><span class="stat-value" id="life-time">0</span><span class="stat-label">Farmed</span></div>
+        </div>
+        <details>
+          <summary>Recent sessions</summary>
+          <ul id="sessions-list" class="plain-list small"></ul>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============================== SCREEN ============================== -->
+    <section id="tab-screen" class="tab" data-tab="screen" hidden>
+      <div class="card">
+        <div class="toolbar">
+          <button class="btn small" id="btn-refresh-screen" type="button">⟳ Refresh</button>
+          <label class="switch"><input type="checkbox" id="toggle-live" checked><span>Live</span></label>
+          <label class="switch"><input type="checkbox" id="toggle-boxes" checked><span>Boxes</span></label>
+          <label class="switch"><input type="checkbox" id="toggle-control"><span>Touch control</span></label>
+        </div>
+        <div class="screen-wrap" id="screen-wrap">
+          <img id="screen-img" alt="Device screen">
+          <canvas id="screen-overlay"></canvas>
+        </div>
+        <p id="screen-empty" class="muted small">No screenshot yet. Press Refresh.</p>
+        <p class="muted small" id="screen-hint">Turn on <b>Touch control</b> to tap or swipe on the picture to control the device.</p>
+        <div class="keys">
+          <button class="btn small" data-devkey="BACK" type="button">◀ Back</button>
+          <button class="btn small" data-devkey="HOME" type="button">⌂ Home</button>
+          <button class="btn small" data-app="launch" type="button">▶ Launch game</button>
+          <button class="btn small" data-app="restart" type="button">⟳ Restart game</button>
+          <button class="btn small" data-app="stop" type="button">■ Close game</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== TEMPLATES ============================== -->
+    <section id="tab-templates" class="tab" data-tab="templates" hidden>
+      <div class="card hidden" id="capture-card">
+        <div class="row space">
+          <h3>New template</h3>
+          <button class="btn small ghost" id="btn-capture-cancel" type="button">✕</button>
+        </div>
+        <p class="muted small">Drag a box around the button or text. Keep it tight and distinctive.</p>
+        <div class="capture-wrap" id="capture-wrap">
+          <img id="capture-img" alt="Screenshot to crop">
+          <canvas id="capture-canvas"></canvas>
+        </div>
+        <div class="capture-form">
+          <canvas id="crop-preview" class="crop-preview" width="1" height="1"></canvas>
+          <label>Name
+            <input id="tpl-name" list="tpl-names" placeholder="e.g. attempt_again" autocapitalize="off" spellcheck="false">
+            <datalist id="tpl-names"></datalist>
+          </label>
+          <label>Threshold <span id="tpl-threshold-value">0.85</span>
+            <input id="tpl-threshold" type="range" min="0.6" max="0.98" step="0.01" value="0.85">
+          </label>
+          <label class="switch"><input type="checkbox" id="tpl-full"><span>Search the whole screen (for buttons that move, like OK)</span></label>
+          <label class="switch"><input type="checkbox" id="tpl-color"><span>Compare colours (e.g. Auto ON vs OFF)</span></label>
+          <div class="buttons">
+            <button class="btn primary" id="btn-save-template" type="button">Save template</button>
+            <button class="btn" id="btn-recapture" type="button">New screenshot</button>
+          </div>
+          <div id="capture-result" class="notice hidden"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row space">
+          <h3>Checklist</h3>
+          <span class="muted small" id="checklist-routine"></span>
+        </div>
+        <p class="muted small">Templates used by the selected routine. Open the matching screen in the game, then press <b>Capture</b>.</p>
+        <ul id="checklist" class="checklist"></ul>
+      </div>
+
+      <div class="card">
+        <div class="row space">
+          <h3>All templates</h3>
+          <div class="buttons">
+            <button class="btn small" id="btn-test-templates" type="button">Test on screen</button>
+            <button class="btn small primary" id="btn-capture-new" type="button">+ Capture</button>
+          </div>
+        </div>
+        <div id="templates-grid" class="tpl-grid"></div>
+        <p id="templates-empty" class="muted small hidden">No templates yet.</p>
+      </div>
+    </section>
+
+    <!-- ============================== ROUTINES ============================== -->
+    <section id="tab-routines" class="tab" data-tab="routines" hidden>
+      <div class="card">
+        <div class="row space wrap">
+          <select id="editor-select" aria-label="Routine to edit"></select>
+          <div class="buttons">
+            <button class="btn small" id="btn-routine-copy" type="button">Copy…</button>
+            <button class="btn small" id="btn-routine-restore" type="button">Restore default</button>
+            <button class="btn small danger" id="btn-routine-delete" type="button">Delete</button>
+          </div>
+        </div>
+        <details id="rules-overview-wrap">
+          <summary>Rules overview</summary>
+          <ol id="rules-overview" class="rules small"></ol>
+        </details>
+        <textarea id="routine-editor" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+        <div id="routine-error" class="notice error hidden"></div>
+        <div class="buttons end">
+          <button class="btn" id="btn-routine-validate" type="button">Validate</button>
+          <button class="btn primary" id="btn-routine-save" type="button">Save</button>
+        </div>
+        <p class="muted small">Reference: <a href="https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/blob/main/docs/ROUTINES.md" target="_blank" rel="noopener">docs/ROUTINES.md</a></p>
+      </div>
+    </section>
+
+    <!-- ============================== LOGS ============================== -->
+    <section id="tab-logs" class="tab" data-tab="logs" hidden>
+      <div class="card">
+        <div class="toolbar">
+          <select id="log-level" aria-label="Log level">
+            <option value="DEBUG">All</option>
+            <option value="INFO" selected>Info+</option>
+            <option value="WARNING">Warnings+</option>
+            <option value="ERROR">Errors</option>
+          </select>
+          <label class="switch"><input type="checkbox" id="log-follow" checked><span>Follow</span></label>
+          <button class="btn small" id="btn-log-clear" type="button">Clear view</button>
+        </div>
+        <div id="log-view" class="log-view" role="log" aria-live="off"></div>
+      </div>
+    </section>
+
+    <!-- ============================== DEVICE ============================== -->
+    <section id="tab-device" class="tab" data-tab="device" hidden>
+      <div class="card">
+        <div class="row space"><h3>Device</h3><button class="btn small" id="btn-device-refresh" type="button">⟳ Check</button></div>
+        <dl id="device-info" class="kv"></dl>
+        <div id="device-error" class="notice error hidden"></div>
+      </div>
+
+      <div class="card adb-only">
+        <h3>Connect</h3>
+        <p class="muted small">Network ADB address of your phone, emulator or redroid container, e.g. <code>192.168.1.50:5555</code> or <code>redroid:5555</code>.</p>
+        <div class="row">
+          <input id="connect-serial" placeholder="192.168.1.50:5555" autocapitalize="off" spellcheck="false" inputmode="url">
+          <button class="btn primary" id="btn-connect" type="button">Connect</button>
+        </div>
+      </div>
+
+      <div class="card adb-only">
+        <h3>Pair (Android 11+ wireless debugging)</h3>
+        <ol class="small muted steps">
+          <li>On the phone: Developer options → Wireless debugging → <b>Pair device with pairing code</b>.</li>
+          <li>Enter the <b>IP address &amp; port</b> and the <b>6-digit code</b> shown in that popup below.</li>
+          <li>Then connect with the address shown on the Wireless debugging screen (a different port).</li>
+        </ol>
+        <div class="row wrap">
+          <input id="pair-address" placeholder="192.168.1.50:37123" autocapitalize="off" spellcheck="false" inputmode="url">
+          <input id="pair-code" placeholder="123456" inputmode="numeric" maxlength="6" class="short">
+          <button class="btn" id="btn-pair" type="button">Pair</button>
+        </div>
+      </div>
+
+      <div class="card adb-only">
+        <div class="row space"><h3>ADB devices</h3><button class="btn small" id="btn-devices" type="button">List</button></div>
+        <ul id="devices-list" class="plain-list small"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Notifications</h3>
+        <p class="muted small" id="notify-status"></p>
+        <button class="btn small" id="btn-notify-test" type="button">Send test notification</button>
+      </div>
+
+      <div class="card">
+        <h3>Settings</h3>
+        <p class="muted small">Set these as environment variables in your Portainer stack.</p>
+        <dl id="settings-list" class="kv"></dl>
+      </div>
+
+      <p class="muted small center">
+        Dokkan Idle Farmer <span id="version"></span> ·
+        <a href="https://github.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer" target="_blank" rel="noopener">GitHub</a> ·
+        <a href="/api/docs" target="_blank" rel="noopener">API</a><br>
+        Unofficial fan project, not affiliated with Bandai Namco. Automating the game breaks its terms of service: use at your own risk.
+      </p>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button type="button" data-tab="farm" class="active">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span>Farm</span>
+    </button>
+    <button type="button" data-tab="screen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="18" r="1.2"/></svg><span>Screen</span>
+    </button>
+    <button type="button" data-tab="templates">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v16h16" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 6h16v16" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Templates</span>
+    </button>
+    <button type="button" data-tab="routines">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Routine</span>
+    </button>
+    <button type="button" data-tab="logs">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5l5 5-5 5M11 17h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Logs</span>
+    </button>
+    <button type="button" data-tab="device">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Device</span>
+    </button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
