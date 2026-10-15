@@ -25,6 +25,7 @@
     logs: [],
     logLastId: 0,
     lastTap: null,
+    jobActive: false,
   };
 
   // ================================================================= helpers
@@ -114,7 +115,7 @@
     if (name === "templates") { loadTemplates(); renderChecklist(); }
     if (name === "routines") loadEditor(ui.editorId || ui.routineId);
     if (name === "logs") pollLogs();
-    if (name === "device") renderDevice();
+    if (name === "device") { renderDevice(); loadApps(); }
     if (name === "farm") updatePreview(true);
   }
 
@@ -516,6 +517,20 @@
     await api("/api/device/app", { method: "POST", body: { action: b.dataset.app } });
     setTimeout(() => refreshScreen(true), 2500);
   }, "Done")));
+  async function typeText() {
+    const input = $("#type-text");
+    const text = input.value;
+    if (!text) return;
+    await run(async () => {
+      await api("/api/device/text", { method: "POST", body: { text } });
+      input.value = "";
+      setTimeout(() => refreshScreen(true), 700);
+    });
+  }
+  $("#btn-type").addEventListener("click", typeText);
+  $("#type-text").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); typeText(); }
+  });
   window.addEventListener("resize", () => { drawOverlay(); drawCapture(); });
 
   setInterval(() => {
@@ -918,9 +933,15 @@
       ["Device", [info.manufacturer, info.model].filter(Boolean).join(" ") || "–"],
       ["Android", info.android || "–"],
       ["Resolution", info.resolution || "–"],
-      ["CPU ABI", info.abi || "–"],
-      ["Game package", status.settings.game_package],
+      ["CPU ABIs", (info.abilist || info.abi || "–").split(",").join(", ")],
     ];
+    if ((info.abi || "").startsWith("x86")) {
+      const bridge = info.native_bridge && info.native_bridge !== "0" ? info.native_bridge : "";
+      rows.push(["ARM apps", bridge
+        ? `✅ translated (${bridge})`
+        : "❌ no ARM translation: Dokkan cannot run on this Android"]);
+    }
+    rows.push(["Game package", status.settings.game_package]);
     $("#device-info").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
     const err = $("#device-error");
     err.classList.toggle("hidden", !d.error);
@@ -983,6 +1004,153 @@
     const b = e.target.closest("button[data-serial]");
     if (b) $("#connect-serial").value = b.dataset.serial;
   });
+
+  // =================================================================== apps
+  const JOB_ACTIVE = ["queued", "uploading", "downloading", "installing"];
+  const UPLOAD_LIMIT_HINT = "Behind Cloudflare an upload can be at most 100 MB: "
+    + "open the farmer on its local address or install a link instead.";
+  let jobTimer = null;
+
+  function fmtBytes(n) {
+    if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
+    return `${((n || 0) / 1024 ** 2).toFixed(1)} MB`;
+  }
+
+  function renderJob(job) {
+    const el = $("#install-job");
+    const busy = Boolean(job && JOB_ACTIVE.includes(job.state));
+    ["#btn-install-aurora", "#btn-install-url", "#btn-install-file"].forEach((sel) => {
+      $(sel).disabled = busy;
+    });
+    if (!job) {
+      el.className = "notice hidden";
+      return;
+    }
+    const name = job.source === "fdroid:com.aurora.store" ? "Aurora Store" : job.source;
+    let text;
+    if (job.state === "uploading" || job.state === "downloading") {
+      const verb = job.state === "uploading" ? "Uploading" : "Downloading";
+      const pct = job.total ? ` (${Math.floor((job.downloaded / job.total) * 100)}%)` : "";
+      const size = job.total ? `${fmtBytes(job.downloaded)} of ${fmtBytes(job.total)}` : fmtBytes(job.downloaded);
+      text = `${verb} ${name}: ${size}${pct}…`;
+    } else if (job.state === "installing") {
+      text = `Installing ${name}… (a big game takes a few minutes)`;
+    } else if (job.state === "done") {
+      text = `✅ Installed ${name}`;
+    } else if (job.state === "error") {
+      text = `❌ ${name}: ${job.message}`;
+    } else {
+      text = `Starting ${name}…`;
+    }
+    el.textContent = text;
+    el.className = `notice ${{ done: "ok", error: "error" }[job.state] || ""}`;
+  }
+
+  async function pollJob() {
+    clearTimeout(jobTimer);
+    const res = await api("/api/apps/job").catch(() => null);
+    if (!res) {
+      if (ui.jobActive) jobTimer = setTimeout(pollJob, 3000);
+      return;
+    }
+    const job = res.job;
+    const wasActive = ui.jobActive;
+    ui.jobActive = Boolean(job && JOB_ACTIVE.includes(job.state));
+    renderJob(job);
+    if (ui.jobActive) {
+      jobTimer = setTimeout(pollJob, 1500);
+    } else if (wasActive && job) {
+      if (job.state === "done") {
+        toast(`Installed ${job.source === "fdroid:com.aurora.store" ? "Aurora Store" : job.source}`, "ok");
+        loadApps();
+      } else if (job.state === "error") {
+        toast(job.message, "error");
+      }
+    }
+  }
+
+  async function loadApps() {
+    const res = await api("/api/apps").catch(() => null);
+    if (!res) return;
+    const badge = $("#game-installed");
+    badge.className = `badge ${res.installed ? "ok" : "required"}${res.installed === null ? " hidden" : ""}`;
+    badge.textContent = res.installed ? "✓ game installed" : "game not installed";
+    renderJob(res.job);
+    if (res.job && JOB_ACTIVE.includes(res.job.state) && !ui.jobActive) {
+      ui.jobActive = true;
+      pollJob();
+    }
+  }
+
+  function startInstall(source) {
+    return run(async () => {
+      const res = await api("/api/apps/install", { method: "POST", body: { source } });
+      ui.jobActive = true;
+      renderJob(res.job);
+      pollJob();
+    });
+  }
+
+  function uploadApp(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", `/api/apps/upload?filename=${encodeURIComponent(file.name)}`);
+      xhr.setRequestHeader("Content-Type", "application/octet-stream");
+      xhr.upload.onprogress = (e) => onProgress(e.loaded, e.lengthComputable ? e.total : file.size);
+      xhr.onload = () => {
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (err) { data = null; }
+        if (xhr.status >= 200 && xhr.status < 300 && data) {
+          resolve(data);
+          return;
+        }
+        let detail = data && data.detail;
+        if (Array.isArray(detail)) detail = detail.map((d) => d.msg).join(", ");
+        if (!detail && xhr.status === 413) detail = `The file is too large. ${UPLOAD_LIMIT_HINT}`;
+        reject(new Error(detail || `Upload failed (HTTP ${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error(`Upload failed. ${UPLOAD_LIMIT_HINT}`));
+      xhr.send(file);
+    });
+  }
+
+  $("#btn-install-aurora").addEventListener("click", () => startInstall("fdroid:com.aurora.store"));
+  $("#btn-open-aurora").addEventListener("click", () => run(async () => {
+    await api("/api/device/app", {
+      method: "POST", body: { action: "launch", package: "com.aurora.store" },
+    });
+    $("#toggle-control").checked = true;
+    $("#screen-wrap").classList.add("control");
+    showTab("screen");
+    setTimeout(() => refreshScreen(true), 2500);
+  }));
+  $("#btn-install-url").addEventListener("click", () => {
+    const url = $("#install-url").value.trim();
+    if (!url) {
+      toast("Enter a link to an .apk, .xapk or .apks file", "error");
+      return;
+    }
+    startInstall(url);
+  });
+  $("#btn-install-file").addEventListener("click", () => run(async () => {
+    const file = $("#install-file").files[0];
+    if (!file) throw new Error("Choose an .apk, .xapk or .apks file first");
+    ui.jobActive = true;
+    const progress = (loaded, total) => renderJob({
+      state: "uploading", source: file.name, downloaded: loaded, total,
+    });
+    progress(0, file.size);
+    try {
+      const res = await uploadApp(file, progress);
+      $("#install-file").value = "";
+      renderJob(res.job);
+    } catch (err) {
+      ui.jobActive = false;
+      renderJob({ state: "error", source: file.name, message: err.message });
+      throw err;
+    }
+    pollJob();
+  }));
 
   $("#btn-notify-test").addEventListener("click", () => run(
     () => api("/api/notify/test", { method: "POST" }), "Test notification sent",

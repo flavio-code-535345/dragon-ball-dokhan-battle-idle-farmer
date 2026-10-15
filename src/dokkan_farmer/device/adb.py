@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import re
+import shlex
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import cv2
@@ -195,6 +197,14 @@ class AdbDevice(Device):
     def key(self, name: str) -> None:
         self.shell("input", "keyevent", KEYCODES[normalize_key(name)])
 
+    def text(self, value: str) -> None:
+        if not value:
+            return
+        if len(value) > 500 or any(not 32 <= ord(c) <= 126 for c in value):
+            raise ValueError("Only plain ASCII text (up to 500 characters) can be typed")
+        # `input text` reads "%s" as a space; quote the rest for the device shell.
+        self.shell("input", "text", shlex.quote(value.replace(" ", "%s")))
+
     # --------------------------------------------------------------------- apps
     def launch_app(self, package: str) -> None:
         validate_package(package)
@@ -211,6 +221,27 @@ class AdbDevice(Device):
     def stop_app(self, package: str) -> None:
         validate_package(package)
         self.shell("am", "force-stop", package)
+
+    def install(self, apks: Sequence[Path]) -> str:
+        if not apks:
+            raise ValueError("Nothing to install")
+        verb = ["install"] if len(apks) == 1 else ["install-multiple"]
+        # -r: replace an existing install, -g: grant the app's runtime permissions.
+        proc = self._exec([*verb, "-r", "-g", *(str(p) for p in apks)], timeout=900, check=False)
+        text = _output(proc)
+        if "Success" not in text:
+            failure = re.search(r"Failure \[([^\]]+)\]", text)
+            failure = failure or re.search(r"(INSTALL_\w+.*)", text)
+            raise DeviceError(f"Install failed: {failure.group(1) if failure else text[-300:]}")
+        return text
+
+    def push(self, local: Path, remote: str) -> None:
+        self._exec(["push", str(local), remote], timeout=900)
+
+    def is_installed(self, package: str) -> bool | None:
+        validate_package(package)
+        proc = self._exec(["shell", "pm", "path", package], timeout=15, check=False)
+        return "package:" in proc.stdout.decode("utf-8", "replace")
 
     def foreground_package(self) -> str | None:
         # One round-trip; grep keeps the output small. "; true" because grep exits 1 on no match.
@@ -229,11 +260,12 @@ class AdbDevice(Device):
         out = self.shell(
             "getprop ro.product.manufacturer; getprop ro.product.model; "
             "getprop ro.build.version.release; getprop ro.build.version.sdk; "
-            "getprop ro.product.cpu.abi; wm size"
+            "getprop ro.product.cpu.abi; getprop ro.product.cpu.abilist; "
+            "getprop ro.dalvik.vm.native.bridge; wm size"
         )
         lines = [line.strip() for line in out.splitlines()]
         info: dict[str, Any] = {}
-        keys = ["manufacturer", "model", "android", "sdk", "abi"]
+        keys = ["manufacturer", "model", "android", "sdk", "abi", "abilist", "native_bridge"]
         for key, value in zip(keys, lines, strict=False):
             info[key] = value
         sizes = re.findall(r"(Physical|Override) size:\s*(\d+)x(\d+)", out)

@@ -42,6 +42,15 @@ elif cmd == "exec-out":
         sys.stdout.buffer.write(fh.read())
 elif cmd == "pair":
     print("Successfully paired to %s [guid=adb-123]" % args[1])
+elif cmd in ("install", "install-multiple"):
+    print("Performing Streamed Install")
+    if mode == "install_fail":
+        print("adb: failed to install x.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: "
+              "Failed to extract native libraries, res=-113]")
+        sys.exit(1)
+    print("Success")
+elif cmd == "push":
+    print("%s: 1 file pushed, 0 skipped." % args[1])
 elif cmd == "devices":
     print("List of devices attached")
     print("192.168.1.50:5555       device product:x model:Pixel_7 device:panther transport_id:1")
@@ -56,7 +65,17 @@ elif cmd == "shell":
         print("  topResumedActivity=ActivityRecord{1a2b u0 com.bandainamcogames.dbzdokkanww/"
               "com.bandainamcogames.dbzdokkan.MainActivity t42}")
     elif "getprop" in script:
-        print("Google\nPixel 7\n14\n34\narm64-v8a\nPhysical size: 1080x2400")
+        if mode == "redroid":
+            print("redroid\nredroid14_x86_64\n14\n34\nx86_64\n"
+                  "x86_64,x86,arm64-v8a,armeabi-v7a,armeabi\nlibnb.so\nPhysical size: 720x1280")
+        else:
+            print("Google\nPixel 7\n14\n34\narm64-v8a\narm64-v8a,armeabi-v7a,armeabi\n\n"
+                  "Physical size: 1080x2400\nOverride size: 720x1600")
+    elif script.startswith("pm path"):
+        if "dbzdokkanww" in script:
+            print("package:/data/app/~~x==/com.bandainamcogames.dbzdokkanww-y==/base.apk")
+        else:
+            sys.exit(1)
 sys.exit(0)
 """
 
@@ -123,7 +142,8 @@ def test_info_devices_pair(fake_adb):
     device = AdbDevice("192.168.1.50:5555", adb_path=path)
     info = device.info()
     assert info["model"] == "Pixel 7" and info["android"] == "14"
-    assert info["abi"] == "arm64-v8a" and info["resolution"] == "1080x2400"
+    assert info["abi"] == "arm64-v8a" and info["resolution"] == "720x1600"
+    assert info["abilist"] == "arm64-v8a,armeabi-v7a,armeabi" and info["native_bridge"] == ""
     devices = device.devices()
     assert devices[0]["serial"] == "192.168.1.50:5555" and devices[0]["model"] == "Pixel_7"
     assert devices[1]["state"] == "offline"
@@ -157,3 +177,53 @@ def test_timeout_and_missing_binary(fake_adb, monkeypatch):
 def test_invalid_serials(serial):
     with pytest.raises(ValueError):
         validate_serial(serial)
+
+
+def test_info_redroid_reports_arm_translation(fake_adb, monkeypatch):
+    path, _ = fake_adb
+    monkeypatch.setenv("FAKE_ADB_MODE", "redroid")
+    info = AdbDevice("redroid:5555", adb_path=path).info()
+    assert info["abi"] == "x86_64" and "arm64-v8a" in info["abilist"]
+    assert info["native_bridge"] == "libnb.so" and info["resolution"] == "720x1280"
+
+
+def test_type_text(fake_adb):
+    path, calls = fake_adb
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    device.text("goku@example.com")
+    device.text("p4ss w'rd;$(x)")
+    device.text("")
+    shell_texts = [c[5:] for c in calls() if c[2:5] == ["shell", "input", "text"]]
+    # Spaces become %s for `input text`; everything is quoted for the device shell.
+    assert shell_texts == [["goku@example.com"], ["'p4ss%sw'\"'\"'rd;$(x)'"]]
+    for bad in ("über", "line\nbreak", "x" * 501):
+        with pytest.raises(ValueError):
+            device.text(bad)
+
+
+def test_install_push_and_is_installed(fake_adb, monkeypatch, tmp_path):
+    path, calls = fake_adb
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    base, split = tmp_path / "base.apk", tmp_path / "split_config.arm64_v8a.apk"
+    assert "Success" in device.install([base])
+    assert "Success" in device.install([base, split])
+    log = calls()
+    assert ["-s", "192.168.1.50:5555", "install", "-r", "-g", str(base)] in log
+    assert ["-s", "192.168.1.50:5555", "install-multiple", "-r", "-g", str(base), str(split)] in log
+    with pytest.raises(ValueError):
+        device.install([])
+    device.push(tmp_path / "main.obb", "/sdcard/Android/obb/x/main.obb")
+    assert [
+        "-s",
+        "192.168.1.50:5555",
+        "push",
+        str(tmp_path / "main.obb"),
+        "/sdcard/Android/obb/x/main.obb",
+    ] in calls()
+    assert device.is_installed("com.bandainamcogames.dbzdokkanww") is True
+    assert device.is_installed("com.aurora.store") is False
+    with pytest.raises(ValueError):
+        device.is_installed("bad package")
+    monkeypatch.setenv("FAKE_ADB_MODE", "install_fail")
+    with pytest.raises(DeviceError, match="INSTALL_FAILED_NO_MATCHING_ABIS"):
+        device.install([base])

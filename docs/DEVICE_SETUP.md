@@ -7,7 +7,7 @@ Pick one of these:
 |---|---|---|---|
 | **A. Spare phone or tablet on Wi-Fi** | low | ★★★ | Recommended. A real device, so the game is officially supported. |
 | **B. Emulator on a PC** (BlueStacks, LDPlayer, MuMu) | medium | ★★☆ | The PC has to stay on. |
-| **C. redroid container on the server** | high | ★☆☆ | Fully self-hosted but **experimental**: not confirmed to run Dokkan. |
+| **C. All-in-one: Android in a container on the server** | low | ★★☆ | Nothing else has to stay on. Needs a Linux kernel with binder; game support not confirmed yet. |
 | **D. Phone on USB at the server** | medium | ★★★ | Needs USB passthrough into the container. |
 
 ## Tips for every option
@@ -63,47 +63,77 @@ Emulators only listen on `127.0.0.1`, so make the port reachable:
 
   and use `ADB_SERIAL=<pc-ip>:5555`.
 
-## C. redroid: Android in a container (experimental)
+## C. All-in-one: Android in a container on the server (redroid)
 
-[redroid](https://github.com/remote-android/redroid-doc) runs Android in Docker next to the farmer
-([`docker-compose.redroid.yml`](../docker-compose.redroid.yml)). It is the only fully self-hosted
-option, but **nobody has confirmed that Dokkan works on it**. The game may refuse a rooted or
-emulated system, and software rendering can be slow. Try it if you like tinkering.
+[redroid](https://github.com/remote-android/redroid-doc) runs Android in Docker next to the
+farmer, so nothing else has to stay on: deploy
+[`docker-compose.redroid.yml`](../docker-compose.redroid.yml) instead of `docker-compose.yml`.
+The stack has three services:
 
-Requirements:
+1. **host-setup** runs once at every deploy. Android needs the *binder* driver of the server's
+   kernel: it loads it (`modprobe binder_linux`) and writes `/etc/modules-load.d/redroid.conf` and
+   `/etc/modprobe.d/redroid.conf` so the server loads it after a reboot, too. Delete those two
+   files to undo that.
+2. **redroid** is Android 14 at 720x1280. Its x86_64 image translates ARM code
+   (`libndk_translation`), so Dokkan runs on Intel and AMD servers: the Device tab shows
+   *ARM apps: ✅ translated*. Keep version 14: the newer x86_64 images (15, 16) come without that
+   translator ([redroid-doc#933](https://github.com/remote-android/redroid-doc/issues/933)).
+   On ARM64 servers the game runs natively.
+3. **farmer** connects to `redroid:5555` by itself and waits up to 5 minutes for Android to boot.
 
-- A **Linux host whose kernel has binder**. On Ubuntu/Debian:
+### Requirements
 
-  ```sh
-  sudo apt install linux-modules-extra-$(uname -r)
-  sudo modprobe binder_linux devices="binder,hwbinder,vndbinder"
-  echo binder_linux | sudo tee /etc/modules-load.d/redroid.conf
-  echo 'options binder_linux devices="binder,hwbinder,vndbinder"' | sudo tee /etc/modprobe.d/redroid.conf
-  ```
+- A **Linux** server or VM (x86_64 or ARM64), ~4 GB of free RAM and ~15 GB of disk for Android,
+  the game and its data. 4+ CPU cores are recommended.
+- A kernel with **binder** (`CONFIG_ANDROID_BINDER_IPC`, module `binder_linux`; binderfs works
+  too). host-setup loads it and stops the stack with instructions if it is missing:
+  - Ubuntu: `sudo apt install linux-modules-extra-$(uname -r)`, then redeploy.
+  - Proxmox: run the stack in a VM. An LXC container shares the Proxmox kernel: there, load the
+    module on the Proxmox host (`modprobe binder_linux devices=binder,hwbinder,vndbinder`).
+  - Docker Desktop (Windows/macOS), Synology and Unraid kernels usually lack binder: use option A
+    or B there.
+- The stack starts two **privileged** containers (host-setup and redroid). Only deploy it on a
+  machine you control.
 
-  This does **not** work on Docker Desktop (Windows/macOS) or on most NAS kernels. Kernels that only
-  provide *binderfs* are a [known problem](https://github.com/remote-android/redroid-doc/issues/859).
-- **ARM support.** Dokkan ships ARM code. On an **ARM64 host** (Raspberry Pi 5, Ampere, ...) it runs
-  natively. On **x86_64** you need an image with ARM translation (libndk). Build one with
-  [redroid-script](https://github.com/ayasa520/redroid-script), e.g.
-  `python redroid.py -a 12.0.0_64only -n` (add `-mtg` for Google Play). Set
-  `REDROID_IMAGE` to the image it creates and uncomment the `ro.*` lines in
-  `docker-compose.redroid.yml`.
+### Setup
 
-Installing Dokkan on redroid:
+1. Portainer → *Stacks* → *Add stack* → paste
+   [`docker-compose.redroid.yml`](../docker-compose.redroid.yml) into the *Web editor* (or use
+   *Repository* with that compose path). Set `WEB_PASSWORD`, `TZ` and, if port 8080 is taken,
+   `HOST_PORT`. Deploy.
+2. The first start downloads Android (about 900 MB) and boots it in a minute or two. The
+   **Device** tab then shows *connected* and *ARM apps: ✅ translated*.
+3. **Install the game.** redroid has no Google Play, so: Device tab → *Apps* →
+   **Install Aurora Store** (an open-source Play Store client, downloaded from F-Droid), then
+   **Open Aurora Store**. The farmer switches to the Screen tab with *Touch control* on.
+   In Aurora Store go through the welcome screens (allow it to install apps), log in
+   **anonymously**, search for *Dokkan* and install *Dragon Ball Z Dokkan Battle*.
+   Alternatively install an `.apk`, `.xapk` or `.apks` file from a link or an upload in the *Apps*
+   card. Uploads through Cloudflare are limited to 100 MB: use the server's local address for
+   bigger files.
+4. **Screen tab → ▶ Launch game.** Bring your account over with the game's own data transfer
+   (Bandai Namco ID or a transfer code). The text field under the screen types into the selected
+   input (plain ASCII), ⌫ deletes and ↵ presses Enter. Signing in with Google is not possible
+   because redroid has no Google Play services.
+5. Download all game data in the game, then continue with the stage and template setup like on a
+   phone (README, steps 4 to 6).
 
-- With a GApps image, sign in to the Play Store using the farmer's **Screen** tab (Touch control).
-- Or copy the APKs from your phone. From a PC with adb:
+### Performance
 
-  ```sh
-  adb -s <phone> shell pm path com.bandainamcogames.dbzdokkanww   # lists base.apk + split APKs
-  adb -s <phone> pull <each path>
-  adb -s <redroid-host>:5555 install-multiple base.apk split_*.apk
-  ```
+- `REDROID_GPU_MODE=guest` (default) renders on the CPU. It works everywhere and costs a few CPU
+  cores while the game is on screen.
+- `REDROID_GPU_MODE=host` renders on the server's GPU (Intel iGPU with the `i915` driver, AMD) and
+  saves CPU. If the screen stays black, go back to `guest`.
+- `REDROID_FPS` (default 30) can be lowered to save more CPU.
 
-  (Expose port 5555 of the redroid service for this, see the comment in the compose file.)
+### Good to know
 
-Then log in, download the data and set up your stage with the Screen tab, exactly like on a phone.
+- redroid is a development build of Android (*userdebug*, with `su` inside). Games that refuse
+  rooted devices may notice that. Whether Dokkan accepts it has not been confirmed yet; a phone
+  (option A) remains the safe choice.
+- ADB of redroid is an unprotected root shell. The compose file does not publish port 5555; if
+  you open it for scrcpy, keep it inside your LAN.
+- To start over, remove the stack together with its `redroid-data` volume.
 
 ## D. Phone on USB at the server
 

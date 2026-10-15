@@ -84,6 +84,7 @@ jobs:
           grep -q '"connected":true' status.json
           docker exec farmer adb version
           docker exec farmer tini --version
+          docker exec farmer sh -c 'modprobe --version && test -x /usr/local/bin/host-setup'
           curl -fsS -X POST http://localhost:8080/api/farm/start \
             -H 'Content-Type: application/json' -d '{"routine": "dokkan_auto_farm"}'
           sleep 15

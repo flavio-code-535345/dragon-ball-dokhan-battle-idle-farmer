@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -17,6 +19,8 @@ KEYCODES = {
     "BACK": "KEYCODE_BACK",
     "HOME": "KEYCODE_HOME",
     "ENTER": "KEYCODE_ENTER",
+    "DEL": "KEYCODE_DEL",
+    "TAB": "KEYCODE_TAB",
     "ESCAPE": "KEYCODE_ESCAPE",
     "MENU": "KEYCODE_MENU",
     "APP_SWITCH": "KEYCODE_APP_SWITCH",
@@ -72,6 +76,22 @@ class Device(abc.ABC):
 
     def info(self) -> dict[str, Any]:
         return {}
+
+    def text(self, value: str) -> None:
+        """Type text into the focused input field."""
+        raise DeviceError("This device cannot type text")
+
+    def install(self, apks: Sequence[Path]) -> str:
+        """Install an APK, or the split APKs of one app together."""
+        raise DeviceError("This device cannot install apps")
+
+    def push(self, local: Path, remote: str) -> None:
+        """Copy a file to the device."""
+        raise DeviceError("This device cannot receive files")
+
+    def is_installed(self, package: str) -> bool | None:
+        """Whether an app is installed (``None`` if unknown)."""
+        return None
 
     def set_stay_awake(self, enabled: bool) -> None:  # noqa: B027 - optional hook
         """Keep the screen on while farming (no-op where unsupported)."""

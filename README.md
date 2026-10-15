@@ -4,9 +4,10 @@
 [![Docker Hub](https://img.shields.io/docker/pulls/flavio11113/dokkan-idle-farmer?logo=docker&label=Docker%20Hub)](https://hub.docker.com/r/flavio11113/dokkan-idle-farmer)
 
 A self-hosted idle farmer for **Dragon Ball Z Dokkan Battle** that runs as a Docker container
-(Portainer-ready) on your home server. It drives an Android phone, emulator or redroid container
-over ADB, keeps Dokkan's own **Auto Mode** farming your stage around the clock, and you watch and
-control everything from a mobile-friendly web page.
+(Portainer-ready) on your home server. It drives an Android phone, an emulator, or Android running
+in a container on the same server (all-in-one stack) over ADB, keeps Dokkan's own **Auto Mode**
+farming your stage around the clock, and you watch and control everything from a mobile-friendly
+web page.
 
 <p align="center">
   <img src="docs/images/farm.png" width="250" alt="Farm tab">
@@ -65,7 +66,8 @@ own Auto Mode, so the farmer is simple and does not try to play battles itself.
 ## Quick start with Portainer
 
 **1. Prepare an Android device with ADB over the network.** The easiest is a spare phone or
-tablet on Wi-Fi with *Wireless debugging* (Android 11+). Emulators on a PC and redroid also work.
+tablet on Wi-Fi with *Wireless debugging* (Android 11+). Emulators on a PC work too. No spare
+device? Run Android on the server itself with the [all-in-one stack](#all-in-one-android-on-the-server).
 See **[docs/DEVICE_SETUP.md](docs/DEVICE_SETUP.md)**.
 
 **2. Deploy the stack.** In Portainer go to *Stacks → Add stack*:
@@ -111,6 +113,25 @@ ADB_SERIAL=192.168.1.50:5555 WEB_PASSWORD=change-me docker compose up -d
 > package public first if Portainer can't pull it). Or deploy
 > [`docker-compose.build.yml`](docker-compose.build.yml), which builds the image on your server.
 
+## All-in-one: Android on the server
+
+[`docker-compose.redroid.yml`](docker-compose.redroid.yml) runs Android 14
+([redroid](https://github.com/remote-android/redroid-doc)) in a container next to the farmer, so
+no phone or PC has to stay on. It needs a Linux server whose kernel has the *binder* driver; a
+one-shot `host-setup` service loads it. On Intel/AMD servers Android translates Dokkan's ARM code.
+
+1. Deploy `docker-compose.redroid.yml` as the stack (instead of `docker-compose.yml`). No
+   `ADB_SERIAL` needed.
+2. Device tab → *Apps* → **Install Aurora Store**, then **Open Aurora Store**, log in
+   anonymously and install Dokkan with touch control on the Screen tab (or install an
+   `.apk`/`.xapk` file from a link or upload).
+3. Launch the game, transfer your account (the Screen tab can type text), download the data and
+   continue with step 4 above.
+
+Details, requirements and caveats: [docs/DEVICE_SETUP.md, option C](docs/DEVICE_SETUP.md#c-all-in-one-android-in-a-container-on-the-server-redroid).
+The [Android end-to-end workflow](.github/workflows/android-e2e.yml) boots this stack on a GitHub
+runner to test it.
+
 ## Configuration
 
 All settings are environment variables:
@@ -136,6 +157,9 @@ All settings are environment variables:
 | `PUID` / `PGID` | `1000` | Owner of the files in the data volume. |
 | `RUN_AS_ROOT` | `false` | Needed for USB passthrough (`/dev/bus/usb`). |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail. |
+| `REDROID_GPU_MODE` | `guest` | All-in-one stack: `guest` renders on the CPU, `host` on the server's Intel/AMD GPU. |
+| `REDROID_FPS` | `30` | All-in-one stack: Android's frame rate (lower = less CPU). |
+| `REDROID_IMAGE` | `redroid/redroid:14.0.0-latest` | All-in-one stack: the Android image. Keep 14 on x86_64 (ARM translation). |
 
 Everything you configure in the UI (templates, routines, options, device address, statistics)
 lives in the `/data` volume.
@@ -208,6 +232,8 @@ and `IMAGE` in the compose files.
   if a button is not found.
 - **It taps the wrong thing**: make the template more distinctive (include the text), uncheck
   "whole screen", or enable colour matching. A popup's dimmed background is ignored automatically.
+- **All-in-one stack does not start**: open the logs of the `host-setup` container. It explains
+  what to install when the kernel has no binder driver.
 - **Logs** are in the Logs tab and in `/data/logs/farmer.log`. Screenshots of stuck screens are in
   `/data/screenshots`.
 

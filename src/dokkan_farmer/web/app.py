@@ -21,6 +21,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from .. import __version__
 from ..context import AppContext
 from ..device import AdbDevice, DeviceError, normalize_key
+from ..device.adb import validate_package
+from ..installer import MAX_DOWNLOAD, InstallError
 from ..library import validate_routine_id
 from ..logging_setup import LOG_BUFFER, ensure_log_buffer
 from ..routine import Routine, RoutineError, parse_routine
@@ -129,6 +131,17 @@ class KeyRequest(BaseModel):
 
 class AppRequest(BaseModel):
     action: Literal["launch", "stop", "restart"]
+    #: Another app than the game, e.g. "com.aurora.store" to open Aurora Store.
+    package: str | None = None
+
+
+class TextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+class InstallRequest(BaseModel):
+    #: An http(s) link to an .apk / .xapk / .apks file, or "fdroid:<package>".
+    source: str = Field(min_length=3, max_length=2000)
 
 
 class ConnectRequest(BaseModel):
@@ -440,9 +453,22 @@ def create_app(ctx: AppContext) -> FastAPI:
         ctx.farmer.device_call(lambda d: d.key(key))
         return {"ok": True}
 
+    @app.post("/api/device/text")
+    def device_text(body: TextRequest) -> dict[str, Any]:
+        try:
+            ctx.farmer.device_call(lambda d: d.text(body.text))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        return {"ok": True}
+
     @app.post("/api/device/app")
     def device_app(body: AppRequest) -> dict[str, Any]:
         package = ctx.settings.game_package
+        if body.package:
+            try:
+                package = validate_package(body.package.strip())
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from None
         if body.action in ("stop", "restart"):
             ctx.farmer.device_call(lambda d: d.stop_app(package))
         if body.action in ("launch", "restart"):
@@ -478,6 +504,69 @@ def create_app(ctx: AppContext) -> FastAPI:
         if not isinstance(ctx.device, AdbDevice):
             return {"devices": [{"serial": ctx.device.serial, "state": "device"}]}
         return {"devices": ctx.device.devices()}
+
+    # ------------------------------------------------------------------- apps
+    def _require_adb() -> None:
+        if not isinstance(ctx.device, AdbDevice):
+            raise HTTPException(400, "Installing apps needs a real Android device (adb backend)")
+
+    @app.get("/api/apps")
+    def apps_status() -> dict[str, Any]:
+        installed = None
+        if ctx.device_status["connected"]:
+            try:
+                installed = ctx.farmer.device_call(
+                    lambda d: d.is_installed(ctx.settings.game_package)
+                )
+            except DeviceError:
+                installed = None
+        return {
+            "package": ctx.settings.game_package,
+            "installed": installed,
+            "can_install": isinstance(ctx.device, AdbDevice),
+            "job": ctx.installer.current(),
+        }
+
+    @app.get("/api/apps/job")
+    def apps_job() -> dict[str, Any]:
+        return {"job": ctx.installer.current()}
+
+    @app.post("/api/apps/install")
+    def apps_install(body: InstallRequest) -> dict[str, Any]:
+        _require_adb()
+        try:
+            return {"job": ctx.installer.start_url(body.source)}
+        except InstallError as exc:
+            raise HTTPException(400, str(exc)) from None
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from None
+
+    @app.put("/api/apps/upload")
+    async def apps_upload(
+        request: Request, filename: str = Query(min_length=1, max_length=200)
+    ) -> dict[str, Any]:
+        _require_adb()
+        if ctx.installer.busy:
+            raise HTTPException(409, "Another install is still running")
+        path = ctx.installer.upload_path(filename)
+        size = 0
+        try:
+            with open(path, "wb") as fh:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > MAX_DOWNLOAD:
+                        raise HTTPException(413, "The file is too large")
+                    fh.write(chunk)
+        except BaseException:
+            path.unlink(missing_ok=True)
+            raise
+        if size == 0:
+            path.unlink(missing_ok=True)
+            raise HTTPException(400, "The upload was empty")
+        try:
+            return {"job": ctx.installer.start_file(path, filename)}
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from None
 
     # -------------------------------------------------------------- templates
     @app.get("/api/templates")

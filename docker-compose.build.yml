@@ -1,5 +1,5 @@
 # Same as docker-compose.yml, but builds the image from this repository instead of
-# pulling it from GHCR (useful for forks or a private copy of the repo).
+# pulling it from Docker Hub (useful for forks or a private copy of the repo).
 #   docker compose -f docker-compose.build.yml up -d --build
 services:
   farmer:

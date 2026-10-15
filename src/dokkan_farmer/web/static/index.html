@@ -111,6 +111,12 @@
           <button class="btn small" data-app="restart" type="button">⟳ Restart game</button>
           <button class="btn small" data-app="stop" type="button">■ Close game</button>
         </div>
+        <div class="row">
+          <input id="type-text" placeholder="Text for the selected field (e-mail, code, …)" maxlength="500" autocapitalize="off" autocomplete="off" spellcheck="false" enterkeyhint="send">
+          <button class="btn small" id="btn-type" type="button">Type</button>
+          <button class="btn small" data-devkey="DEL" type="button" title="Delete one character" aria-label="Delete one character">⌫</button>
+          <button class="btn small" data-devkey="ENTER" type="button" title="Enter" aria-label="Enter">↵</button>
+        </div>
       </div>
     </section>
 
@@ -215,6 +221,25 @@
         <div class="row space"><h3>Device</h3><button class="btn small" id="btn-device-refresh" type="button">⟳ Check</button></div>
         <dl id="device-info" class="kv"></dl>
         <div id="device-error" class="notice error hidden"></div>
+      </div>
+
+      <div class="card adb-only" id="apps-card">
+        <div class="row space"><h3>Apps</h3><span id="game-installed" class="badge hidden"></span></div>
+        <p class="muted small">Android without Google Play (the all-in-one redroid stack): install <b>Aurora Store</b>, open it, log in <b>anonymously</b> and install Dragon Ball Z Dokkan Battle from there with <b>Touch control</b> on the Screen tab. You can also install an <code>.apk</code>, <code>.xapk</code> or <code>.apks</code> file.</p>
+        <div class="buttons">
+          <button class="btn primary" id="btn-install-aurora" type="button">Install Aurora Store</button>
+          <button class="btn" id="btn-open-aurora" type="button">Open Aurora Store</button>
+        </div>
+        <div class="row">
+          <input id="install-url" placeholder="https://…/dokkan.xapk" autocapitalize="off" spellcheck="false" inputmode="url">
+          <button class="btn" id="btn-install-url" type="button">Install link</button>
+        </div>
+        <div class="row">
+          <input id="install-file" type="file" accept=".apk,.xapk,.apks,.zip">
+          <button class="btn" id="btn-install-file" type="button">Upload</button>
+        </div>
+        <p class="muted small">Behind Cloudflare an upload can be at most 100 MB: for bigger files open the farmer on its local address (<code>http://server-ip:port</code>) or install a link.</p>
+        <div id="install-job" class="notice hidden"></div>
       </div>
 
       <div class="card adb-only">

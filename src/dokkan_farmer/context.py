@@ -9,6 +9,7 @@ from typing import Any
 
 from .device import AdbDevice, Device, DeviceError, SimDevice, create_device, install_sim_templates
 from .engine import Farmer, missing_required_templates
+from .installer import InstallManager
 from .library import RoutineLibrary
 from .notify import Notifier
 from .routine import Routine, RoutineError
@@ -17,6 +18,11 @@ from .state import StateStore
 from .vision import Matcher, TemplateStore
 
 log = logging.getLogger(__name__)
+
+#: At startup, keep trying to reach the device for this long (Android in a
+#: container needs a minute or two to boot).
+STARTUP_CONNECT_SECONDS = 300
+STARTUP_RETRY_SECONDS = 10
 
 
 class AppContext:
@@ -56,6 +62,10 @@ class AppContext:
             on_device_status=self._on_device_status,
             **(farmer_kwargs or {}),
         )
+        # Installs run for minutes: they bypass the device lock so the live
+        # screen and touch control keep working meanwhile (adb runs both at once).
+        self.installer = InstallManager(settings.data_dir / "apk-tmp", lambda fn: fn(self.device))
+        self._closing = threading.Event()
 
     # ------------------------------------------------------------------ device
     @property
@@ -128,6 +138,13 @@ class AppContext:
 
     def _startup_worker(self) -> None:
         status = self.refresh_device()
+        deadline = time.monotonic() + STARTUP_CONNECT_SECONDS
+        if not status["connected"]:
+            log.info("Waiting for the device (%s)...", status["error"])
+        while not status["connected"] and time.monotonic() < deadline:
+            if self._closing.wait(STARTUP_RETRY_SECONDS):
+                return
+            status = self.refresh_device()
         if status["connected"]:
             info = status["info"]
             log.info(
@@ -151,6 +168,7 @@ class AppContext:
                 log.error("Autostart failed: %s", exc)
 
     def shutdown(self) -> None:
+        self._closing.set()
         if self.farmer.is_running:
             self.farmer.stop("Container stopped", resume_later=True)
         self.notifier.close()

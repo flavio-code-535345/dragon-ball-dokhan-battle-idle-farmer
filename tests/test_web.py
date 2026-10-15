@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import base64
+import io
+import threading
 import time
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
 
 from dokkan_farmer.context import AppContext
+from dokkan_farmer.device.adb import AdbDevice
 from dokkan_farmer.device.sim import SimConfig, SimDevice, SimGame
 from dokkan_farmer.settings import Settings
 from dokkan_farmer.web import create_app
@@ -244,3 +248,92 @@ def test_static_files_revalidate_and_manifest_sends_credentials(client):
     assert 'rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials"' in (
         client.get("/").text
     )
+
+
+def test_type_text_and_open_other_apps(client):
+    assert client.post("/api/device/text", json={"text": "goku@example.com"}).json()["ok"]
+    assert client.ctx.device.typed == ["goku@example.com"]
+    assert client.post("/api/device/text", json={"text": ""}).status_code == 422
+    assert client.post("/api/device/text", json={"text": "x" * 501}).status_code == 422
+    other = client.post("/api/device/app", json={"action": "launch", "package": "com.aurora.store"})
+    assert other.status_code == 503 and "not installed" in other.json()["detail"]
+    bad = client.post("/api/device/app", json={"action": "launch", "package": "rm -rf"})
+    assert bad.status_code == 400
+
+
+def test_apps_on_the_simulator(client):
+    assert wait_for(lambda: client.get("/api/status").json()["device"]["connected"])
+    apps = client.get("/api/apps").json()
+    assert apps == {
+        "package": client.ctx.settings.game_package,
+        "installed": True,
+        "can_install": False,
+        "job": None,
+    }
+    assert client.get("/api/apps/job").json() == {"job": None}
+    install = client.post("/api/apps/install", json={"source": "fdroid:com.aurora.store"})
+    assert install.status_code == 400 and "adb" in install.json()["detail"]
+    assert client.put("/api/apps/upload?filename=a.apk", content=b"x").status_code == 400
+
+
+class InstallableAdb(AdbDevice):
+    """An adb device that only pretends to install apps."""
+
+    def __init__(self) -> None:
+        super().__init__("redroid:5555", adb_path="adb-is-not-called")
+        self.installed: list[list[str]] = []
+        self.gate = threading.Event()
+        self.gate.set()
+
+    def connect(self) -> None:
+        pass
+
+    def info(self) -> dict:
+        return {"abi": "x86_64", "abilist": "x86_64,arm64-v8a", "native_bridge": "libnb.so"}
+
+    def install(self, apks) -> str:
+        self.gate.wait(5)
+        self.installed.append([p.name for p in apks])
+        return "Success"
+
+    def is_installed(self, package: str) -> bool:
+        return bool(self.installed)
+
+
+def apk_bytes() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("AndroidManifest.xml", b"\x03\x00")
+    return buffer.getvalue()
+
+
+def test_upload_and_install_through_the_api(tmp_path):
+    settings = Settings(data_dir=tmp_path / "data")
+    device = InstallableAdb()
+    ctx = AppContext(settings, device=device)
+    with TestClient(create_app(ctx)) as client:
+        assert wait_for(lambda: client.get("/api/status").json()["device"]["connected"])
+        assert client.get("/api/apps").json()["installed"] is False
+        assert client.get("/api/apps").json()["can_install"] is True
+        bad = client.post("/api/apps/install", json={"source": "ftp://example.com/x.apk"})
+        assert bad.status_code == 400
+        assert client.put("/api/apps/upload?filename=a.apk", content=b"").status_code == 400
+
+        device.gate.clear()  # hold the install until the busy check below
+        job = client.put("/api/apps/upload?filename=Dokkan.apk", content=apk_bytes()).json()
+        assert job["job"]["source"] == "Dokkan.apk"
+        busy = client.put("/api/apps/upload?filename=b.apk", content=apk_bytes())
+        assert busy.status_code == 409
+        again = client.post("/api/apps/install", json={"source": "https://example.com/x.apk"})
+        assert again.status_code == 409
+        device.gate.set()
+
+        def finished() -> bool:
+            return client.get("/api/apps/job").json()["job"]["state"] == "done"
+
+        assert wait_for(finished)
+        assert len(device.installed) == 1 and device.installed[0][0].endswith("Dokkan.apk")
+        apps = client.get("/api/apps").json()
+        assert apps["installed"] is True and apps["job"]["message"] == "Installed Dokkan.apk"
+        info = client.get("/api/status").json()["device"]["info"]
+        assert info["native_bridge"] == "libnb.so"

@@ -636,6 +636,7 @@ class SimDevice(Device):
         self.reachable = True
         self.taps: list[tuple[int, int]] = []
         self.keys: list[str] = []
+        self.typed: list[str] = []
 
     @property
     def serial(self) -> str:
@@ -665,6 +666,14 @@ class SimDevice(Device):
         self._check()
         self.keys.append(normalize_key(name))
         self.game.key(name)
+
+    def text(self, value: str) -> None:
+        self._check()
+        self.typed.append(value)
+
+    def is_installed(self, package: str) -> bool | None:
+        self._check()
+        return package == self.package
 
     def launch_app(self, package: str) -> None:
         self._check()
