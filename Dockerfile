@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="Dokkan Idle Farmer" \
       org.opencontainers.image.description="Self-hosted idle farmer for Dragon Ball Z Dokkan Battle (ADB + OpenCV + web UI)" \
