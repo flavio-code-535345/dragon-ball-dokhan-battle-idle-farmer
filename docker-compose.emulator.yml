@@ -16,16 +16,26 @@ services:
     container_name: dokkan-android
     restart: unless-stopped
     # Before the emulator starts: no password on its console (only the farmer can reach
-    # it, no port is published) and a folder for the screenshots it hands to the farmer.
+    # it, no port is published), a folder for the screenshots it hands to the farmer, and
+    # the renderer from EMULATOR_GPU (the image's script always uses swiftshader_indirect).
     entrypoint:
       - /bin/sh
       - -c
-      - "mkdir -p /screens && chmod 0777 /screens && : > /root/.emulator_console_auth_token && exec /opt/start-emulator.sh"
+      - |
+        mkdir -p /screens && chmod 0777 /screens
+        : > /root/.emulator_console_auth_token
+        if [ "$$EMULATOR_GPU" = host ]; then export GPU_ACCELERATED=true; fi
+        sed "s/GPU_MODE=\"swiftshader_indirect\"/GPU_MODE=\"$$EMULATOR_GPU\"/" /opt/start-emulator.sh > /tmp/start-emulator.sh
+        chmod +x /tmp/start-emulator.sh
+        exec /tmp/start-emulator.sh
     devices:
       - /dev/kvm
     environment:
       MEMORY: ${ANDROID_MEMORY:-6144}
       CORES: ${ANDROID_CORES:-4}
+      # How Android's graphics are drawn (all on the CPU): swiftshader_indirect, guest,
+      # swangle_indirect, or host (OpenGL of the image's virtual X display).
+      EMULATOR_GPU: ${ANDROID_GPU:-swiftshader_indirect}
       # Android's screen refresh rate: 30 fps halves the CPU spent drawing the game
       # (60 = smoother, more CPU). The farm runs the same either way.
       EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30}
