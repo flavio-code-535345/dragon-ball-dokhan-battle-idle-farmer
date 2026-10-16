@@ -30,6 +30,7 @@ KEYCODES = {
     "MENU": "KEYCODE_MENU",
     "APP_SWITCH": "KEYCODE_APP_SWITCH",
     "WAKEUP": "KEYCODE_WAKEUP",
+    "SLEEP": "KEYCODE_SLEEP",
     "POWER": "KEYCODE_POWER",
 }
 
@@ -73,6 +74,18 @@ class Device(abc.ABC):
 
     @abc.abstractmethod
     def key(self, name: str) -> None: ...
+
+    @property
+    def is_emulator(self) -> bool:
+        """The emulator stack's emulator (not a phone): automatic power saving is safe."""
+        return False
+
+    def sleep_screen(self) -> None:
+        """Turn the screen off (Android pauses the game and stops drawing)."""
+        self.key("SLEEP")
+
+    def wake_screen(self) -> None:
+        self.key("WAKEUP")
 
     def press(self, name: str, times: int = 1) -> None:
         """Press a key several times (a key held down in the web UI)."""

@@ -82,3 +82,13 @@ def test_custom_package_and_bad_values():
         Settings.from_env({"WEB_PORT": "eighty"})
     with pytest.raises(ValueError):
         Settings.from_env({"AUTOSTART": "sometimes"})
+
+
+def test_power_save_is_automatic_unless_set():
+    assert Settings.from_env({}).power_save is None  # automatic: the emulator stack's emulator
+    assert Settings.from_env({"POWER_SAVE": "auto"}).power_save is None
+    assert Settings.from_env({"POWER_SAVE": "false"}).power_save is False
+    on = Settings.from_env({"POWER_SAVE": "yes", "SCREEN_OFF_MINUTES": "0"})
+    assert on.power_save is True and on.screen_off_minutes == 0
+    assert Settings.from_env({}).screen_off_minutes == 10
+    assert Settings.from_env({}).public_dict()["power_save"] == "auto"

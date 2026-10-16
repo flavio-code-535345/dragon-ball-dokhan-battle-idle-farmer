@@ -43,6 +43,12 @@ MAX_ERRORS_IN_ROW = 10
 NO_EFFECT_LIMIT = 3
 #: ...for this many seconds, so that lower-priority rules (fallbacks) get a chance.
 NO_EFFECT_PAUSE = 120.0
+#: With power saving, waits at least this long turn Android's screen off.
+SCREEN_OFF_WAIT = 120.0
+#: After turning the screen back on: time for the game to draw again.
+WAKE_SETTLE = 3.0
+#: The same before a screenshot or a tap for the web UI.
+WAKE_SETTLE_UI = 1.5
 
 
 class FarmState(StrEnum):
@@ -218,6 +224,16 @@ class Farmer:
         self._last_summary: dict[str, Any] | None = None
         self._stop_request: str | None = None
         self._resume_later = False
+        #: The farmer turned Android's screen off to save power (and turns it back on).
+        self._screen_off = False
+        #: When the web UI last looked at or touched the device.
+        self._last_use = clock()
+        #: Checking and switching the screen in one go (the idle check vs. the web UI).
+        self._screen_lock = threading.RLock()
+        #: The farm waits with nothing to do (wait_minutes, outside active hours): after a look
+        #: from the web UI the idle rule turns the screen off again.
+        self._idle_wait = False
+        self._off_hours = False
 
     # ================================================================ public API
     @property
@@ -268,6 +284,7 @@ class Farmer:
                 "frame_id": self.frames.latest_id(),
                 "active_hours": str(self.active_hours),
                 "active_now": self.active_hours.is_active(self.now()),
+                "screen_off": self._screen_off,
             }
             session = self._session
         if session is not None:
@@ -295,6 +312,82 @@ class Farmer:
             )
         data["last_session"] = self._last_summary
         return data
+
+    # ------------------------------------------------------------- power saving
+    @property
+    def screen_off(self) -> bool:
+        return self._screen_off
+
+    @property
+    def power_save(self) -> bool:
+        """POWER_SAVE, or automatic: on while the device is the emulator stack's emulator."""
+        if self.settings.power_save is not None:
+            return self.settings.power_save
+        return self.device.is_emulator
+
+    def screen_sleep(self, why: str) -> None:
+        """Turn Android's screen off (power saving): the emulator stops drawing the game."""
+        with self._screen_lock:
+            if not self.power_save or self._screen_off:
+                return
+            try:
+                self._with_device(lambda d: d.sleep_screen())
+            except DeviceError as exc:
+                log.warning("Could not turn the screen off: %s", exc)
+                return
+            self._screen_off = True
+        log.info("Screen off to save power (%s)", why)
+
+    def screen_wake(self) -> bool:
+        """Turn the screen back on if the farmer turned it off. True if it did."""
+        with self._screen_lock:
+            if not self._screen_off:
+                return False
+            try:
+                self.device_call(lambda d: d.wake_screen())  # reconnects once if needed
+            except DeviceError as exc:
+                # Still off: the next tick, look or touch tries again.
+                log.warning("Could not turn the screen on: %s", exc)
+                return False
+            self._screen_off = False
+        log.info("Screen on")
+        return True
+
+    def wake_at_startup(self) -> None:
+        """A new farmer does not know whether an earlier one left the screen off: wake it."""
+        with self._screen_lock:
+            self._screen_off = False
+            self._last_use = self.clock()
+            self._quietly(lambda d: d.wake_screen())
+
+    def note_use(self, *, touch: bool) -> bool:
+        """The web UI looked at (live view) or touched the device: it stays awake.
+
+        A touch turns the screen back on; so does looking while no farm runs or the farm is
+        paused (while the farm waits, the live view shows its last picture and a button to
+        wake it). True if the screen was turned on: give the game a moment to draw.
+        """
+        self.mark_watched()
+        if touch or not self.is_running or self._pause_event.is_set():
+            return self.screen_wake()
+        return False
+
+    def mark_watched(self) -> None:
+        """Someone is watching: no idle screen-off for now (never touches the device)."""
+        self._last_use = self.clock()
+
+    def check_idle(self) -> None:
+        """Screen off when nothing happens (no farm, a paused farm, a farm waiting for ACT or
+        active hours) and nobody used the web UI for SCREEN_OFF_MINUTES."""
+        minutes = self.settings.screen_off_minutes
+        if not self.power_save or not minutes:
+            return
+        with self._screen_lock:  # so that a look from the web UI in between counts
+            if self._screen_off:
+                return
+            busy = self.is_running and not (self._pause_event.is_set() or self._idle_wait)
+            if not busy and self.clock() - self._last_use >= minutes * 60:
+                self.screen_sleep(f"nothing to do and nobody watching for {minutes} min")
 
     # ------------------------------------------------------- device helpers (UI)
     def capture(self) -> int:
@@ -372,6 +465,8 @@ class Farmer:
         session.next_milestone = self.settings.notify_every_runs
         with self._status_lock:
             self._session = session
+        if self.screen_wake():
+            self._sleep(WAKE_SETTLE)
         self._prepare(session)
         if session.stop_reason is None:
             options = ", ".join(f"{k}={v}" for k, v in values.items()) or "defaults"
@@ -462,9 +557,17 @@ class Farmer:
             resume_at = self.active_hours.next_start(self.now())
             when = resume_at.strftime("%H:%M") if resume_at else "later"
             self._set_state(FarmState.WAITING, f"Outside active hours, resuming at {when}")
+            if not self._off_hours:  # once; after a look, the idle rule (check_idle)
+                self._off_hours = self._idle_wait = True
+                self.screen_sleep("outside active hours")
             self._sleep(30.0)
             self._reset_timers(session)
             return
+        if self._off_hours:
+            self._off_hours = self._idle_wait = False
+        if self.screen_wake():  # after a wait with the screen off
+            self._sleep(WAKE_SETTLE)
+            self._reset_timers(session)
 
         frame = self._capture()
         if session.device_errors:
@@ -516,7 +619,7 @@ class Farmer:
             session.dark_frames += 1
             if session.dark_frames >= 5:
                 log.info("The screen looks switched off, sending WAKEUP")
-                self._with_device(lambda d: d.key("WAKEUP"))
+                self._with_device(lambda d: d.wake_screen())
                 session.dark_frames = 0
         else:
             session.dark_frames = 0
@@ -762,7 +865,7 @@ class Farmer:
             self._wait(session, resolve_number(args["seconds"], options))
         elif kind == "wait_minutes":
             minutes = resolve_number(args["minutes"], options)
-            self._wait(session, minutes * 60, f"Waiting {minutes:g} min")
+            self._wait(session, minutes * 60, f"Waiting {minutes:g} min", screen_off=True)
         elif kind == "count":
             self._increment(session, args["counter"], int(args.get("by", 1)))
         elif kind == "reset":
@@ -789,7 +892,16 @@ class Farmer:
             frame = analysis.frame if analysis is not None else self._capture()
             self._save_screenshot(frame, args.get("label") or "routine")
 
-    def _wait(self, session: Session, seconds: float, message: str | None = None) -> None:
+    def _wait(
+        self,
+        session: Session,
+        seconds: float,
+        message: str | None = None,
+        *,
+        screen_off: bool = False,
+    ) -> None:
+        """Wait; ``screen_off`` (wait_minutes): with power saving, a long wait has the screen
+        off (a plain ``wait`` may be letting the game play, so it never does)."""
         if seconds <= 0:
             return
         if seconds >= 30:
@@ -800,7 +912,19 @@ class Farmer:
                 wait_until=until,
             )
             log.info("%s", message or f"Waiting {format_duration(seconds)}")
-        self._sleep(seconds)
+        idle = screen_off and seconds >= SCREEN_OFF_WAIT
+        if idle:
+            self._idle_wait = True
+            self.screen_sleep(f"waiting {format_duration(seconds)}")
+        try:
+            self._sleep(seconds)
+        finally:
+            if idle:
+                self._idle_wait = False
+        # Paused meanwhile: the screen stays off until the farm resumes (_tick wakes it).
+        paused = self._pause_event.is_set()
+        if idle and not self._stop_event.is_set() and not paused and self.screen_wake():
+            self._sleep(WAKE_SETTLE)
         self._reset_timers(session)
         if not self._stop_event.is_set():
             self._set_state(FarmState.RUNNING, "Farming")
@@ -845,6 +969,8 @@ class Farmer:
 
     # ------------------------------------------------------------- bookkeeping
     def _finish(self, session: Session) -> dict[str, Any]:
+        self._last_use = self.clock()  # the idle countdown starts when the farm stops
+        self._idle_wait = self._off_hours = False
         reason = session.stop_reason or self._stop_request or "Stopped"
         elapsed = self.clock() - session.started
         summary = {

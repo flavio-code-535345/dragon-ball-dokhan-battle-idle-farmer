@@ -40,6 +40,10 @@ services:
           STORAGE_MB=$$have
         fi
         export EXTRA_FLAGS="$$EXTRA_FLAGS -partition-size $$STORAGE_MB"
+        # Android's screen size (SCREEN empty = the emulator's own 1080x1920).
+        if [ -n "$$SCREEN" ]; then
+          export EXTRA_FLAGS="$$EXTRA_FLAGS -skin $$SCREEN -prop qemu.sf.lcd_density=$$DENSITY"
+        fi
         # On "docker stop": flush Android's disk, then close the emulator cleanly. Killed, it
         # loses what Android wrote last (game data, settings).
         stop() {
@@ -56,6 +60,7 @@ services:
     stop_grace_period: 60s
     # At most this many of the server's CPU cores (0 = no limit): Dokkan uses every core it
     # gets, so this caps the stack's power draw while the game is on screen (it runs slower).
+    # With the screen off (POWER_SAVE) the emulator idles either way.
     cpus: ${ANDROID_CPUS:-0}
     devices:
       - /dev/kvm
@@ -72,11 +77,17 @@ services:
       # X display) draws Dokkan right; with the image's swiftshader_indirect its shaders
       # fail ("glGetAttribLocation ... error 0x501") and the game shows in red only.
       EMULATOR_GPU: ${ANDROID_GPU:-host}
-      # Android's screen refresh rate: 30 fps halves the CPU spent drawing the game
-      # (60 = smoother, more CPU). The farm runs the same either way. -grpc: the emulator's
-      # gRPC port, without a token: the farmer's live view gets frames as they are drawn
-      # (no port is published, only the stack's containers reach it).
-      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30} -grpc 8554
+      # Power: the emulator draws the game on the CPU and takes every core it gets. Measured
+      # on a 4-core runner: 1080x1920 at 30 Hz 3.9 cores (the game at 10 fps), 720x1280 at
+      # 15 Hz 2.0 cores (the game at 15 fps, its cap). The farmer scales its templates to the
+      # screen; Android's layout stays phone-like with the density (dpi).
+      SCREEN: ${ANDROID_SCREEN-720x1280}
+      DENSITY: ${ANDROID_DENSITY:-280}
+      # Android's screen refresh rate (30 or 60 = smoother live view, more CPU; the farm runs
+      # the same either way). -grpc: the emulator's gRPC port, without a token: the farmer's
+      # live view gets frames as they are drawn (no port is published, only the stack's
+      # containers reach it).
+      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-15} -grpc 8554
       # Android's storage in MB, for a new Android (the image's own 6 GB fills up during
       # Dokkan's download: "insufficient space"). An existing Android keeps its size.
       STORAGE_MB: ${ANDROID_STORAGE_MB:-32768}

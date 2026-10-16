@@ -204,6 +204,7 @@
 
     if (ui.tab === "farm") updatePreview(false);
     $("#screen-offline").classList.toggle("hidden", status.device.connected);
+    $("#screen-sleeping").classList.toggle("hidden", !status.farm.screen_off);
     if (ui.tab === "device") renderDevice();
   }
 

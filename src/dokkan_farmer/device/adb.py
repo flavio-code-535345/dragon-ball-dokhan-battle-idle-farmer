@@ -228,6 +228,11 @@ class AdbDevice(Device):
         """The emulator's own ports serve this device: not once the UI points at a phone."""
         return self._serial.rpartition(":")[0].lower() == host.lower()
 
+    @property
+    def is_emulator(self) -> bool:
+        ports = [port for port in (self.grpc, self.console) if port is not None]
+        return any(self._is_emulator_host(port.host) for port in ports)
+
     def _console_for_this_device(self) -> bool:
         return self.console is not None and self._is_emulator_host(self.console.host)
 
@@ -361,6 +366,10 @@ class AdbDevice(Device):
 
     def key(self, name: str) -> None:
         self.shell("input", "keyevent", KEYCODES[normalize_key(name)])
+
+    def wake_screen(self) -> None:
+        # Without a PIN, dismiss-keyguard puts the game back in front of the lock screen.
+        self.shell("input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard")
 
     def press(self, name: str, times: int = 1) -> None:
         # One `input keyevent` takes several key codes: one round-trip instead of `times`.

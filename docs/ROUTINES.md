@@ -114,7 +114,7 @@ All listed conditions must hold.
 | `swipe: {from: [0.5, 0.8], to: [0.5, 0.3], ms: 400}` | swipe (also `[x1, y1, x2, y2, ms]`) |
 | `key: BACK` | press a key: `BACK`, `HOME`, `ENTER`, `ESCAPE`, `MENU`, `APP_SWITCH`, `WAKEUP`, `POWER` |
 | `wait: 2.5` | wait seconds |
-| `wait_minutes: $act_wait_minutes` | wait minutes (shown as a countdown in the UI) |
+| `wait_minutes: $act_wait_minutes` | wait minutes (shown as a countdown in the UI); with power saving (`POWER_SAVE`) Android's screen is off meanwhile (2 minutes or more), the game paused. Use `wait` for waits in which the game must keep playing |
 | `count: stone_refills` | add 1 to a counter (`{counter: x, by: 2}` to add more) |
 | `reset: stone_refills` | set a counter to 0 |
 | `notify: "Out of ACT after {runs} runs"` | send a notification (with a screenshot) |

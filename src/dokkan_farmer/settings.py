@@ -81,6 +81,13 @@ class Settings:
     match_scale: float = 0.5
     tap_jitter: float = 0.15
     keep_screen_on: bool = True
+    #: turn Android's screen off while nothing happens (long waits, idle): the emulator then
+    #: stops drawing the game, its biggest power draw. None = automatic: only while the device
+    #: is the emulator stack's emulator (a phone may have a lock screen with a PIN).
+    power_save: bool | None = None
+    #: with power_save: screen off after this many minutes without a farm and without anyone
+    #: looking at or touching the device in the web UI (0 = only during the farm's waits)
+    screen_off_minutes: int = 10
     log_level: str = "INFO"
     screenshot_keep: int = 30
 
@@ -97,6 +104,7 @@ class Settings:
             autostart = "false"
         if autostart not in AUTOSTART_MODES:
             raise ValueError(f"AUTOSTART must be one of {', '.join(AUTOSTART_MODES)}")
+        power_save = _text(env, "POWER_SAVE", "auto").lower()
         return cls(
             data_dir=Path(_text(env, "DATA_DIR", "/data")),
             device_backend=backend,
@@ -118,6 +126,8 @@ class Settings:
             match_scale=min(1.0, max(0.2, _float(env, "MATCH_SCALE", 0.5))),
             tap_jitter=min(0.45, max(0.0, _float(env, "TAP_JITTER", 0.15))),
             keep_screen_on=_bool(env, "KEEP_SCREEN_ON", True),
+            power_save=None if power_save == "auto" else _bool(env, "POWER_SAVE", False),
+            screen_off_minutes=max(0, _int(env, "SCREEN_OFF_MINUTES", 10)),
             log_level=_text(env, "LOG_LEVEL", "INFO").upper(),
             screenshot_keep=max(0, _int(env, "SCREENSHOT_KEEP", 30)),
         )
@@ -159,6 +169,8 @@ class Settings:
             "match_scale": self.match_scale,
             "tap_jitter": self.tap_jitter,
             "keep_screen_on": self.keep_screen_on,
+            "power_save": "auto" if self.power_save is None else self.power_save,
+            "screen_off_minutes": self.screen_off_minutes,
             "auth_enabled": bool(self.web_password),
             "data_dir": str(self.data_dir),
         }

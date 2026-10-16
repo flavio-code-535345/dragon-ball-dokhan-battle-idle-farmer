@@ -324,3 +324,171 @@ def test_ui_device_actions_reconnect_once(make_sim):
     assert device.connects == 1 and statuses[-1] is True
     farmer.capture()  # still connected: no second connect needed
     assert device.connects == 1
+
+
+# --------------------------------------------------------------- power saving
+class ScreenLog:
+    """Records the farmer's screen-off and screen-on calls on the simulator."""
+
+    def __init__(self, device):
+        self.calls = []
+        sleep, wake = device.sleep_screen, device.wake_screen
+        device.sleep_screen = lambda: (self.calls.append("off"), sleep())[1]
+        device.wake_screen = lambda: (self.calls.append("on"), wake())[1]
+
+
+def power_farmer(env, **kwargs):
+    """A farmer whose only way to wake the screen is power saving's own (no dark-frame WAKEUP)."""
+    farmer = env.make_farmer(**kwargs)
+    farmer._wake_if_dark = lambda session, frame: None
+    return farmer
+
+
+def wait_routine(action: str):
+    return parse_routine(f"""
+name: Waits
+rules:
+  - name: Wait
+    when: {{always: true}}
+    do: [{action}]
+""")
+
+
+def test_power_save_turns_the_screen_off_while_act_regenerates(make_sim):
+    env = make_sim(SimConfig(act_max=20, act_cost=10, act_regen_seconds=120), power_save=True)
+    screen = ScreenLog(env.device)
+    farmer = power_farmer(env)
+    summary = env.run(minutes=40, options={"act_wait_minutes": 10}, farmer=farmer)
+    waits = summary["counters"].get("act_waits", 0)
+    assert waits >= 2
+    assert screen.calls == ["off", "on"] * waits  # off for each wait, on again after it
+    assert summary["runs"] >= 3  # with 2+ waits: farming went on after waking
+    assert not farmer.screen_off and not env.game.screen_off
+
+
+def test_short_waits_keep_the_screen_on(make_sim):
+    env = make_sim(SimConfig(act_max=20, act_cost=10, act_regen_seconds=120), power_save=True)
+    screen = ScreenLog(env.device)
+    summary = env.run(minutes=20, options={"act_wait_minutes": 1}, farmer=power_farmer(env))
+    assert summary["counters"].get("act_waits", 0) >= 1 and screen.calls == []
+
+
+def test_only_wait_minutes_turns_the_screen_off(make_sim):
+    env = make_sim(power_save=True)
+    screen = ScreenLog(env.device)
+    farmer = power_farmer(env)
+    # A plain wait may be letting the game play (Auto Mode): never with the screen off.
+    farmer.run_session("w", wait_routine("{wait: 600}"), {}, max_ticks=2)
+    assert screen.calls == []
+    farmer.run_session("w", wait_routine("{wait_minutes: 5}"), {}, max_ticks=2)
+    assert screen.calls == ["off", "on", "off", "on"]
+
+
+def test_no_power_save_keeps_the_screen_on(make_sim):
+    env = make_sim(SimConfig(act_max=20, act_cost=10, act_regen_seconds=120), power_save=False)
+    screen = ScreenLog(env.device)
+    env.run(minutes=20, options={"act_wait_minutes": 10})
+    assert screen.calls == []
+
+
+def test_power_save_outside_active_hours(make_sim):
+    env = make_sim(active_hours="01:00-02:00", power_save=True)
+    hour = [12]
+    farmer = power_farmer(env, now=lambda: datetime(2026, 1, 1, hour[0], 30))
+    screen = ScreenLog(env.device)
+    start = env.clock.t
+    touched = []
+
+    def on_tick():
+        elapsed = env.clock.t - start
+        if elapsed >= 120 and not touched:  # someone taps in the Screen tab
+            touched.append(farmer.note_use(touch=True))
+        if 0 < elapsed < 300:  # (from the first tick on)
+            assert farmer.screen_off == (not touched)  # stays on after the touch, no re-off
+        elif elapsed < 15 * 60:
+            farmer.check_idle()  # the power-save thread; 10 min without use: off again
+        elif hour[0] == 12:
+            hour[0] = 1  # active hours begin
+
+    env.run(minutes=20, farmer=farmer, on_tick=on_tick)
+    assert touched == [True]
+    assert screen.calls[:4] == ["off", "on", "off", "on"]
+    assert env.device.taps, "farming started once active hours began"
+    assert not farmer.screen_off
+
+
+def test_idle_screen_off_and_waking_from_the_web_ui(make_sim):
+    env = make_sim(power_save=True, screen_off_minutes=10)
+    farmer = env.make_farmer()
+    screen = ScreenLog(env.device)
+    env.clock.sleep(9 * 60)
+    farmer.check_idle()
+    assert screen.calls == []  # not idle long enough
+    farmer.mark_watched()  # an open live view
+    env.clock.sleep(9 * 60)
+    farmer.check_idle()
+    assert screen.calls == []
+    env.clock.sleep(2 * 60)
+    farmer.check_idle()
+    assert screen.calls == ["off"] and farmer.screen_off and env.game.screen_off
+    assert farmer.snapshot()["screen_off"]
+    farmer.check_idle()
+    assert screen.calls == ["off"]  # only once
+    assert farmer.note_use(touch=False)  # looking, no farm running: back on
+    assert screen.calls == ["off", "on"] and not env.game.screen_off
+    assert not farmer.note_use(touch=False)  # already on
+
+
+def test_a_farm_waiting_with_the_screen_off_wakes_only_on_touch(make_sim, monkeypatch):
+    env = make_sim(power_save=True)
+    farmer = env.make_farmer()
+    screen = ScreenLog(env.device)
+    farmer.screen_sleep("test")
+    monkeypatch.setattr(Farmer, "is_running", property(lambda self: True))
+    farmer.note_use(touch=False)  # the live view while the farm waits: stays off
+    assert screen.calls == ["off"]
+    farmer.note_use(touch=True)
+    assert screen.calls == ["off", "on"]
+    env.clock.sleep(3600)
+    farmer.check_idle()  # a farm at work never gets the idle screen-off
+    assert screen.calls == ["off", "on"]
+    farmer.pause()
+    farmer._pause_event.set()  # is_running is faked: set the pause by hand
+    farmer.check_idle()  # paused and nobody watching: off
+    assert screen.calls == ["off", "on", "off"]
+
+
+def test_a_wake_that_fails_is_tried_again(make_sim):
+    from dokkan_farmer.device.base import DeviceError
+
+    env = make_sim(power_save=True)
+    farmer = env.make_farmer()
+    farmer.screen_sleep("test")
+    wake, fails = env.device.wake_screen, [2]
+
+    def flaky_wake():
+        if fails[0]:
+            fails[0] -= 1
+            raise DeviceError("device 'android:5555' not found")
+        wake()
+
+    env.device.wake_screen = flaky_wake
+    assert not farmer.note_use(touch=True)  # failed (also after one reconnect)
+    assert farmer.screen_off and farmer.snapshot()["screen_off"]  # the UI keeps its notice
+    assert farmer.note_use(touch=True) and not farmer.screen_off and not env.game.screen_off
+
+
+def test_power_save_is_automatic_for_the_emulator_only(make_sim):
+    env = make_sim()  # POWER_SAVE=auto: the simulator is no emulator
+    farmer = env.make_farmer()
+    screen = ScreenLog(env.device)
+    assert env.settings.power_save is None and not farmer.power_save
+    farmer.screen_sleep("test")
+    assert screen.calls == []
+    type(env.device).is_emulator = property(lambda self: True)
+    try:
+        assert farmer.power_save
+        farmer.screen_sleep("test")
+        assert screen.calls == ["off"]
+    finally:
+        del type(env.device).is_emulator

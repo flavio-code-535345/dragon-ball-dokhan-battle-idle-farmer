@@ -226,6 +226,9 @@ class StreamingAdb(AdbDevice):
     def _screen_rotation(self) -> int:
         return 0
 
+    def wake_screen(self) -> None:
+        pass  # power saving wakes the emulator at startup (adb is not called here)
+
 
 def parts(body: bytes) -> list[bytes]:
     return [p for p in body.split(b"--frame\r\n") if p]
@@ -287,3 +290,15 @@ def test_a_still_screen_is_resent(monkeypatch, tmp_path):
     started = time.monotonic()
     assert feed.next_jpeg() == b"\xff\xd8jpeg"  # same frame id: resent after KEEPALIVE
     assert time.monotonic() - started >= 0.2 and calls.is_set()
+
+
+def test_only_the_emulator_counts_as_emulator():
+    from dokkan_farmer.device.emulator import EmulatorConsole
+
+    device = AdbDevice("android:5555", adb_path="adb", grpc=EmulatorGrpc("android:8554"))
+    assert device.is_emulator  # automatic power saving applies
+    device.set_serial("192.168.1.50:5555")  # the Device tab now points at a phone
+    assert not device.is_emulator
+    console = EmulatorConsole("android:5554", "/screens")
+    assert AdbDevice("android:5555", adb_path="adb", console=console).is_emulator
+    assert not AdbDevice("android:5555", adb_path="adb").is_emulator

@@ -418,3 +418,21 @@ def test_keyboard_keys(client):
         assert (
             client.post("/api/device/key", json={"key": "DEL", "count": count}).status_code == 422
         )
+
+
+def test_power_save_screen_off_and_touch_to_wake(tmp_path):
+    settings = Settings(data_dir=tmp_path / "data", device_backend="sim", power_save=True)
+    game = SimGame(SimConfig(battle_seconds=1.0))
+    ctx = AppContext(settings, device=SimDevice(game, package=settings.game_package))
+    with TestClient(create_app(ctx)) as client:
+        for thread in threading.enumerate():  # its wake at startup must not race the test
+            if thread.name == "startup":
+                thread.join(10)
+        assert client.get("/api/status").json()["settings"]["power_save"] is True
+        ctx.farmer.screen_sleep("test")
+        assert game.screen_off and client.get("/api/status").json()["farm"]["screen_off"]
+        assert client.post("/api/device/tap", json={"x": 0.5, "y": 0.5}).status_code == 200
+        assert not game.screen_off and not client.get("/api/status").json()["farm"]["screen_off"]
+        ctx.farmer.screen_sleep("test")
+        assert client.get("/api/screen/live.jpg?w=240").status_code == 200  # looking, no farm
+        assert not game.screen_off

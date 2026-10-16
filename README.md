@@ -152,6 +152,8 @@ All settings are environment variables:
 | `NOTIFY_URLS` | *(empty)* | [Apprise URLs](https://github.com/caronc/apprise/wiki), space or comma separated. |
 | `NOTIFY_EVERY_RUNS` | `0` | Also send a progress message every N runs. |
 | `KEEP_SCREEN_ON` | `true` | Enable "stay awake" on the device while farming. |
+| `POWER_SAVE` | `auto` | Turn Android's screen off while nothing happens: during the farm's long waits (`wait_minutes`, e.g. ACT regenerating; outside `ACTIVE_HOURS`) and when no farm runs. The emulator then stops drawing the game: 0.02 instead of 2 to 4 CPU cores. Touching the Screen tab or starting a farm turns it back on. `auto` = on while the device is the emulator stack's emulator, off for phones (a lock screen with a PIN would stop the farm); `true` / `false` to choose. |
+| `SCREEN_OFF_MINUTES` | `10` | With power saving: screen off after this many minutes without anyone using the Screen tab while nothing happens (no farm, a paused farm, a farm waiting); `0` = only when a wait starts. |
 | `MATCH_SCALE` | `0.5` | Downscaling for template matching (lower = faster, less precise). |
 | `TAP_JITTER` | `0.15` | Random tap offset inside a button, as a fraction of its size. |
 | `SCREENSHOT_KEEP` | `30` | Debug screenshots kept in `/data/screenshots` (stuck screens, defeats). |
@@ -159,7 +161,9 @@ All settings are environment variables:
 | `RUN_AS_ROOT` | `false` | Needed for USB passthrough (`/dev/bus/usb`). |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail. |
 | `ANDROID_MEMORY` / `ANDROID_CORES` | `6144` / `4` | Emulator stack: RAM (MB) and CPU cores of the emulated Android. |
-| `ANDROID_FPS` | `30` | Emulator stack: Android's screen refresh rate (60 = smoother, more CPU). |
+| `ANDROID_SCREEN` / `ANDROID_DENSITY` | `720x1280` / `280` | Emulator stack: Android's screen size and density. Half the CPU of the emulator's own 1080x1920 with the game running faster ([power use](docs/DEVICE_SETUP.md#c1-emulator-recommended)); empty `ANDROID_SCREEN` = 1080x1920. |
+| `ANDROID_FPS` | `15` | Emulator stack: Android's screen refresh rate, the game's and the live view's frame rate (30 = smoother, more CPU). |
+| `ANDROID_CPUS` | `0` | Emulator stack: at most this many of the server's CPU cores for Android (`0` = no limit). Caps the power draw while the game is on screen; the game runs slower. |
 | `ANDROID_STORAGE_MB` | `32768` | Emulator stack: Android's storage for a *new* Android (the image's own 6 GB is too small for Dokkan's data). An existing Android keeps its size: [insufficient space](docs/DEVICE_SETUP.md#c1-emulator-recommended). |
 | `ANDROID_GPU` | `host` | Emulator stack: Android's renderer (`host`, `swangle_indirect`, `swiftshader_indirect`, `guest`; all on the CPU). Dokkan is drawn right with `host`. |
 | `EMULATOR_GRPC` | *(empty)* | Emulator stack: the emulator's gRPC port (`android:8554`, opened with `-grpc 8554`): screenshots without PNG, and the Screen tab's live view at the game's frame rate. |

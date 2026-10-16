@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hmac
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -29,6 +30,7 @@ from .. import __version__
 from ..context import AppContext
 from ..device import AdbDevice, DeviceError, normalize_key
 from ..device.adb import validate_package
+from ..engine import WAKE_SETTLE_UI
 from ..installer import MAX_DOWNLOAD, InstallError
 from ..library import validate_routine_id
 from ..live import BOUNDARY, mjpeg_part, open_feed
@@ -432,6 +434,8 @@ def create_app(ctx: AppContext) -> FastAPI:
         ``after``: the frame the viewer already shows; answered with 204 when nothing newer
         exists yet (while farming, frames come at the farm loop's pace).
         """
+        if ctx.farmer.note_use(touch=False):
+            time.sleep(WAKE_SETTLE_UI)  # the screen was off: let the game draw first
         frame_id = ctx.farmer.capture()
         if after is not None and frame_id == after:
             return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -455,6 +459,8 @@ def create_app(ctx: AppContext) -> FastAPI:
 
         ``n``: stop after that many frames (0 = until the browser closes it).
         """
+        if await anyio.to_thread.run_sync(lambda: ctx.farmer.note_use(touch=False)):
+            await anyio.sleep(WAKE_SETTLE_UI)
         feed = await anyio.to_thread.run_sync(open_feed, ctx.farmer, w, fps)
 
         async def parts() -> AsyncIterator[bytes]:
@@ -463,6 +469,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 while not n or sent < n:
                     # abandon_on_cancel: a closed tab must not wait for the next frame.
                     jpeg = await anyio.to_thread.run_sync(feed.next_jpeg, abandon_on_cancel=True)
+                    ctx.farmer.mark_watched()  # an open live view keeps the screen on
                     yield mjpeg_part(jpeg)
                     sent += 1
             except DeviceError as exc:
@@ -478,6 +485,8 @@ def create_app(ctx: AppContext) -> FastAPI:
 
     @app.post("/api/screen/capture")
     def screen_capture(pin: bool = False) -> dict[str, Any]:
+        if ctx.farmer.note_use(touch=False):
+            time.sleep(WAKE_SETTLE_UI)
         frame_id = ctx.farmer.capture()
         if pin:
             ctx.farmer.frames.pin(frame_id)
@@ -500,11 +509,15 @@ def create_app(ctx: AppContext) -> FastAPI:
     # ----------------------------------------------------------------- device
     @app.post("/api/device/tap")
     def device_tap(body: TapRequest) -> dict[str, Any]:
+        if ctx.farmer.note_use(touch=True):
+            time.sleep(WAKE_SETTLE_UI)  # a tap on a screen still turning on gets lost
         px, py = ctx.farmer.tap_relative(body.x, body.y, body.count)
         return {"x": px, "y": py}
 
     @app.post("/api/device/swipe")
     def device_swipe(body: SwipeRequest) -> dict[str, Any]:
+        if ctx.farmer.note_use(touch=True):
+            time.sleep(WAKE_SETTLE_UI)
         ctx.farmer.swipe_relative(body.x1, body.y1, body.x2, body.y2, body.ms)
         return {"ok": True}
 
@@ -514,11 +527,15 @@ def create_app(ctx: AppContext) -> FastAPI:
             key = normalize_key(body.key)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
+        if ctx.farmer.note_use(touch=True):
+            time.sleep(WAKE_SETTLE_UI)
         ctx.farmer.device_call(lambda d: d.press(key, body.count))
         return {"ok": True}
 
     @app.post("/api/device/text")
     def device_text(body: TextRequest) -> dict[str, Any]:
+        if ctx.farmer.note_use(touch=True):
+            time.sleep(WAKE_SETTLE_UI)
         try:
             ctx.farmer.device_call(lambda d: d.text(body.text))
         except ValueError as exc:
@@ -533,6 +550,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 package = validate_package(body.package.strip())
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from None
+        ctx.farmer.note_use(touch=True)
         if body.action in ("stop", "restart"):
             ctx.farmer.device_call(lambda d: d.stop_app(package))
         if body.action in ("launch", "restart"):

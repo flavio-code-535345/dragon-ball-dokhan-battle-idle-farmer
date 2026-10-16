@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 #: container needs a minute or two to boot).
 STARTUP_CONNECT_SECONDS = 300
 STARTUP_RETRY_SECONDS = 10
+#: How often the idle screen-off of power saving is checked.
+POWER_CHECK_SECONDS = 30
 
 
 class AppContext:
@@ -146,6 +148,15 @@ class AppContext:
     # ---------------------------------------------------------------- lifecycle
     def startup(self) -> None:
         threading.Thread(target=self._startup_worker, name="startup", daemon=True).start()
+        if self.settings.power_save is not False:  # on, or automatic for the emulator
+            threading.Thread(target=self._power_worker, name="power-save", daemon=True).start()
+
+    def _power_worker(self) -> None:
+        while not self._closing.wait(POWER_CHECK_SECONDS):
+            try:
+                self.farmer.check_idle()
+            except Exception:
+                log.exception("Power saving check failed")
 
     def _startup_worker(self) -> None:
         status = self.refresh_device()
@@ -168,6 +179,8 @@ class AppContext:
             )
         else:
             log.warning("Device not connected yet: %s", status["error"])
+        if self.farmer.power_save and status["connected"]:
+            self.farmer.wake_at_startup()
         mode = self.settings.autostart
         resume = mode == "resume" and bool(self.state.get("was_running"))
         if mode == "true" or resume:

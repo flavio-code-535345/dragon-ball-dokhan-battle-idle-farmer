@@ -106,8 +106,9 @@ Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create 
    the stage and template setup like on a phone (README, steps 4 to 6). The Play Store (for
    Google sign-in) is there too: **Screen** tab → *Touch control* on.
 
-Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `ANDROID_FPS`
-(Android's refresh rate, default 30; 60 is smoother but costs more CPU), `ANDROID_STORAGE_MB`
+Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `ANDROID_SCREEN`
+(default 720x1280, see *Power use* below), `ANDROID_FPS` (Android's refresh rate, default 15; 30
+is smoother but costs more CPU), `ANDROID_CPUS` (a CPU cap, default none), `ANDROID_STORAGE_MB`
 (Android's storage, default 32768, for a new Android) and `ANDROID_GPU` (the renderer, default
 `host`). The emulator renders on the CPU. With the image's own renderer
 (`swiftshader_indirect`) Dokkan's shaders fail: its log fills with `glGetAttribLocation ... error
@@ -137,6 +138,38 @@ start a new Android with the 32 GB:
 
 Stopping or redeploying the stack is safe: the emulator is shut down cleanly (`docker stop` gives
 it 60 s), so what Android wrote last is kept.
+
+**Power use.** The emulator draws Android and the game on the CPU (the container has no GPU) and
+translates Dokkan's ARM code: while the game is on screen it takes every core it gets. Measured on
+a 4-core GitHub runner with Dokkan on its start screens (CPU cores in use; the farmer itself needs
+0.01, 0.2 while the live view is open):
+
+| Android's screen | Dokkan on screen | Android's home screen | Screen off |
+|---|---|---|---|
+| 1080x1920 at 30 Hz (the emulator's own) | 3.9 cores, the game at 10 fps | 0.3 to 0.5 | 0.02 to 0.06 |
+| 1080x1920 at 15 Hz | 3.9 cores, 10 fps | 0.3 | 0.02 |
+| **720x1280 at 15 Hz (this stack)** | **2.0 cores, 15 fps** | 0.2 | 0.01 to 0.02 |
+| 540x960 at 15 Hz | 1.9 cores, 15 fps | 0.6 | 0.02 |
+| 1080x1920, `ANDROID_CPUS=2` | 2.0 cores, 6 fps | 1.1 | 0.02 |
+| 1080x1920, `ANDROID_CORES=2` | 3.8 cores, 7 fps | 0.4 | 0.35 |
+
+Fewer pixels let the game reach its frame rate cap with half the CPU; below 720x1280 there is
+little more to gain, and fewer emulated cores (`ANDROID_CORES`) only make the game slower. What
+saves power:
+
+- **Power saving** (`POWER_SAVE`, on in this stack). The farmer turns Android's screen off while
+  nothing happens: during the farm's long waits (ACT regenerating with the ACT policy *wait*,
+  outside `ACTIVE_HOURS`) and after `SCREEN_OFF_MINUTES` (default 10) without a farm and without
+  anyone using the Screen tab. The game is paused then and comes back where it was when the screen
+  turns on again: when the wait ends, when a farm starts, or when you touch the Screen tab (or
+  press *Turn it on* in its notice). With the ACT policy *wait*, most of a farming day is waiting.
+  `POWER_SAVE=auto` does this only while the device is this stack's emulator, not a phone.
+- **A smaller screen** (`ANDROID_SCREEN=720x1280` and `ANDROID_FPS=15`, this stack's defaults):
+  half the CPU while the game is on screen, and the game runs smoother than at 1080x1920. Took
+  templates at another size? The farmer scales them to the screen; if one stops matching (*Test
+  on screen*), capture it again.
+- **A CPU cap** (`ANDROID_CPUS`, e.g. `2`): never more than that many cores, at the cost of a
+  slower game. With the screen off the emulator idles either way.
 
 ### C2. redroid
 

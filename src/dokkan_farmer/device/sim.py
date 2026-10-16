@@ -172,6 +172,7 @@ class SimGame:
         self.stones = self.cfg.stones
         self.running = True
         self.visible = True
+        self.screen_off = False
         self.in_quest = self.screen in {"battle", "error", "defeat"}
         self.dialog_return = "results"
         self.battle_progress = 0.0
@@ -241,7 +242,7 @@ class SimGame:
     def tap(self, x: float, y: float) -> None:
         with self._lock:
             self._update()
-            if not (self.running and self.visible):
+            if self.screen_off or not (self.running and self.visible):
                 return
             handler = getattr(self, f"_tap_{self.screen}", None)
             if handler:
@@ -347,7 +348,11 @@ class SimGame:
         with self._lock:
             self._update()
             key = normalize_key(name)
-            if key == "HOME":
+            if key == "SLEEP":
+                self.screen_off = True
+            elif key == "WAKEUP":
+                self.screen_off = False
+            elif key == "HOME":
                 self.visible = False
             elif key == "BACK" and self.running and self.visible:
                 back = {
@@ -385,6 +390,8 @@ class SimGame:
     def render(self) -> np.ndarray:
         with self._lock:
             self._update()
+            if self.screen_off:
+                return _canvas((0, 0, 0))
             if not self.in_front:
                 return self._draw_launcher()
             return getattr(self, f"_draw_{self.screen}")()
