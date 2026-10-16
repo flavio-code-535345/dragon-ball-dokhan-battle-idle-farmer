@@ -1051,6 +1051,7 @@
     const s = status.settings;
     const settings = [
       ["ADB_SERIAL", s.adb_serial || "–"],
+      ["EMULATOR_CONSOLE", s.emulator_console || "–"],
       ["GAME_PACKAGE", s.game_package],
       ["ROUTINE", s.routine],
       ["AUTOSTART", s.autostart],

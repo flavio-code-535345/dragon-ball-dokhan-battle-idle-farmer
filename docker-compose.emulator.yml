@@ -15,6 +15,12 @@ services:
     image: ${EMULATOR_IMAGE:-halimqarroum/docker-android:api-30-playstore}
     container_name: dokkan-android
     restart: unless-stopped
+    # Before the emulator starts: no password on its console (only the farmer can reach
+    # it, no port is published) and a folder for the screenshots it hands to the farmer.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "mkdir -p /screens && chmod 0777 /screens && : > /root/.emulator_console_auth_token && exec /opt/start-emulator.sh"
     devices:
       - /dev/kvm
     environment:
@@ -28,6 +34,7 @@ services:
       - android-data:/data
       # The emulator lets its own adb key in without a prompt; the farmer uses it too.
       - adb-keys:/root/.android
+      - screens:/screens
 
   farmer:
     image: ${IMAGE:-flavio11113/dokkan-idle-farmer}:${IMAGE_TAG:-latest}
@@ -41,6 +48,8 @@ services:
     environment:
       # Android of the emulator service above (the farmer waits for it to boot).
       ADB_SERIAL: android:5555
+      # Screenshots straight from the emulator (~0.1 s instead of ~1 s through Android).
+      EMULATOR_CONSOLE: android:5554
       GAME_PACKAGE: ${GAME_PACKAGE:-global}
       AUTOSTART: ${AUTOSTART:-resume}
       ACTIVE_HOURS: ${ACTIVE_HOURS:-}
@@ -54,8 +63,15 @@ services:
     volumes:
       - farmer-data:/data
       - adb-keys:/data/adb
+      - screens:/screens
 
 volumes:
   android-data:
   farmer-data:
   adb-keys:
+  # In memory: screenshots only pass through here.
+  screens:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=64m

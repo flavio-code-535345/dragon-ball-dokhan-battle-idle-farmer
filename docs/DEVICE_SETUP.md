@@ -101,8 +101,9 @@ Dokkan and the game starts and shows its first screen.
 
 Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4) and `ANDROID_FPS`
 (Android's refresh rate, default 30; 60 is smoother but costs more CPU). The emulator renders on
-the CPU. The Screen tab's *Live* menu sets how often the web page fetches a new picture (up to
-10 fps); with *Touch control* on, your keyboard types into Android.
+the CPU. The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about
+0.1 s each) instead of through Android (about 1 s), so the Screen tab's *Live* view can show up to
+10 fps; with *Touch control* on, your keyboard types into Android.
 
 ### C2. redroid
 

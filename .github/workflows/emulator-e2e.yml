@@ -94,15 +94,23 @@ jobs:
           docker exec -u farmer dokkan-farmer adb -s android:5555 shell "wm size; wm density"
           docker exec -u farmer dokkan-farmer adb -s android:5555 shell pm path com.android.vending
           mkdir -p shots
-          id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+          capture=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture")
+          echo "$capture"
+          id=$(echo "$capture" | jq -r .frame_id)
           curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o shots/home.jpg
+          # The farmer's screenshots must match the screen it taps on.
+          size=$(docker exec -u farmer dokkan-farmer adb -s android:5555 shell wm size | tr -d '\r' | awk '/Physical/ { print $3 }')
+          echo "screenshot $(echo "$capture" | jq -r '"\(.width)x\(.height)"'), screen $size"
+          [ "$(echo "$capture" | jq -r '"\(.width)x\(.height)"')" = "$size" ]
 
       - name: Live view speed (10 frames, 720 px wide)
         run: |
           for i in $(seq 1 10); do
             curl -sS --fail-with-body -o /dev/null -w "%{time_total}\n" "$BASE/api/screen/live.jpg?w=720"
           done | awk '{ sum += $1; print "frame " NR ": " $1 " s" } END { printf "average %.3f s = %.1f fps\n", sum / NR, NR / sum }'
-          docker logs dokkan-farmer 2>&1 | grep -i "screenshots" || echo "raw screenshots (fast path)"
+          docker logs dokkan-farmer 2>&1 | grep -i "screenshots" || true
+          # docker-compose.emulator.yml sets EMULATOR_CONSOLE: the emulator's own screenshots.
+          docker logs dokkan-farmer 2>&1 | grep -q "Screenshots: from the emulator console"
 
       - name: Screenshot speed inside the emulator container (diagnostics)
         run: |

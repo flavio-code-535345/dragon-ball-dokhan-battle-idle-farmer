@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 
 from .base import KEYCODES, Device, DeviceError, normalize_key
+from .emulator import EmulatorConsole
 
 log = logging.getLogger(__name__)
 
@@ -77,10 +78,20 @@ def _state_hint(state: str, serial: str) -> str:
 class AdbDevice(Device):
     backend = "adb"
 
-    def __init__(self, serial: str = "", adb_path: str = "adb", timeout: float = 20.0) -> None:
+    def __init__(
+        self,
+        serial: str = "",
+        adb_path: str = "adb",
+        timeout: float = 20.0,
+        console: EmulatorConsole | None = None,
+    ) -> None:
         self._serial = validate_serial(serial) if serial.strip() else ""
         self.adb_path = adb_path
         self.timeout = timeout
+        #: Screenshots from the emulator itself (docker-compose.emulator.yml), ~10x faster.
+        self.console = console
+        self._console_ok = False
+        self._console_retry_at = 0.0
         #: "raw" or "png" once known: raw pixels skip the device's slow PNG encoding but
         #: are ~4x bigger, which only pays off on a fast link (emulator, LAN).
         self.capture_method: str | None = None
@@ -191,7 +202,25 @@ class AdbDevice(Device):
         return result
 
     # ------------------------------------------------------------------- screen
+    def _console_for_this_device(self) -> bool:
+        """The console belongs to the emulator: not used once the UI points at a phone."""
+        host = self._serial.rpartition(":")[0]
+        return self.console is not None and host.lower() == self.console.host.lower()
+
     def screenshot(self) -> np.ndarray:
+        if self._console_for_this_device() and time.monotonic() >= self._console_retry_at:
+            assert self.console is not None
+            try:
+                image = self.console.screenshot()
+            except DeviceError as exc:
+                self._console_ok = False
+                self._console_retry_at = time.monotonic() + 60
+                log.warning("Emulator screenshots failed, using adb for a minute: %s", exc)
+            else:
+                if not self._console_ok:
+                    log.info("Screenshots: from the emulator console %s", self.console.address)
+                    self._console_ok = True
+                return image
         if self.capture_method == "png":
             return self._screenshot_png()
         started = time.monotonic()
@@ -369,3 +398,7 @@ class AdbDevice(Device):
             self.shell("svc", "power", "stayon", "true" if enabled else "false")
         except DeviceError as exc:
             log.debug("Could not change stay-awake setting: %s", exc)
+
+    def close(self) -> None:
+        if self.console is not None:
+            self.console.close()

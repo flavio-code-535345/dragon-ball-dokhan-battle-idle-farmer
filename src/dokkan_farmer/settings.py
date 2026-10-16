@@ -62,6 +62,10 @@ class Settings:
     device_backend: str = "adb"
     adb_serial: str = ""
     adb_path: str = "adb"
+    #: host:port of the Android emulator's console (emulator stack): fast screenshots
+    emulator_console: str = ""
+    #: folder shared with the emulator for those screenshots (same path in both containers)
+    emulator_screenshots: str = "/screens"
     game_package: str = GAME_PACKAGES["global"]
     routine: str = "dokkan_auto_farm"
     autostart: str = "resume"
@@ -96,6 +100,8 @@ class Settings:
             device_backend=backend,
             adb_serial=_text(env, "ADB_SERIAL", ""),
             adb_path=_text(env, "ADB_PATH", "adb"),
+            emulator_console=_text(env, "EMULATOR_CONSOLE", ""),
+            emulator_screenshots=_text(env, "EMULATOR_SCREENSHOTS", "/screens"),
             game_package=resolve_game_package(_text(env, "GAME_PACKAGE", "global")),
             routine=_text(env, "ROUTINE", "dokkan_auto_farm"),
             autostart=autostart,
@@ -139,6 +145,7 @@ class Settings:
         return {
             "device_backend": self.device_backend,
             "adb_serial": self.adb_serial,
+            "emulator_console": self.emulator_console,
             "game_package": self.game_package,
             "routine": self.routine,
             "autostart": self.autostart,
