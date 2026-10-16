@@ -31,6 +31,15 @@ log = logging.getLogger(__name__)
 
 FDROID_API = "https://f-droid.org/api/v1/packages/{package}"
 FDROID_APK = "https://f-droid.org/repo/{package}_{code}.apk"
+APKPURE_API = "https://api.pureapk.com/m/v3/cms/app_version?hl=en-US&package_name={package}"
+#: APKPure's app API answers in a binary format: its download links are found the way
+#: apkeep (github.com/EFForg/apkeep) finds them.
+_APKPURE_LINK_RE = re.compile(
+    rb"X?APKJ..(https?://(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b"
+    rb"[-a-zA-Z0-9()@:%_+.~#?&/=]*)",
+    re.DOTALL,
+)
+ABIS = ("arm64-v8a", "armeabi-v7a", "armeabi", "x86", "x86_64")
 PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
 MAX_DOWNLOAD = 4 * 1024**3
 USER_AGENT = f"dokkan-idle-farmer/{__version__}"
@@ -43,13 +52,27 @@ class InstallError(ValueError):
     """The app could not be downloaded or unpacked."""
 
 
+def _apkpure_parts(source: str) -> tuple[str, str]:
+    """``apkpure:<package>[@<abi>,...]`` -> (package, ABIs to ask for)."""
+    package, at, abis = source.removeprefix("apkpure:").partition("@")
+    if not PACKAGE_RE.match(package):
+        raise InstallError(f"Invalid package name {package!r}")
+    wanted = abis.split(",") if at else list(ABIS)
+    if any(abi not in ABIS for abi in wanted):
+        raise InstallError(f"Unknown ABI in {source!r}: use {', '.join(ABIS)}")
+    return package, ",".join(wanted)
+
+
 def check_source(source: str) -> str:
-    """Validate ``fdroid:<package>`` or an http(s) link without going online."""
+    """Validate ``fdroid:<package>``, ``apkpure:<package>[@abi]`` or an http(s) link."""
     source = source.strip()
     if source.startswith("fdroid:"):
         package = source.removeprefix("fdroid:")
         if not PACKAGE_RE.match(package):
             raise InstallError(f"Invalid package name {package!r}")
+        return source
+    if source.startswith("apkpure:"):
+        _apkpure_parts(source)
         return source
     parts = urllib.parse.urlsplit(source)
     if parts.scheme not in ("http", "https") or not parts.netloc:
@@ -57,9 +80,32 @@ def check_source(source: str) -> str:
     return source
 
 
+def resolve_apkpure(source: str, opener: Opener = urllib.request.urlopen) -> str:
+    """The download link of the newest APKPure build for the ABIs in the source."""
+    package, abis = _apkpure_parts(source)
+    request = urllib.request.Request(
+        APKPURE_API.format(package=package),
+        headers={
+            "User-Agent": USER_AGENT,
+            "x-cv": "3172501",
+            "x-sv": "29",
+            "x-abis": abis,
+            "x-gp": "1",
+        },
+    )
+    with opener(request, timeout=30) as response:
+        data = response.read(4 << 20)
+    match = _APKPURE_LINK_RE.search(data)
+    if match is None:
+        raise InstallError(f"APKPure has no download of {package} ({abis})")
+    return match.group(1).decode("ascii")
+
+
 def resolve_source(source: str, opener: Opener = urllib.request.urlopen) -> str:
-    """Turn ``fdroid:<package>`` or an http(s) link into a download URL."""
+    """Turn ``fdroid:<package>``, ``apkpure:<package>`` or an http(s) link into a URL."""
     source = check_source(source)
+    if source.startswith("apkpure:"):
+        return resolve_apkpure(source, opener)
     if not source.startswith("fdroid:"):
         return source
     package = source.removeprefix("fdroid:")

@@ -78,9 +78,52 @@ def test_resolve_fdroid_source_falls_back_to_the_newest_build():
         resolve_source("fdroid:com.aurora.store", opener)
 
 
+DOKKAN_APKPURE = (
+    "https://api.pureapk.com/m/v3/cms/app_version?hl=en-US"
+    "&package_name=com.bandainamcogames.dbzdokkanww"
+)
+#: Shaped like APKPure's binary answer: newest version first, each with its link.
+APKPURE_BODY = (
+    b"\x0a\x056.6.0\x12\x02\x08\x01XAPKJ\x1c\x00"
+    b"https://download.pureapk.com/b/XAPK/dokkan-660?k=abc&v=1\x1a\x03"
+    b"\x0a\x056.5.0XAPKJ\x1c\x00https://download.pureapk.com/b/XAPK/dokkan-650\x1a"
+)
+
+
+def test_resolve_apkpure_source_asks_for_the_abi():
+    opener, _ = make_opener({DOKKAN_APKPURE: (APKPURE_BODY, {})})
+    headers = {}
+
+    def recording_opener(request, timeout=None):
+        headers.update(request.header_items())
+        return opener(request, timeout)
+
+    url = resolve_source("apkpure:com.bandainamcogames.dbzdokkanww@armeabi-v7a", recording_opener)
+    assert url == "https://download.pureapk.com/b/XAPK/dokkan-660?k=abc&v=1"
+    assert headers["X-abis"] == "armeabi-v7a"
+    resolve_source("apkpure:com.bandainamcogames.dbzdokkanww", recording_opener)
+    assert headers["X-abis"] == "arm64-v8a,armeabi-v7a,armeabi,x86,x86_64"
+
+
+def test_apkpure_without_a_download():
+    opener, _ = make_opener({DOKKAN_APKPURE: (b"\x0a\x03nothing here", {})})
+    with pytest.raises(InstallError, match="APKPure has no download"):
+        resolve_source("apkpure:com.bandainamcogames.dbzdokkanww@arm64-v8a", opener)
+
+
 @pytest.mark.parametrize(
     "source",
-    ["fdroid:bad package", "fdroid:", "ftp://example.com/x.apk", "file:///etc/passwd", "game.apk"],
+    [
+        "fdroid:bad package",
+        "fdroid:",
+        "ftp://example.com/x.apk",
+        "file:///etc/passwd",
+        "game.apk",
+        "apkpure:",
+        "apkpure:com.example.app@mips",
+        "apkpure:com.example.app@",
+        "apkpure:not a package",
+    ],
 )
 def test_invalid_sources_are_rejected_offline(source):
     with pytest.raises(InstallError):
