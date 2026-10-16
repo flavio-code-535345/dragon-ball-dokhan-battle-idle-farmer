@@ -314,13 +314,28 @@ class AdbDevice(Device):
     def key(self, name: str) -> None:
         self.shell("input", "keyevent", KEYCODES[normalize_key(name)])
 
+    def press(self, name: str, times: int = 1) -> None:
+        # One `input keyevent` takes several key codes: one round-trip instead of `times`.
+        self.shell("input", "keyevent", *[KEYCODES[normalize_key(name)]] * max(1, times))
+
     def text(self, value: str) -> None:
         if not value:
             return
         if len(value) > 500 or any(not 32 <= ord(c) <= 126 for c in value):
             raise ValueError("Only plain ASCII text (up to 500 characters) can be typed")
-        # `input text` reads "%s" as a space; quote the rest for the device shell.
-        self.shell("input", "text", shlex.quote(value.replace(" ", "%s")))
+        # `input text` reads "%s" as a space and has no escape for a typed "%s", so that is
+        # typed in two goes: "...%" (a trailing % stays a %), then "s...".
+        pieces = value.split("%s")
+        parts = [
+            ("s" if i else "") + piece + ("%" if i < len(pieces) - 1 else "")
+            for i, piece in enumerate(pieces)
+        ]
+        # Spaces become %s; everything is quoted for the device shell.
+        quoted = [shlex.quote(part.replace(" ", "%s")) for part in parts if part]
+        if len(quoted) == 1:
+            self.shell("input", "text", quoted[0])
+        else:
+            self.shell(" && ".join(f"input text {part}" for part in quoted))
 
     # --------------------------------------------------------------------- apps
     def launch_app(self, package: str) -> None:

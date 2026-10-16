@@ -551,6 +551,7 @@
 
   $("#toggle-control").addEventListener("change", (e) => {
     $("#screen-wrap").classList.toggle("control", e.target.checked);
+    e.target.blur(); // so the keys typed next go to Android, not to this switch
   });
   $("#toggle-boxes").addEventListener("change", () => refreshScreen(false));
   $("#btn-refresh-screen").addEventListener("click", () => refreshScreen(true));
@@ -590,48 +591,84 @@
     } catch (err) {
       // storage blocked
     }
+    $("#live-fps").blur();
     liveTick();
   });
 
-  // Keyboard: with Touch control on, keys go to the device (text is sent in batches).
+  // Keyboard: with Touch control on, keys go to the device. Requests go one at a time;
+  // what is typed meanwhile is sent with the next one (text joined, held keys counted).
   const KEY_MAP = {
     Backspace: "DEL", Delete: "FORWARD_DEL", Enter: "ENTER", Escape: "BACK", Tab: "TAB",
     ArrowUp: "DPAD_UP", ArrowDown: "DPAD_DOWN", ArrowLeft: "DPAD_LEFT", ArrowRight: "DPAD_RIGHT",
   };
-  let keyBuffer = "";
-  let keyTimer = null;
-  let keyChain = Promise.resolve();
+  // macOS types characters such as @ or € with Option (= Alt).
+  const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const NOT_TEXT_INPUTS = ["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"];
+  const keyQueue = [];
+  let keyBusy = false;
+  let keyRefreshTimer = null;
+  let asciiWarnedAt = 0;
 
-  function sendInOrder(fn) {
-    keyChain = keyChain.then(fn).catch((err) => toast(err.message || String(err), "error"));
+  function isTextField(el) {
+    if (!el || !el.tagName) return false;
+    if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+    return el.tagName === "INPUT" && !NOT_TEXT_INPUTS.includes(el.type);
   }
 
-  function flushKeys() {
-    clearTimeout(keyTimer);
-    if (!keyBuffer) return;
-    const text = keyBuffer;
-    keyBuffer = "";
-    sendInOrder(() => api("/api/device/text", { method: "POST", body: { text } }));
+  function queueInput(item) {
+    const last = keyQueue[keyQueue.length - 1];
+    if (last && item.key && last.key === item.key && last.count < 50) {
+      last.count += 1;
+    } else if (last && item.text && last.text && last.text.length + item.text.length <= 500) {
+      last.text += item.text;
+    } else {
+      keyQueue.push(item);
+    }
+    pumpInput();
+  }
+
+  async function pumpInput() {
+    if (keyBusy) return;
+    keyBusy = true;
+    while (keyQueue.length) {
+      const item = keyQueue.shift();
+      try {
+        if (item.key) {
+          await api("/api/device/key", { method: "POST", body: { key: item.key, count: item.count } });
+        } else {
+          await api("/api/device/text", { method: "POST", body: { text: item.text } });
+        }
+      } catch (err) {
+        toast(err.message || String(err), "error");
+      }
+    }
+    keyBusy = false;
+    clearTimeout(keyRefreshTimer);
+    keyRefreshTimer = setTimeout(() => refreshScreen(true), 350);
   }
 
   document.addEventListener("keydown", (e) => {
     if (ui.tab !== "screen" || !$("#toggle-control").checked) return;
-    if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
-    if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
-    if (e.key.length === 1 && e.key >= " " && e.key <= "~") {
+    if (e.isComposing || e.metaKey || isTextField(e.target)) return;
+    if (e.key.length === 1) {
+      // AltGr (Ctrl+Alt on Windows) and macOS Option type characters; other Ctrl/Alt
+      // combinations stay browser shortcuts.
+      const altGraph = e.getModifierState && e.getModifierState("AltGraph");
+      const typed = altGraph || (e.ctrlKey && e.altKey) || (!e.ctrlKey && (!e.altKey || IS_MAC));
+      if (!typed) return;
       e.preventDefault();
-      keyBuffer += e.key;
-      clearTimeout(keyTimer);
-      keyTimer = setTimeout(flushKeys, 150);
-      if (keyBuffer.length >= 200) flushKeys();
+      if (e.key >= " " && e.key <= "~") {
+        queueInput({ text: e.key });
+      } else if (Date.now() - asciiWarnedAt > 5000) {
+        asciiWarnedAt = Date.now();
+        toast(`Android's keyboard input only types plain ASCII, not "${e.key}"`, "error");
+      }
       return;
     }
     const key = KEY_MAP[e.key];
-    if (!key) return;
+    if (!key || e.ctrlKey || e.altKey) return; // e.g. Alt+Left = the browser's Back
     e.preventDefault();
-    flushKeys();
-    sendInOrder(() => api("/api/device/key", { method: "POST", body: { key } }));
-    setTimeout(() => refreshScreen(true), 350);
+    queueInput({ key, count: 1 });
   });
 
   // =============================================================== templates

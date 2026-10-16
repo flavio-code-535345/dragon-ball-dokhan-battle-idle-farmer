@@ -127,6 +127,8 @@ class SwipeRequest(BaseModel):
 
 class KeyRequest(BaseModel):
     key: str
+    #: a key held down in the web UI: its repeats, sent together
+    count: int = Field(1, ge=1, le=50)
 
 
 class AppRequest(BaseModel):
@@ -470,7 +472,7 @@ def create_app(ctx: AppContext) -> FastAPI:
             key = normalize_key(body.key)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        ctx.farmer.device_call(lambda d: d.key(key))
+        ctx.farmer.device_call(lambda d: d.press(key, body.count))
         return {"ok": True}
 
     @app.post("/api/device/text")

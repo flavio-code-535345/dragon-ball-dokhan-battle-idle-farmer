@@ -69,6 +69,11 @@ class Device(abc.ABC):
     @abc.abstractmethod
     def key(self, name: str) -> None: ...
 
+    def press(self, name: str, times: int = 1) -> None:
+        """Press a key several times (a key held down in the web UI)."""
+        for _ in range(times):
+            self.key(name)
+
     @abc.abstractmethod
     def launch_app(self, package: str) -> None: ...
 

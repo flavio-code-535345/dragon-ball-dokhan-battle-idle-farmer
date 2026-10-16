@@ -370,3 +370,12 @@ def test_live_screen_in_one_request(client):
 def test_keyboard_keys(client):
     for key in ("DPAD_UP", "dpad_left", "FORWARD_DEL", "TAB"):
         assert client.post("/api/device/key", json={"key": key}).status_code == 200
+    # A held key: its repeats come together.
+    device = client.ctx.device
+    before = len(device.keys)
+    assert client.post("/api/device/key", json={"key": "DEL", "count": 4}).status_code == 200
+    assert device.keys[before:] == ["DEL"] * 4
+    for count in (0, 51):
+        assert (
+            client.post("/api/device/key", json={"key": "DEL", "count": count}).status_code == 422
+        )

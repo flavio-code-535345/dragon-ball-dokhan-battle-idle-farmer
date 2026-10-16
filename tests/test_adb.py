@@ -222,6 +222,25 @@ def test_type_text(fake_adb):
             device.text(bad)
 
 
+def test_a_typed_percent_s_is_not_a_space(fake_adb):
+    # `input text` turns any "%s" into a space: a real one is typed as "...%" + "s...".
+    path, calls = fake_adb
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    device.text("Ab%s9 x!")
+    device.text("%s")
+    shells = [c[3:] for c in calls() if c[2:3] == ["shell"]]
+    assert shells == [
+        ["input text Ab% && input text 's9%sx!'"],
+        ["input text % && input text s"],
+    ]
+
+
+def test_held_keys_are_pressed_in_one_command(fake_adb):
+    path, calls = fake_adb
+    AdbDevice("192.168.1.50:5555", adb_path=path).press("DEL", 3)
+    assert calls()[-1][2:] == ["shell", "input", "keyevent", *["KEYCODE_DEL"] * 3]
+
+
 def test_install_push_and_is_installed(fake_adb, monkeypatch, tmp_path):
     path, calls = fake_adb
     device = AdbDevice("192.168.1.50:5555", adb_path=path)
