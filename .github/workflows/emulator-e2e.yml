@@ -102,6 +102,22 @@ jobs:
           size=$(docker exec -u farmer dokkan-farmer adb -s android:5555 shell wm size | tr -d '\r' | awk '/Physical/ { print $3 }')
           echo "screenshot $(echo "$capture" | jq -r '"\(.width)x\(.height)"'), screen $size"
           [ "$(echo "$capture" | jq -r '"\(.width)x\(.height)"')" = "$size" ]
+          # ...and show what Android shows: compare with Android's own screencap.
+          id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+          curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=1080" -o farmer.jpg
+          docker exec -u farmer dokkan-farmer adb -s android:5555 exec-out screencap -p > android.png
+          docker cp farmer.jpg dokkan-farmer:/tmp/farmer.jpg
+          docker cp android.png dokkan-farmer:/tmp/android.png
+          docker exec dokkan-farmer python -c '
+          import sys, cv2, numpy as np
+          a, b = cv2.imread("/tmp/farmer.jpg"), cv2.imread("/tmp/android.png")
+          print("farmer", a.shape, "mean %.1f std %.1f" % (a.mean(), a.std()))
+          print("android", b.shape, "mean %.1f std %.1f" % (b.mean(), b.std()))
+          if a.shape != b.shape or a.std() < 5:
+              sys.exit("not the screen Android shows")
+          diff = float(np.abs(a.astype(int) - b.astype(int)).mean())
+          print("mean difference %.2f" % diff)
+          sys.exit(0 if diff < 12 else "not the screen Android shows")'
 
       - name: Live view speed (10 frames, 720 px wide)
         run: |
