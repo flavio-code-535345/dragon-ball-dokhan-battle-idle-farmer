@@ -39,7 +39,7 @@ class AppContext:
         self.library = RoutineLibrary(settings.routines_dir)
         self.library.install_defaults()
         self.store = TemplateStore(settings.templates_dir)
-        serial = self.state.get("adb_serial") or settings.adb_serial
+        serial = self._device_serial(settings)
         self.device = device or create_device(settings, serial=serial)
         if isinstance(self.device, SimDevice):
             # Keep the demo templates in sync with the simulator's drawings.
@@ -68,6 +68,17 @@ class AppContext:
         self._closing = threading.Event()
 
     # ------------------------------------------------------------------ device
+    def _device_serial(self, settings: Settings) -> str:
+        """The address set in the web UI, unless ADB_SERIAL was changed since then."""
+        saved = self.state.get("adb_serial")
+        env = settings.adb_serial
+        if saved and env and saved != env and env != self.state.get("adb_serial_env"):
+            # e.g. the stack switched from a phone to the emulator: the stack wins.
+            log.info("ADB_SERIAL changed to %s: using it instead of %s set in the UI", env, saved)
+            saved = None
+        self.state.update(adb_serial=saved, adb_serial_env=env)
+        return saved or env
+
     @property
     def device_status(self) -> dict[str, Any]:
         with self._device_lock:

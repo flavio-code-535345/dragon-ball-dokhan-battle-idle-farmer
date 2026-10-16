@@ -18,6 +18,8 @@ DEFAULTS: dict[str, Any] = {
     "selected_routine": None,
     "options": {},
     "adb_serial": None,
+    # ADB_SERIAL at the last start, to notice when the stack changes it
+    "adb_serial_env": None,
     "was_running": False,
     "lifetime": {"runs": 0, "sessions": 0, "seconds": 0},
     "sessions": [],
