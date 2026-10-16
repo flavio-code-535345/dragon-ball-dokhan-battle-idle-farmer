@@ -637,6 +637,10 @@
       if (distance < 0.02) {
         ui.lastTap = { x: begin.x, y: begin.y, t: Date.now() };
         drawOverlay();
+        // The spot as a routine writes it (tap_xy, the tap point options).
+        const tapInfo = $("#screen-tap");
+        tapInfo.textContent = `Last tap: x ${begin.x.toFixed(2)}, y ${begin.y.toFixed(2)} (as in a routine's tap_xy)`;
+        tapInfo.classList.remove("hidden");
         queueInput({ call: () => api("/api/device/tap", { method: "POST", body: { x: begin.x, y: begin.y } }) });
       } else {
         const ms = Math.min(1500, Math.max(120, Date.now() - begin.t));

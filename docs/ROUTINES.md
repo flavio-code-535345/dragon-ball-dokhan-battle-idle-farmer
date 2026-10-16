@@ -1,9 +1,17 @@
 # Routines
 
-A routine is a YAML file in `/data/routines` (edit it in the **Routine** tab of the web UI). The
-bundled [`dokkan_auto_farm.yaml`](../src/dokkan_farmer/routines/dokkan_auto_farm.yaml) is a
-complete, commented example. Bundled routines are copied into the volume once. Your edits are never
-overwritten, and *Restore default* brings back the original.
+A routine is a YAML file in `/data/routines` (edit it in the **Routine** tab of the web UI). Two
+complete, commented routines are bundled:
+
+- [`dokkan_auto_farm.yaml`](../src/dokkan_farmer/routines/dokkan_auto_farm.yaml): repeats a stage
+  with Dokkan's Auto Mode (the default),
+- [`dokkan_clear_new_stages.yaml`](../src/dokkan_farmer/routines/dokkan_clear_new_stages.yaml):
+  plays the stages you have not cleared yet, for their Dragon Stones (see
+  [below](#clearing-new-stages-for-dragon-stones)).
+
+Bundled routines are copied into the volume once. Your edits are never overwritten, and *Restore
+default* brings back the original. Templates are shared: a button captured for one routine works in
+all of them.
 
 ## How the engine runs a routine
 
@@ -117,6 +125,34 @@ All listed conditions must hold.
 
 Any number value can be an option reference like `$max_runs`. Texts of `notify`, `log` and `stop`
 can use `{placeholders}`: option names, counter names, `{runs}`, `{elapsed}` and `{routine}`.
+
+## Clearing new stages for Dragon Stones
+
+Each stage gives Dragon Stones the first time you clear a difficulty. **Dokkan Clear New Stages**
+collects them: it opens the first stage with a "NEW" mark in the stage list, picks a NEW difficulty,
+plays it, and continues with the next one. When the list has no NEW mark left (it swipes down and
+up to look), it stops and tells you to open the next area.
+
+Dokkan's Auto Mode only works on stages you already cleared, so this routine plays them itself, the
+simple way: on the map it taps where you move, in battle it keeps tapping one spot of the ki sphere
+board. That is no battle strategy: it suits easy stages (Normal and Hard Quest stages of the early
+areas) with a strong team. After a defeat it taps "Give up" (never a paid revive), tries once more
+and then stops (option *Tries again after a defeat*).
+
+To set it up:
+
+1. In Dokkan, open the stage list of one Quest area.
+2. In the **Templates** tab capture the five required templates: `new_mark` (the "NEW" mark of a
+   stage, tick *search the whole screen*), `stage_list` (e.g. the title bar of the stage list),
+   `start_button`, `battle_screen` (e.g. the pause button of a battle) and `stage_clear` (the
+   "Stage Clear" banner). Capture the others when you meet those screens: `map_screen`,
+   `ok_button`, `select_support`, `skip_button` (story scenes), `cancel_button`,
+   `act_empty_dialog`, `defeat_give_up`, ... The checklist on the Templates tab lists them all.
+3. On the **Farm** tab pick *Dokkan Clear New Stages*. Check the tap points: *Battle: where to tap a
+   ki sphere* (a spot in the middle of the sphere board) and *Map: where to tap to move*. With
+   *Touch control* on, the Screen tab shows the coordinates of the spot you tapped.
+4. Press Start and watch the first stage. If a difficulty opens on a screen of its own, capture
+   `difficulty_screen` too.
 
 ## The safety net
 

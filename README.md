@@ -52,6 +52,10 @@ own Auto Mode, so the farmer is simple and does not try to play battles itself.
     number of Dragon Stones, or stop,
   - after a **defeat**: always "Give up" (never a paid revive), then stop or continue,
   - decline friend requests, retry connection errors, tap through "tap to continue" screens.
+- **Routine for Dragon Stones from new stages**: plays the stages of a Quest area you have not
+  cleared yet (the "NEW" ones) for their first-clear rewards, then stops. Auto Mode does not work
+  on uncleared stages, so it plays them itself in a simple way that suits easy stages with a strong
+  team. See [Clearing new stages](docs/ROUTINES.md#clearing-new-stages-for-dragon-stones).
 - **Self-healing**: relaunches Dokkan if it crashes or loses focus, navigates back to your stage
   (optional templates), resumes interrupted quests, detects stuck screens (BACK, then a game
   restart, then gives up with a notification), pauses rules that have no effect, wakes the screen,
@@ -183,8 +187,9 @@ screenshot), when the device is unreachable and, with `NOTIFY_EVERY_RUNS`, every
   optional colour check. See [docs/TEMPLATES.md](docs/TEMPLATES.md).
 - **Routines** are YAML files with options (shown as a form in the UI) and an ordered list of rules
   (`when` this is on screen, `do` these actions). The first matching rule wins. The bundled
-  [`dokkan_auto_farm.yaml`](src/dokkan_farmer/routines/dokkan_auto_farm.yaml) is a commented
-  example. See [docs/ROUTINES.md](docs/ROUTINES.md).
+  [`dokkan_auto_farm.yaml`](src/dokkan_farmer/routines/dokkan_auto_farm.yaml) and
+  [`dokkan_clear_new_stages.yaml`](src/dokkan_farmer/routines/dokkan_clear_new_stages.yaml) are
+  commented examples. See [docs/ROUTINES.md](docs/ROUTINES.md).
 
 ## Demo mode
 

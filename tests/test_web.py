@@ -139,7 +139,7 @@ def test_template_lifecycle(client):
 
 def test_routine_endpoints(client):
     routines = client.get("/api/routines").json()
-    assert [r["id"] for r in routines] == ["dokkan_auto_farm"]
+    assert [r["id"] for r in routines] == ["dokkan_auto_farm", "dokkan_clear_new_stages"]
     detail = client.get("/api/routines/dokkan_auto_farm").json()
     assert detail["valid"] and detail["ready"] and detail["bundled"]
     assert {o["key"] for o in detail["options"]} >= {"max_runs", "act_policy"}
