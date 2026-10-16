@@ -270,6 +270,7 @@ def test_apps_on_the_simulator(client):
         "abi": None,
         "abi_ok": None,
         "runnable_abis": None,
+        "crashes": False,
         "can_install": False,
         "job": None,
     }
@@ -358,6 +359,28 @@ def test_upload_and_install_through_the_api(tmp_path):
         gone = client.post("/api/apps/uninstall").json()
         assert gone == {"ok": True, "package": settings.game_package}
         assert client.get("/api/apps").json()["installed"] is False
+
+
+class EmulatorWith64BitGame(InstallableAdb):
+    def info(self) -> dict:
+        return {"abi": "x86_64", "native_bridge": "libndk_translation.so"}
+
+    def is_installed(self, package: str) -> bool:
+        return True
+
+    def app_abi(self, package: str) -> str:
+        return "arm64-v8a"
+
+    def runnable_abis(self) -> list[str]:
+        return ["x86_64", "x86", "arm64-v8a", "armeabi-v7a"]
+
+
+def test_the_64_bit_game_is_flagged_on_the_emulator(tmp_path):
+    ctx = AppContext(Settings(data_dir=tmp_path / "data"), device=EmulatorWith64BitGame())
+    with TestClient(create_app(ctx)) as client:
+        assert wait_for(lambda: client.get("/api/status").json()["device"]["connected"])
+        apps = client.get("/api/apps").json()
+        assert apps["abi"] == "arm64-v8a" and apps["abi_ok"] is True and apps["crashes"] is True
 
 
 def test_uninstall_needs_adb_and_a_stopped_farm(client):

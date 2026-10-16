@@ -458,6 +458,24 @@ class AdbDevice(Device):
             info["resolution"] = f"{w}x{h}"
         return info
 
+    def android_log(self, package: str) -> str:
+        validate_package(package)
+        about = shlex.quote(
+            f"{package}|FATAL|has died|lowmemorykiller|lmkd|SIGSEGV|SIGILL|SIGBUS|SIGABRT"
+            "|Abort message|ndk_translation"
+        )
+        # One round-trip: the app's build, Android's memory, the crash buffer, then the
+        # newest main-log lines about the app or a crash.
+        script = (
+            f"echo '== {package}'; "
+            f"dumpsys package {package} | grep -E 'versionName|primaryCpuAbi'; "
+            "echo '== Memory'; grep -E 'MemTotal|MemAvailable' /proc/meminfo; "
+            "echo '== Crash log'; logcat -d -b crash -t 300; "
+            "echo '== Log lines about the game'; "
+            f"logcat -d -t 5000 | grep -iE {about} | tail -n 200; true"
+        )
+        return self.shell(script, timeout=60)
+
     def set_stay_awake(self, enabled: bool) -> None:
         try:
             self.shell("svc", "power", "stayon", "true" if enabled else "false")

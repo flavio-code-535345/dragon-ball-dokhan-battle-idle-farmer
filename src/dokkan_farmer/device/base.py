@@ -115,6 +115,10 @@ class Device(abc.ABC):
         """ABIs whose native code really runs here, translation included (``None`` if unknown)."""
         return None
 
+    def android_log(self, package: str) -> str:
+        """What Android logged about an app: its crash reports and the lines naming it."""
+        raise DeviceError("This device has no Android log")
+
     def set_stay_awake(self, enabled: bool) -> None:  # noqa: B027 - optional hook
         """Keep the screen on while farming (no-op where unsupported)."""
 

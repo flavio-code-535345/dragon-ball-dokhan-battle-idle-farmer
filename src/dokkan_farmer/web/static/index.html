@@ -221,6 +221,15 @@
         </div>
         <div id="log-view" class="log-view" role="log" aria-live="off"></div>
       </div>
+
+      <div class="card adb-only">
+        <div class="row space"><h3>Android log</h3><button class="btn small" id="btn-android-log" type="button">Show game log</button></div>
+        <p class="muted small">Why the game closed: Android's crash reports and the log lines about the game, with its build and Android's free memory. Start the game, let it close, then press <b>Show game log</b>, <b>Copy</b> and paste it into your bug report.</p>
+        <textarea id="android-log" class="log-view hidden" readonly spellcheck="false" aria-label="Android log"></textarea>
+        <div class="buttons hidden" id="android-log-actions">
+          <button class="btn small" id="btn-android-log-copy" type="button">Copy</button>
+        </div>
+      </div>
     </section>
 
     <!-- ============================== DEVICE ============================== -->

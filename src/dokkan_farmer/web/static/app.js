@@ -1048,6 +1048,28 @@
 
   $("#log-level").addEventListener("change", () => renderLogs(null));
   $("#btn-log-clear").addEventListener("click", () => { ui.logs = []; $("#log-view").innerHTML = ""; });
+
+  $("#btn-android-log").addEventListener("click", () => run(async () => {
+    const res = await api("/api/device/android-log");
+    const box = $("#android-log");
+    box.value = res.text || "(Android logged nothing about the game)";
+    box.classList.remove("hidden");
+    $("#android-log-actions").classList.remove("hidden");
+    box.scrollTop = box.scrollHeight;
+  }));
+  $("#btn-android-log-copy").addEventListener("click", async () => {
+    const box = $("#android-log");
+    box.focus();
+    box.select();
+    try {
+      // The clipboard API needs https or localhost; on a LAN address fall back to execCommand.
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(box.value);
+      else if (!document.execCommand("copy")) throw new Error("copy refused");
+      toast("Copied", "ok");
+    } catch (err) {
+      toast("Selected: press Ctrl+C (or long-press → Copy)", "error");
+    }
+  });
   setInterval(() => { if (ui.tab === "logs" && !document.hidden) pollLogs(); }, 2000);
 
   // ================================================================= device
@@ -1204,7 +1226,7 @@
     const res = await api("/api/apps").catch(() => null);
     if (!res) return;
     const badge = $("#game-installed");
-    const broken = res.installed && res.abi_ok === false;
+    const broken = res.installed && (res.abi_ok === false || res.crashes);
     badge.className = `badge ${res.installed && !broken ? "ok" : "required"}${res.installed === null ? " hidden" : ""}`;
     badge.textContent = res.installed ? `${broken ? "✗" : "✓"} game installed${res.abi ? ` (${res.abi})` : ""}` : "game not installed";
     $("#btn-uninstall-game").classList.toggle("hidden", !res.installed);
@@ -1213,9 +1235,13 @@
     $("#btn-install-apkpure").classList.toggle("hidden", !runs32);
     const warning = $("#game-abi-warning");
     warning.classList.toggle("hidden", !broken);
-    warning.textContent = broken
-      ? `The game was installed as its ${res.abi} build, which this Android cannot run (it shows "This app isn't compatible"). Uninstall it in Android's settings and install the arm64-v8a version: Aurora Store picks that one by itself.`
-      : "";
+    if (res.crashes) {
+      warning.textContent = "This is the game's 64-bit build (from the Play Store): it closes right after starting on this emulator, whose ARM translation lacks an instruction the game uses. Press Uninstall game, then Install Dokkan (APKPure) for the 32-bit build.";
+    } else {
+      warning.textContent = broken
+        ? `The game was installed as its ${res.abi} build, which this Android cannot run (it shows "This app isn't compatible"). Uninstall it in Android's settings and install the arm64-v8a version: Aurora Store picks that one by itself.`
+        : "";
+    }
     renderJob(res.job);
     if (res.job && JOB_ACTIVE.includes(res.job.state) && !ui.jobActive) {
       ui.jobActive = true;

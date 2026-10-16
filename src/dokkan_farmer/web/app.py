@@ -553,6 +553,11 @@ def create_app(ctx: AppContext) -> FastAPI:
             "abi_ok": None if abi is None or runnable is None else abi in runnable,
             # The CPU code this Android runs (APKPure only has Dokkan's 32-bit ARM build).
             "runnable_abis": runnable,
+            # The emulator's ARM translation (libndk_translation 0.2.2) installs Dokkan's 64-bit
+            # build but lacks an AArch64 instruction it uses: the game dies (SIGILL) as it starts
+            # drawing. Its 32-bit build runs.
+            "crashes": abi == "arm64-v8a"
+            and ctx.device_status["info"].get("native_bridge") == "libndk_translation.so",
             "can_install": isinstance(ctx.device, AdbDevice),
             "job": ctx.installer.current(),
         }
@@ -570,6 +575,15 @@ def create_app(ctx: AppContext) -> FastAPI:
             raise HTTPException(400, str(exc)) from None
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from None
+
+    @app.get("/api/device/android-log")
+    def device_android_log() -> dict[str, Any]:
+        """Android's crash reports and log lines about the game, to copy into a bug report."""
+        package = ctx.settings.game_package
+        return {
+            "package": package,
+            "text": ctx.farmer.device_call(lambda d: d.android_log(package)),
+        }
 
     @app.post("/api/apps/uninstall")
     def apps_uninstall() -> dict[str, Any]:

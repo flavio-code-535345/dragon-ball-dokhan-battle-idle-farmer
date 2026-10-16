@@ -63,7 +63,9 @@ elif cmd == "devices":
     print("emulator-5554           offline")
 elif cmd == "shell":
     script = " ".join(args[1:])
-    if script.startswith("monkey"):
+    if script.startswith("echo '== "):
+        print("== com.bandainamcogames.dbzdokkanww\n    versionName=6.6.0\n== Crash log")
+    elif script.startswith("monkey"):
         if "unknown.pkg" in script:
             print("** No activities found to run, monkey aborted."); sys.exit(251)
         print("Events injected: 1")
@@ -243,6 +245,17 @@ def test_held_keys_are_pressed_in_one_command(fake_adb):
     path, calls = fake_adb
     AdbDevice("192.168.1.50:5555", adb_path=path).press("DEL", 3)
     assert calls()[-1][2:] == ["shell", "input", "keyevent", *["KEYCODE_DEL"] * 3]
+
+
+def test_android_log_in_one_round_trip(fake_adb):
+    path, calls = fake_adb
+    device = AdbDevice("android:5555", adb_path=path)
+    text = device.android_log("com.bandainamcogames.dbzdokkanww")
+    assert "versionName=6.6.0" in text
+    script = calls()[-1][3]
+    assert "logcat -d -b crash" in script and "com.bandainamcogames.dbzdokkanww|FATAL" in script
+    with pytest.raises(ValueError):
+        device.android_log("x; reboot")
 
 
 def test_uninstall(fake_adb, monkeypatch):

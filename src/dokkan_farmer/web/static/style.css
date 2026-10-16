@@ -314,6 +314,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+textarea.log-view { display: block; width: 100%; height: 45vh; resize: vertical; color: inherit; }
 .log-line .t { color: var(--muted); }
 .log-WARNING { color: var(--warn); }
 .log-ERROR, .log-CRITICAL { color: var(--err); }
