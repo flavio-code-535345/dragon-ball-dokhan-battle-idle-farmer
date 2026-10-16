@@ -137,8 +137,10 @@ jobs:
           print("android", b.shape, "mean %.1f std %.1f" % (b.mean(), b.std()))
           if a.shape != b.shape or a.std() < 5:
               sys.exit("not the screen Android shows")
-          diff = float(np.abs(a.astype(int) - b.astype(int)).mean())
-          print("mean difference %.2f" % diff)
+          d = lambda x: float(np.abs(x.astype(int) - b.astype(int)).mean())
+          diff = d(a)
+          print("mean difference %.2f (upside down %.2f, colours swapped %.2f, both %.2f)" % (
+              diff, d(a[::-1]), d(a[:, :, ::-1]), d(a[::-1, :, ::-1])))
           # Same screen: ~6 (JPEG), ~15 with the host renderer (16-bit display); a black,
           # stale or rotated frame: 60+.
           sys.exit(0 if diff < 25 else "not the screen Android shows")'
