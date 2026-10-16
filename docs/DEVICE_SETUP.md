@@ -148,14 +148,14 @@ a 4-core GitHub runner with Dokkan on its start screens (CPU cores in use; the f
 |---|---|---|---|
 | 1080x1920 at 30 Hz (the emulator's own) | 3.9 cores, the game at 10 fps | 0.3 to 0.5 | 0.02 to 0.06 |
 | 1080x1920 at 15 Hz | 3.9 cores, 10 fps | 0.3 | 0.02 |
-| **720x1280 at 15 Hz (this stack)** | **2.0 cores, 15 fps** | 0.2 | 0.01 to 0.02 |
-| 540x960 at 15 Hz | 1.9 cores, 15 fps | 0.6 | 0.02 |
+| **720x1280 at 15 Hz (this stack)** | **2.0 to 3.1 cores, 13 to 15 fps** | 0.2 | 0.01 to 0.03 |
+| 540x960 at 15 Hz (one run) | 1.9 cores, 15 fps | 0.6 | 0.02 |
 | 1080x1920, `ANDROID_CPUS=2` | 2.0 cores, 6 fps | 1.1 | 0.02 |
 | 1080x1920, `ANDROID_CORES=2` | 3.8 cores, 7 fps | 0.4 | 0.35 |
 
-Fewer pixels let the game reach its frame rate cap with half the CPU; below 720x1280 there is
-little more to gain, and fewer emulated cores (`ANDROID_CORES`) only make the game slower. What
-saves power:
+Fewer pixels: 20 to 50 % less CPU (the runners differ) while the game gets closer to its frame
+rate cap; below 720x1280 there is little more to gain, and fewer emulated cores (`ANDROID_CORES`)
+only make the game slower. The screen off saves by far the most. What saves power:
 
 - **Power saving** (`POWER_SAVE`, on in this stack). The farmer turns Android's screen off while
   nothing happens: during the farm's long waits (ACT regenerating with the ACT policy *wait*,
@@ -165,7 +165,7 @@ saves power:
   press *Turn it on* in its notice). With the ACT policy *wait*, most of a farming day is waiting.
   `POWER_SAVE=auto` does this only while the device is this stack's emulator, not a phone.
 - **A smaller screen** (`ANDROID_SCREEN=720x1280` and `ANDROID_FPS=15`, this stack's defaults):
-  half the CPU while the game is on screen, and the game runs smoother than at 1080x1920. Took
+  20 to 50 % less CPU while the game is on screen, and the game runs smoother than at 1080x1920. Took
   templates at another size? The farmer scales them to the screen; if one stops matching (*Test
   on screen*), capture it again.
 - **A CPU cap** (`ANDROID_CPUS`, e.g. `2`): never more than that many cores, at the cost of a

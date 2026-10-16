@@ -78,9 +78,9 @@ services:
       # fail ("glGetAttribLocation ... error 0x501") and the game shows in red only.
       EMULATOR_GPU: ${ANDROID_GPU:-host}
       # Power: the emulator draws the game on the CPU and takes every core it gets. Measured
-      # on a 4-core runner: 1080x1920 at 30 Hz 3.9 cores (the game at 10 fps), 720x1280 at
-      # 15 Hz 2.0 cores (the game at 15 fps, its cap). The farmer scales its templates to the
-      # screen; Android's layout stays phone-like with the density (dpi).
+      # on 4-core runners: 1080x1920 at 30 Hz 3.9 cores (the game at 10 fps), 720x1280 at
+      # 15 Hz 2.0 to 3.1 cores (the game at 13 to 15 fps). The farmer scales its templates to
+      # the screen; Android's layout stays phone-like with the density (dpi).
       SCREEN: ${ANDROID_SCREEN-720x1280}
       DENSITY: ${ANDROID_DENSITY:-280}
       # Android's screen refresh rate (30 or 60 = smoother live view, more CPU; the farm runs

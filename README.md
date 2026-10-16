@@ -161,7 +161,7 @@ All settings are environment variables:
 | `RUN_AS_ROOT` | `false` | Needed for USB passthrough (`/dev/bus/usb`). |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail. |
 | `ANDROID_MEMORY` / `ANDROID_CORES` | `6144` / `4` | Emulator stack: RAM (MB) and CPU cores of the emulated Android. |
-| `ANDROID_SCREEN` / `ANDROID_DENSITY` | `720x1280` / `280` | Emulator stack: Android's screen size and density. Half the CPU of the emulator's own 1080x1920 with the game running faster ([power use](docs/DEVICE_SETUP.md#c1-emulator-recommended)); empty `ANDROID_SCREEN` = 1080x1920. |
+| `ANDROID_SCREEN` / `ANDROID_DENSITY` | `720x1280` / `280` | Emulator stack: Android's screen size and density. 20 to 50 % less CPU than the emulator's own 1080x1920 (measured), with the game running faster ([power use](docs/DEVICE_SETUP.md#c1-emulator-recommended)); empty `ANDROID_SCREEN` = 1080x1920. |
 | `ANDROID_FPS` | `15` | Emulator stack: Android's screen refresh rate, the game's and the live view's frame rate (30 = smoother, more CPU). |
 | `ANDROID_CPUS` | `0` | Emulator stack: at most this many of the server's CPU cores for Android (`0` = no limit). Caps the power draw while the game is on screen; the game runs slower. |
 | `ANDROID_STORAGE_MB` | `32768` | Emulator stack: Android's storage for a *new* Android (the image's own 6 GB is too small for Dokkan's data). An existing Android keeps its size: [insufficient space](docs/DEVICE_SETUP.md#c1-emulator-recommended). |
