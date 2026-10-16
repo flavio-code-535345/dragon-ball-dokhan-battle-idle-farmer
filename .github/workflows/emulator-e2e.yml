@@ -86,6 +86,13 @@ jobs:
           id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
           curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o shots/home.jpg
 
+      - name: Live view speed (10 frames, 720 px wide)
+        run: |
+          for i in $(seq 1 10); do
+            curl -sS --fail-with-body -o /dev/null -w "%{time_total}\n" "$BASE/api/screen/live.jpg?w=720"
+          done | awk '{ sum += $1; print "frame " NR ": " $1 " s" } END { printf "average %.3f s = %.1f fps\n", sum / NR, NR / sum }'
+          docker logs dokkan-farmer 2>&1 | grep -i "screenshots" || echo "raw screenshots (fast path)"
+
       - name: Download Dokkan (APKPure via apkeep)
         if: inputs.game
         run: |
