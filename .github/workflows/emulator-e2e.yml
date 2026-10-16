@@ -150,13 +150,15 @@ jobs:
           }
           show
           [ -n "$GROW" ] || exit 0
+          # Something to keep: a file on Android's data partition.
+          adb shell 'echo kept > /sdcard/Download/marker.txt && ls -la /sdcard/Download/marker.txt'
           if [ "$GROW" = config ]; then
             docker stop dokkan-android
             docker run --rm --volumes-from dokkan-android --entrypoint sh alpine:3.20 -c \
-              'sed -i "/^disk.dataPartition.size/d" /data/android.avd/config.ini && echo "disk.dataPartition.size=16G" >> /data/android.avd/config.ini'
+              'sed -i "/^disk.dataPartition.size/d" /data/android.avd/config.ini && echo "disk.dataPartition.size=32G" >> /data/android.avd/config.ini'
             docker start dokkan-android
           else
-            printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 16384"\n' >> e2e.override.yml
+            printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 32768"\n' >> e2e.override.yml
             docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
           fi
           boot=""
@@ -170,6 +172,8 @@ jobs:
           [ "$boot" = "1" ]
           echo "== after growing ($GROW)"
           show
+          [ "$(adb shell cat /sdcard/Download/marker.txt | tr -d '\r')" = kept ]
+          echo "The file written before growing is still there."
 
       - name: Live view speed (10 frames, 720 px wide)
         run: |
