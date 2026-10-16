@@ -219,6 +219,26 @@ jobs:
             shots/logcat.txt | tail -120 || true
           echo "== crash buffer"; tail -60 shots/logcat-crash.txt
 
+      - name: Restart the android container (the same container keeps /tmp and /data)
+        run: |
+          docker restart dokkan-android
+          adb() { docker exec -u farmer dokkan-farmer adb "$@"; }
+          boot=""
+          for i in $(seq 1 60); do
+            adb connect android:5555 >/dev/null 2>&1 || true
+            boot=$(adb -s android:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
+            [ "$boot" = "1" ] && break
+            sleep 5
+          done
+          docker logs --tail 30 dokkan-android 2>&1 | grep -v "bad fde" || true
+          [ "$boot" = "1" ]
+          echo "Android booted again after about $((i * 5)) s"
+          for i in $(seq 1 12); do
+            curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" && break
+            sleep 5
+          done
+          echo
+
       - name: Screenshots in the log (base64 JPEG, one per line)
         if: always()
         run: |

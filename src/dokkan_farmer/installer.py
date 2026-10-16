@@ -81,7 +81,11 @@ def check_source(source: str) -> str:
 
 
 def resolve_apkpure(source: str, opener: Opener = urllib.request.urlopen) -> str:
-    """The download link of the newest APKPure build for the ABIs in the source."""
+    """The download link of the newest APKPure build.
+
+    The ABIs are only a hint (``x-abis``): APKPure may answer with another build. It only
+    has Dokkan's 32-bit ARM one.
+    """
     package, abis = _apkpure_parts(source)
     request = urllib.request.Request(
         APKPURE_API.format(package=package),
@@ -356,6 +360,9 @@ class InstallManager:
             self._fail(job, f"Download failed: {exc.reason}")
         except (InstallError, DeviceError, OSError, ValueError) as exc:
             self._fail(job, str(exc) or type(exc).__name__)
+        except Exception as exc:  # e.g. a cut download, a broken archive: never stay "running"
+            log.exception("Install of %s crashed", job.source)
+            self._fail(job, f"{type(exc).__name__}: {exc}")
         finally:
             if cleanup is not None:
                 cleanup.unlink(missing_ok=True)

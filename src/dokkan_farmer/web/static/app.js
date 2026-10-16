@@ -523,6 +523,8 @@
     canvas.addEventListener("pointerdown", (e) => {
       if (!$("#toggle-control").checked) return;
       e.preventDefault();
+      // preventDefault keeps the focus where it was: the keys typed next go to Android.
+      if (isTextField(document.activeElement)) document.activeElement.blur();
       canvas.setPointerCapture(e.pointerId);
       start = { ...relPos(e, canvas), t: Date.now() };
     });
@@ -532,19 +534,16 @@
       const begin = start;
       start = null;
       const distance = Math.hypot(end.x - begin.x, end.y - begin.y);
-      run(async () => {
-        if (distance < 0.02) {
-          ui.lastTap = { x: begin.x, y: begin.y, t: Date.now() };
-          drawOverlay();
-          await api("/api/device/tap", { method: "POST", body: { x: begin.x, y: begin.y } });
-        } else {
-          const ms = Math.min(1500, Math.max(120, Date.now() - begin.t));
-          await api("/api/device/swipe", {
-            method: "POST", body: { x1: begin.x, y1: begin.y, x2: end.x, y2: end.y, ms },
-          });
-        }
-        setTimeout(() => refreshScreen(true), 350);
-      });
+      // In the same queue as the keyboard, so taps and typing reach Android in order.
+      if (distance < 0.02) {
+        ui.lastTap = { x: begin.x, y: begin.y, t: Date.now() };
+        drawOverlay();
+        queueInput({ call: () => api("/api/device/tap", { method: "POST", body: { x: begin.x, y: begin.y } }) });
+      } else {
+        const ms = Math.min(1500, Math.max(120, Date.now() - begin.t));
+        const body = { x1: begin.x, y1: begin.y, x2: end.x, y2: end.y, ms };
+        queueInput({ call: () => api("/api/device/swipe", { method: "POST", body }) });
+      }
     });
     canvas.addEventListener("pointercancel", () => { start = null; });
   })();
@@ -555,23 +554,19 @@
   });
   $("#toggle-boxes").addEventListener("change", () => refreshScreen(false));
   $("#btn-refresh-screen").addEventListener("click", () => refreshScreen(true));
-  $$("[data-devkey]").forEach((b) => b.addEventListener("click", () => run(async () => {
-    await api("/api/device/key", { method: "POST", body: { key: b.dataset.devkey } });
-    setTimeout(() => refreshScreen(true), 350);
-  })));
+  $$("[data-devkey]").forEach((b) => b.addEventListener("click", () => {
+    queueInput({ key: b.dataset.devkey, count: 1 });
+  }));
   $$("[data-app]").forEach((b) => b.addEventListener("click", () => run(async () => {
     await api("/api/device/app", { method: "POST", body: { action: b.dataset.app } });
     setTimeout(() => refreshScreen(true), 2500);
   }, "Done")));
-  async function typeText() {
+  function typeText() {
     const input = $("#type-text");
     const text = input.value;
     if (!text) return;
-    await run(async () => {
-      await api("/api/device/text", { method: "POST", body: { text } });
-      input.value = "";
-      setTimeout(() => refreshScreen(true), 350);
-    });
+    input.value = "";
+    queueInput({ text });
   }
   $("#btn-type").addEventListener("click", typeText);
   $("#type-text").addEventListener("keydown", (e) => {
@@ -595,8 +590,9 @@
     liveTick();
   });
 
-  // Keyboard: with Touch control on, keys go to the device. Requests go one at a time;
-  // what is typed meanwhile is sent with the next one (text joined, held keys counted).
+  // Keyboard: with Touch control on, keys go to the device. Device input (keys, text, taps)
+  // goes one request at a time, in order; what is typed meanwhile is sent with the next one
+  // (text joined, held keys counted).
   const KEY_MAP = {
     Backspace: "DEL", Delete: "FORWARD_DEL", Enter: "ENTER", Escape: "BACK", Tab: "TAB",
     ArrowUp: "DPAD_UP", ArrowDown: "DPAD_DOWN", ArrowLeft: "DPAD_LEFT", ArrowRight: "DPAD_RIGHT",
@@ -633,7 +629,9 @@
     while (keyQueue.length) {
       const item = keyQueue.shift();
       try {
-        if (item.key) {
+        if (item.call) {
+          await item.call();
+        } else if (item.key) {
           await api("/api/device/key", { method: "POST", body: { key: item.key, count: item.count } });
         } else {
           await api("/api/device/text", { method: "POST", body: { text: item.text } });
@@ -1210,6 +1208,9 @@
     badge.className = `badge ${res.installed && !broken ? "ok" : "required"}${res.installed === null ? " hidden" : ""}`;
     badge.textContent = res.installed ? `${broken ? "✗" : "✓"} game installed${res.abi ? ` (${res.abi})` : ""}` : "game not installed";
     $("#btn-uninstall-game").classList.toggle("hidden", !res.installed);
+    // APKPure only has Dokkan's 32-bit ARM build (redroid cannot run it).
+    const runs32 = !Array.isArray(res.runnable_abis) || res.runnable_abis.includes("armeabi-v7a");
+    $("#btn-install-apkpure").classList.toggle("hidden", !runs32);
     const warning = $("#game-abi-warning");
     warning.classList.toggle("hidden", !broken);
     warning.textContent = broken

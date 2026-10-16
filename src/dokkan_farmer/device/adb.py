@@ -228,9 +228,10 @@ class AdbDevice(Device):
         now = time.monotonic()
         if now - self._rotation_at >= ROTATION_CHECK_SECONDS:
             self._rotation_at = now
-            out = self.shell("dumpsys input | grep -m 1 SurfaceOrientation; true", timeout=10)
-            match = _ORIENTATION_RE.search(out)
-            rotation = int(match.group(1)) if match else 0
+            # One line per touchscreen: the emulator has 11, those of displays that do not
+            # exist always say 0, so the turned one is the largest.
+            out = self.shell("dumpsys input | grep SurfaceOrientation; true", timeout=10)
+            rotation = max((int(v) for v in _ORIENTATION_RE.findall(out)), default=0)
             if rotation != self._rotation:
                 log.info(
                     "Screen rotation %d: screenshots %s",

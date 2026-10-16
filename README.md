@@ -196,6 +196,8 @@ see how everything behaves.
 
 In Portainer open the stack and use *Pull and redeploy* (or enable automatic updates for
 Git-based stacks), or run `docker compose pull && docker compose up -d`. Your data stays in the volume.
+A stack pasted into Portainer's *Web editor* keeps its text: when a stack file of this repository
+changes (for example the emulator stack's renderer), paste the new one before redeploying.
 
 ## Publishing the image
 

@@ -202,7 +202,8 @@ def test_adb_device_prefers_the_console_and_falls_back(emulator):
 def test_a_rotated_screen_goes_through_adb(emulator, tmp_path):
     device, _, _ = emulator
     assert source(device.screenshot()) == "console"
-    (tmp_path / "rotation").write_text("      SurfaceOrientation: 1\n")
+    # The emulator's extra touchscreens (for displays that do not exist) always say 0.
+    (tmp_path / "rotation").write_text("      SurfaceOrientation: 0\n      SurfaceOrientation: 1\n")
     device._rotation_at = float("-inf")  # the next check is due
     assert source(device.screenshot()) == "adb"
     (tmp_path / "rotation").write_text("      SurfaceOrientation: 0\n")

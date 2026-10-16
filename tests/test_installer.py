@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import threading
@@ -258,6 +259,16 @@ def test_install_from_fdroid(tmp_path, device):
     assert device.installed == [[apk]]
     assert [url for url, _ in seen] == [AURORA_API, AURORA_APK]
     assert list((tmp_path / "apk-tmp").iterdir()) == []  # temporary files are gone
+
+
+def test_an_unexpected_error_still_ends_the_job(tmp_path, device):
+    # e.g. APKPure's answer cut off mid-transfer: the job must not stay "queued" forever.
+    opener, _ = make_opener({DOKKAN_APKPURE: http.client.IncompleteRead(b"")})
+    installer = manager(tmp_path, device, opener)
+    installer.start_url("apkpure:com.bandainamcogames.dbzdokkanww")
+    installer.wait(5)
+    job = installer.current()
+    assert job["state"] == "error" and "IncompleteRead" in job["message"], job
 
 
 def test_install_uploaded_bundle_and_clean_up(tmp_path, device):

@@ -269,6 +269,7 @@ def test_apps_on_the_simulator(client):
         "installed": True,
         "abi": None,
         "abi_ok": None,
+        "runnable_abis": None,
         "can_install": False,
         "job": None,
     }
@@ -349,6 +350,7 @@ def test_upload_and_install_through_the_api(tmp_path):
         apps = client.get("/api/apps").json()
         assert apps["installed"] is True and apps["job"]["message"] == "Installed Dokkan.apk"
         assert apps["abi"] == "armeabi-v7a" and apps["abi_ok"] is False
+        assert apps["runnable_abis"] == ["x86_64", "x86", "arm64-v8a"]
         info = client.get("/api/status").json()["device"]["info"]
         assert info["native_bridge"] == "libnb.so"
 

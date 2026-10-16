@@ -97,7 +97,10 @@ Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create 
 4. **Device** tab → *Apps* → **Install Dokkan (APKPure)**. That is the game's 32-bit ARM build,
    the one tested on this emulator; the Play Store may install another build, which can close
    right after starting. Already installed from the Play Store and it closes? *Uninstall game*
-   first (Android refuses to replace a newer version with an older one).
+   first (Android refuses to replace a newer version with an older one). Deployed this stack
+   before? Paste the current [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) into
+   the stack and update it first: pulling the images alone keeps the old renderer, with the game
+   drawn in red.
 5. ▶ *Launch game*, sign in or transfer your account, download all game data, then continue with
    the stage and template setup like on a phone (README, steps 4 to 6). The Play Store (for
    Google sign-in) is there too: **Screen** tab → *Touch control* on.

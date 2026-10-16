@@ -15,13 +15,15 @@ services:
     image: ${EMULATOR_IMAGE:-halimqarroum/docker-android:api-30-playstore}
     container_name: dokkan-android
     restart: unless-stopped
-    # Before the emulator starts: no password on its console (only the farmer can reach
+    # Before the emulator starts: locks left by an earlier run of this container (a restart
+    # keeps /tmp and /data) removed, no password on its console (only the farmer can reach
     # it, no port is published), a folder for the screenshots it hands to the farmer, and
     # the renderer from EMULATOR_GPU (the image's script would use swiftshader_indirect).
     entrypoint:
       - /bin/sh
       - -c
       - |
+        rm -f /tmp/.X0-lock /tmp/.X11-unix/X0; rm -rf /data/android.avd/*.lock
         mkdir -p /screens && chmod 0777 /screens
         : > /root/.emulator_console_auth_token
         if [ "$$EMULATOR_GPU" = host ]; then export GPU_ACCELERATED=true; fi
@@ -30,6 +32,12 @@ services:
         exec /tmp/start-emulator.sh
     devices:
       - /dev/kvm
+    # The "host" renderer logs many harmless "libunwind: ... bad fde" lines: keep the log small.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       MEMORY: ${ANDROID_MEMORY:-6144}
       CORES: ${ANDROID_CORES:-4}

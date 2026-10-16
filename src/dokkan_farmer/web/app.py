@@ -540,9 +540,9 @@ def create_app(ctx: AppContext) -> FastAPI:
         if ctx.device_status["connected"]:
             try:
                 installed = ctx.farmer.device_call(lambda d: d.is_installed(package))
+                runnable = ctx.farmer.device_call(lambda d: d.runnable_abis())
                 if installed:
                     abi = ctx.farmer.device_call(lambda d: d.app_abi(package))
-                    runnable = ctx.farmer.device_call(lambda d: d.runnable_abis())
             except DeviceError:
                 pass
         return {
@@ -551,6 +551,8 @@ def create_app(ctx: AppContext) -> FastAPI:
             # The game's CPU code, and whether this Android can run it (None = unknown).
             "abi": abi,
             "abi_ok": None if abi is None or runnable is None else abi in runnable,
+            # The CPU code this Android runs (APKPure only has Dokkan's 32-bit ARM build).
+            "runnable_abis": runnable,
             "can_install": isinstance(ctx.device, AdbDevice),
             "job": ctx.installer.current(),
         }
