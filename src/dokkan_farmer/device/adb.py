@@ -34,6 +34,10 @@ _FOCUS_RE = re.compile(r"mCurrentFocus=Window\{[^}]*?\s([A-Za-z][\w.]*)/")
 _RAW_FORMATS = {1: cv2.COLOR_RGBA2BGR, 2: cv2.COLOR_RGBA2BGR, 5: cv2.COLOR_BGRA2BGR}
 #: A raw capture faster than this is kept without comparing it with PNG.
 RAW_FAST_ENOUGH = 0.35
+_ORIENTATION_RE = re.compile(r"SurfaceOrientation:\s*(\d)")
+#: How often (seconds) to check Android's screen rotation while the emulator console takes
+#: the screenshots: its frames are never turned, so a rotated screen goes through adb.
+ROTATION_CHECK_SECONDS = 3.0
 
 
 def validate_serial(serial: str) -> str:
@@ -92,6 +96,11 @@ class AdbDevice(Device):
         self.console = console
         self._console_ok = False
         self._console_retry_at = 0.0
+        #: The last adb command for this device worked. Console screenshots skip adb, so after
+        #: an adb failure they wait until adb answers again: a dead link must not look alive.
+        self._adb_ok = True
+        self._rotation = 0
+        self._rotation_at = float("-inf")
         #: "raw" or "png" once known: raw pixels skip the device's slow PNG encoding but
         #: are ~4x bigger, which only pays off on a fast link (emulator, LAN).
         self.capture_method: str | None = None
@@ -104,6 +113,8 @@ class AdbDevice(Device):
     def set_serial(self, serial: str) -> None:
         self._serial = validate_serial(serial) if serial.strip() else ""
         self.capture_method = None
+        self._adb_ok = True
+        self._rotation, self._rotation_at = 0, float("-inf")
 
     @property
     def is_network(self) -> bool:
@@ -125,11 +136,16 @@ class AdbDevice(Device):
             proc = subprocess.run(
                 cmd, capture_output=True, timeout=timeout or self.timeout, check=False
             )
-        except OSError as exc:  # missing, not executable, bad path...
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            if use_serial:
+                self._adb_ok = False
+            if isinstance(exc, subprocess.TimeoutExpired):
+                what = " ".join(args[:2])
+                raise DeviceError(f"adb {what} timed out after {exc.timeout:.0f}s") from exc
+            # missing, not executable, bad path...
             raise DeviceError(f"adb binary not found or not runnable: {self.adb_path}") from exc
-        except subprocess.TimeoutExpired as exc:
-            what = " ".join(args[:2])
-            raise DeviceError(f"adb {what} timed out after {exc.timeout:.0f}s") from exc
+        if use_serial:
+            self._adb_ok = proc.returncode == 0
         if check and proc.returncode != 0:
             raise DeviceError(_output(proc) or f"adb {args[0]} failed ({proc.returncode})")
         return proc
@@ -207,8 +223,33 @@ class AdbDevice(Device):
         host = self._serial.rpartition(":")[0]
         return self.console is not None and host.lower() == self.console.host.lower()
 
+    def _screen_rotation(self) -> int:
+        """Android's screen rotation (0 = natural), checked every few seconds."""
+        now = time.monotonic()
+        if now - self._rotation_at >= ROTATION_CHECK_SECONDS:
+            self._rotation_at = now
+            out = self.shell("dumpsys input | grep -m 1 SurfaceOrientation; true", timeout=10)
+            match = _ORIENTATION_RE.search(out)
+            rotation = int(match.group(1)) if match else 0
+            if rotation != self._rotation:
+                log.info(
+                    "Screen rotation %d: screenshots %s",
+                    rotation,
+                    "through adb while it is turned" if rotation else "from the emulator again",
+                )
+            self._rotation = rotation
+        return self._rotation
+
+    def _use_console(self) -> bool:
+        return (
+            self._console_for_this_device()
+            and time.monotonic() >= self._console_retry_at
+            and self._adb_ok
+            and self._screen_rotation() == 0
+        )
+
     def screenshot(self) -> np.ndarray:
-        if self._console_for_this_device() and time.monotonic() >= self._console_retry_at:
+        if self._use_console():
             assert self.console is not None
             try:
                 image = self.console.screenshot()

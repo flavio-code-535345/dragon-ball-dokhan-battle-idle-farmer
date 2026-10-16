@@ -133,52 +133,110 @@ def test_console_errors(screens):
 
 
 def fake_adb(tmp_path) -> tuple[Path, Path]:
-    """An adb that logs its arguments and answers every command with a blue PNG."""
+    """An adb that logs its arguments and answers screencap with a blue PNG.
+
+    `dumpsys` prints tmp_path/rotation (Android's screen rotation); while tmp_path/offline
+    exists every command fails like a dropped device.
+    """
     adb = tmp_path / "adb"
     png = tmp_path / "screen.png"
     image = np.zeros((20, 10, 3), np.uint8)
     image[:, :, 0] = 150  # blue: from adb
     cv2.imwrite(str(png), image)
+    (tmp_path / "rotation").write_text("      SurfaceOrientation: 0\n")
     log = tmp_path / "adb.log"
     adb.write_text(
-        f"#!{sys.executable}\nimport sys\n"
-        f"open({str(log)!r}, 'a').write(' '.join(sys.argv[1:]) + '\\n')\n"
-        f"sys.stdout.buffer.write(open({str(png)!r}, 'rb').read())\n"
+        f"#!{sys.executable}\n"
+        "import os, sys\n"
+        f"os.chdir({str(tmp_path)!r})\n"
+        "args = ' '.join(sys.argv[1:])\n"
+        "open('adb.log', 'a').write(args + '\\n')\n"
+        "if os.path.exists('offline'):\n"
+        "    sys.exit('error: device offline')\n"
+        "if 'dumpsys' in args:\n"
+        "    sys.stdout.write(open('rotation').read())\n"
+        "else:\n"
+        "    sys.stdout.buffer.write(open('screen.png', 'rb').read())\n"
     )
     adb.chmod(0o755)
     return adb, log
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
-def test_adb_device_prefers_the_console_and_falls_back(screens, tmp_path):
+def screencaps(log: Path) -> int:
+    return log.read_text().count("screencap") if log.exists() else 0
+
+
+@pytest.fixture
+def emulator(screens, tmp_path):
+    """An AdbDevice for 127.0.0.1:5555 whose console is a FakeConsole."""
     adb, log = fake_adb(tmp_path)
     fake = FakeConsole()
     console = EmulatorConsole(f"127.0.0.1:{fake.port}", screens)
     device = AdbDevice("127.0.0.1:5555", adb_path=str(adb), console=console)
-    assert device.screenshot()[0, 0, 2] == 200  # red: from the console
-    assert not log.exists()  # adb not used
-
+    yield device, fake, log
     fake.close()
-    console.close()
-    console.timeout = 1
-    assert device.screenshot()[0, 0, 0] == 150  # console gone: adb
-    log.unlink()
-    device.screenshot()  # no new console attempt for a minute
-    assert "screencap" in log.read_text()
+
+
+def source(image: np.ndarray) -> str:
+    """Where a screenshot came from: the fake console draws red, the fake adb blue."""
+    return "console" if image[0, 0, 2] == 200 else "adb"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
-def test_the_console_only_serves_the_emulator(screens, tmp_path):
-    adb, _ = fake_adb(tmp_path)
-    fake = FakeConsole()
-    console = EmulatorConsole(f"127.0.0.1:{fake.port}", screens)
+def test_adb_device_prefers_the_console_and_falls_back(emulator):
+    device, fake, log = emulator
+    assert source(device.screenshot()) == "console"
+    assert screencaps(log) == 0  # adb only checked the rotation
+    assert source(device.screenshot()) == "console"
+    assert log.read_text().count("dumpsys") == 1  # rotation checked every few seconds
+
+    fake.close()
+    device.console.close()
+    device.console.timeout = 1
+    assert source(device.screenshot()) == "adb"  # console gone: adb
+    assert source(device.screenshot()) == "adb"  # no new console attempt for a minute
+    assert screencaps(log) >= 2
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
+def test_a_rotated_screen_goes_through_adb(emulator, tmp_path):
+    device, _, _ = emulator
+    assert source(device.screenshot()) == "console"
+    (tmp_path / "rotation").write_text("      SurfaceOrientation: 1\n")
+    device._rotation_at = float("-inf")  # the next check is due
+    assert source(device.screenshot()) == "adb"
+    (tmp_path / "rotation").write_text("      SurfaceOrientation: 0\n")
+    device._rotation_at = float("-inf")
+    assert source(device.screenshot()) == "console"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
+def test_after_an_adb_failure_screenshots_need_adb(emulator, tmp_path):
+    # The console keeps working when adb drops: its screenshots must not hide that,
+    # or the farm would never notice (and never notify) an unreachable device.
+    device, _, _ = emulator
+    assert source(device.screenshot()) == "console"
+    (tmp_path / "offline").touch()
+    with pytest.raises(DeviceError):
+        device.tap(10, 10)
+    with pytest.raises(DeviceError, match="offline"):
+        device.screenshot()
+    with pytest.raises(DeviceError, match="offline"):
+        device.screenshot()
+    (tmp_path / "offline").unlink()
+    assert source(device.screenshot()) == "adb"  # adb answers again...
+    assert source(device.screenshot()) == "console"  # ...so the console is trusted again
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
+def test_the_console_only_serves_the_emulator(emulator):
+    device, fake, _ = emulator
     # The Device tab switched to a phone: its screen, not the emulator's.
-    device = AdbDevice("192.168.1.50:5555", adb_path=str(adb), console=console)
-    assert device.screenshot()[0, 0, 0] == 150
+    device.set_serial("192.168.1.50:5555")
+    assert source(device.screenshot()) == "adb"
     assert fake.commands == []
     device.set_serial("127.0.0.1:5555")  # back to the emulator
-    assert device.screenshot()[0, 0, 2] == 200
-    fake.close()
+    assert source(device.screenshot()) == "console"
 
 
 def test_settings_build_the_console(tmp_path):
