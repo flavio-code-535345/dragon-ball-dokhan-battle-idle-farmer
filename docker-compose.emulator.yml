@@ -54,6 +54,9 @@ services:
         wait "$$pid"
     # Time for the clean shutdown above (Docker kills after 10 s by default).
     stop_grace_period: 60s
+    # At most this many of the server's CPU cores (0 = no limit): Dokkan uses every core it
+    # gets, so this caps the stack's power draw while the game is on screen (it runs slower).
+    cpus: ${ANDROID_CPUS:-0}
     devices:
       - /dev/kvm
     # The "host" renderer logs many harmless "libunwind: ... bad fde" lines: keep the log small.
