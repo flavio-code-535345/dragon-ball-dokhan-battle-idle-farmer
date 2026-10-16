@@ -104,6 +104,19 @@ jobs:
           done | awk '{ sum += $1; print "frame " NR ": " $1 " s" } END { printf "average %.3f s = %.1f fps\n", sum / NR, NR / sum }'
           docker logs dokkan-farmer 2>&1 | grep -i "screenshots" || echo "raw screenshots (fast path)"
 
+      - name: Screenshot speed inside the emulator container (diagnostics)
+        run: |
+          docker exec dokkan-android sh -c '
+            ms() { echo $(( ($(date +%s%N) - $1) / 1000000 )); }
+            mkdir -p /tmp/s
+            for i in 1 2 3 4 5; do
+              t=$(date +%s%N); adb -s emulator-5554 exec-out screencap > /dev/null; echo "android raw screencap: $(ms $t) ms"
+            done
+            for i in 1 2 3 4 5; do
+              t=$(date +%s%N); adb -s emulator-5554 emu screenrecord screenshot /tmp/s > /dev/null; echo "emulator console screenshot: $(ms $t) ms"
+            done
+            ls -la /tmp/s | tail -3' || true
+
       - name: Download Dokkan (APKPure via apkeep)
         if: inputs.game
         run: |
