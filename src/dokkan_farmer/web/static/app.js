@@ -1152,14 +1152,14 @@
   function renderJob(job) {
     const el = $("#install-job");
     const busy = Boolean(job && JOB_ACTIVE.includes(job.state));
-    ["#btn-install-aurora", "#btn-install-url", "#btn-install-file"].forEach((sel) => {
+    ["#btn-install-apkpure", "#btn-install-aurora", "#btn-install-url", "#btn-install-file"].forEach((sel) => {
       $(sel).disabled = busy;
     });
     if (!job) {
       el.className = "notice hidden";
       return;
     }
-    const name = job.source === "fdroid:com.aurora.store" ? "Aurora Store" : job.source;
+    const name = sourceName(job.source);
     let text;
     if (job.state === "uploading" || job.state === "downloading") {
       const verb = job.state === "uploading" ? "Uploading" : "Downloading";
@@ -1194,7 +1194,7 @@
       jobTimer = setTimeout(pollJob, 1500);
     } else if (wasActive && job) {
       if (job.state === "done") {
-        toast(`Installed ${job.source === "fdroid:com.aurora.store" ? "Aurora Store" : job.source}`, "ok");
+        toast(`Installed ${sourceName(job.source)}`, "ok");
         loadApps();
       } else if (job.state === "error") {
         toast(job.message, "error");
@@ -1219,6 +1219,12 @@
       ui.jobActive = true;
       pollJob();
     }
+  }
+
+  function sourceName(source) {
+    if (source === "fdroid:com.aurora.store") return "Aurora Store";
+    if (source && source.startsWith("apkpure:")) return "Dokkan (APKPure)";
+    return source;
   }
 
   function startInstall(source) {
@@ -1254,6 +1260,14 @@
   }
 
   $("#btn-install-aurora").addEventListener("click", () => startInstall("fdroid:com.aurora.store"));
+  $("#btn-install-apkpure").addEventListener("click", () => {
+    const pkg = ui.status && ui.status.settings && ui.status.settings.game_package;
+    if (!pkg) {
+      toast("Not connected to the farmer yet, try again in a moment", "error");
+      return;
+    }
+    startInstall(`apkpure:${pkg}`);
+  });
   $("#btn-open-aurora").addEventListener("click", () => run(async () => {
     await api("/api/device/app", {
       method: "POST", body: { action: "launch", package: "com.aurora.store" },

@@ -325,6 +325,8 @@ def test_upload_and_install_through_the_api(tmp_path):
         assert client.get("/api/apps").json()["can_install"] is True
         bad = client.post("/api/apps/install", json={"source": "ftp://example.com/x.apk"})
         assert bad.status_code == 400
+        bad = client.post("/api/apps/install", json={"source": "apkpure:com.example.app@mips"})
+        assert bad.status_code == 400
         assert client.put("/api/apps/upload?filename=a.apk", content=b"").status_code == 400
 
         device.gate.clear()  # hold the install until the busy check below

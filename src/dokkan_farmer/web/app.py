@@ -142,7 +142,8 @@ class TextRequest(BaseModel):
 
 
 class InstallRequest(BaseModel):
-    #: An http(s) link to an .apk / .xapk / .apks file, or "fdroid:<package>".
+    #: An http(s) link to an .apk / .xapk / .apks file, "fdroid:<package>" or
+    #: "apkpure:<package>[@abi]".
     source: str = Field(min_length=3, max_length=2000)
 
 
