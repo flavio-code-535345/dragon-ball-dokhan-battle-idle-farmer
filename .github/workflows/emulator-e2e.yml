@@ -24,7 +24,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: emulator-e2e
+  # Runs with different settings may run side by side.
+  group: emulator-e2e-${{ inputs.emulator_flags }}-${{ inputs.game_arch }}
   cancel-in-progress: true
 
 jobs:
