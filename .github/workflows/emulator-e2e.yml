@@ -27,13 +27,17 @@ on:
         description: "Test Android's storage: restarts keep its data, an existing Android keeps its size, a new one gets 32 GB (any value = yes)"
         type: string
         default: ""
+      android_env:
+        description: "Extra environment of the android container, e.g. LP_NUM_THREADS=2 (space separated)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
   # Runs with different settings may run side by side.
-  group: emulator-e2e-${{ inputs.emulator_flags }}-${{ inputs.game_arch }}-${{ inputs.gpu }}-${{ inputs.grow_disk }}
+  group: emulator-e2e-${{ inputs.emulator_flags }}-${{ inputs.game_arch }}-${{ inputs.gpu }}-${{ inputs.grow_disk }}-${{ inputs.android_env }}
   cancel-in-progress: true
 
 jobs:
@@ -72,6 +76,7 @@ jobs:
           EMULATOR_FLAGS: ${{ inputs.emulator_flags }}
           GPU: ${{ inputs.gpu }}
           GROW: ${{ inputs.grow_disk }}
+          ANDROID_ENV: ${{ inputs.android_env }}
         run: |
           cat > e2e.override.yml <<'EOF'
           services:
@@ -83,6 +88,12 @@ jobs:
           elif [ -n "$GROW" ]; then
             # Start with the image's own 6 GB, to grow it later.
             printf '  android:\n    environment:\n      STORAGE_MB: "6144"\n' >> e2e.override.yml
+          fi
+          if [ -n "$ANDROID_ENV" ]; then
+            grep -q '^  android:' e2e.override.yml || printf '  android:\n    environment:\n' >> e2e.override.yml
+            for pair in $ANDROID_ENV; do
+              printf '      %s: "%s"\n' "${pair%%=*}" "${pair#*=}" >> e2e.override.yml
+            done
           fi
           cat e2e.override.yml
           [ -n "$GPU" ] && export ANDROID_GPU="$GPU"
@@ -327,6 +338,50 @@ jobs:
           grep -iE "dokkan|bandai|native.?bridge|ndk_trans|FATAL|SIGILL|SIGSEGV|root" \
             shots/logcat.txt | tail -120 || true
           echo "== crash buffer"; tail -60 shots/logcat-crash.txt
+
+      - name: Power (CPU time of the stack while Dokkan runs, 30 s each)
+        if: inputs.game
+        run: |
+          adb() { docker exec -u farmer dokkan-farmer adb -s android:5555 "$@"; }
+          usage() {  # CPU time of a container in microseconds (its cgroup)
+            id=$(docker inspect -f '{{.Id}}' "$1")
+            f=/sys/fs/cgroup/system.slice/docker-$id.scope/cpu.stat
+            [ -f "$f" ] || f=$(find /sys/fs/cgroup -path "*$id*" -name cpu.stat | head -1)
+            awk '/^usage_usec/ {print $2}' "$f"
+          }
+          measure() {
+            a0=$(usage dokkan-android); f0=$(usage dokkan-farmer); sleep 30
+            a1=$(usage dokkan-android); f1=$(usage dokkan-farmer)
+            awk -v l="$1" -v a="$((a1 - a0))" -v f="$((f1 - f0))" \
+              'BEGIN { printf "POWER %-46s android %5.2f cores   farmer %5.2f cores\n", l, a / 3e7, f / 3e7 }'
+          }
+          docker exec dokkan-android sh -c 'ps -eo args | grep -m1 "[q]emu-system"' | cut -c1-1500
+          docker exec dokkan-android sh -c 'grep -E "^hw\.(lcd|cpu|gpu|ramSize)" /data/android.avd/config.ini' || true
+          adb shell 'wm size; wm density; echo stay_on=$(settings get global stay_on_while_plugged_in) screen_off_timeout=$(settings get system screen_off_timeout); dumpsys power | grep -E "mWakefulness=|mStayOn="; dumpsys display | grep -m2 -iE "refreshRate|fps"'
+          echo "game pid: $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r')"
+          measure "game in front, nobody watching"
+          docker exec dokkan-android sh -c 'top -b -d 10 -n 2 -w 160 | awk "/^top -/ {n++} n == 2" | sed -n "7,16p"'
+          curl -sN --max-time 31 "$BASE/api/screen/stream.mjpg?w=540&fps=30" -o /dev/null &
+          measure "game + live view (30 fps, 540 px)"
+          wait
+          ( for i in $(seq 30); do curl -sS -X POST "$BASE/api/screen/capture" -o /dev/null; sleep 1; done ) &
+          measure "game + a screenshot every second (farming)"
+          wait
+          adb shell input keyevent SLEEP
+          sleep 5
+          adb shell 'dumpsys power | grep -E "mWakefulness="'
+          measure "screen off (game paused)"
+          adb shell input keyevent WAKEUP
+          sleep 10
+          echo "after waking: game pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r'), $(adb shell "dumpsys activity activities | grep -m1 ResumedActivity")"
+          id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+          curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o shots/power-after-wake.jpg
+          measure "screen on again"
+          adb shell input keyevent HOME
+          sleep 5
+          measure "Android's home screen (game in background)"
+          adb shell monkey -p com.bandainamcogames.dbzdokkanww -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+          sleep 15
 
       - name: Restart the android container (the same container keeps /tmp and /data)
         run: |
