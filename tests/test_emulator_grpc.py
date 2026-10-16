@@ -34,9 +34,9 @@ def int_field(number: int, value: int) -> bytes:
 
 
 def image_message(rgb: np.ndarray, seq: int = 1, pad: int = 0) -> bytes:
-    """An ``Image`` message the way the emulator sends it: RGB888, rows bottom-up."""
+    """An ``Image`` message the way the emulator sends it: RGB888, top row first."""
     height, width = rgb.shape[:2]
-    rows = rgb[::-1].reshape(height, width * 3)
+    rows = rgb.reshape(height, width * 3)
     if pad:
         rows = np.hstack([rows, np.zeros((height, pad), np.uint8)])
     fmt = int_field(1, eg.RGB888) + field(2, int_field(1, 0)) + int_field(3, width)
@@ -110,7 +110,7 @@ def test_image_format_encoding():
     assert eg._varint(300) == b"\xac\x02"
 
 
-def test_decoding_turns_rows_upright_and_drops_padding():
+def test_decoding_keeps_rows_upright_and_drops_padding():
     rgb = screen(5, 4)
     for pad in (0, 2):
         frame = eg.decode_image(image_message(rgb, seq=7, pad=pad))

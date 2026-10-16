@@ -29,9 +29,6 @@ log = logging.getLogger(__name__)
 _SERVICE = "/android.emulation.control.EmulatorController/"
 #: ImageFormat.ImgFormat.RGB888: 3 bytes a pixel, no compression
 RGB888 = 2
-#: the emulator's rows run bottom-up (emulator_controller.proto: "from left to right and
-#: bottom up")
-BOTTOM_UP = True
 MAX_MESSAGE = 64 << 20
 #: A stream nobody read from for this long stops (a browser tab closed without notice).
 IDLE_SECONDS = 30.0
@@ -112,8 +109,9 @@ class Frame:
         rgb = rows.reshape(self.height, stride)[:, : self.width * 3].reshape(
             self.height, self.width, 3
         )
-        bgr = rgb[::-1, :, ::-1] if BOTTOM_UP else rgb[:, :, ::-1]
-        return np.ascontiguousarray(bgr)
+        # Top row first: emulator_controller.proto says "bottom up", but compared with
+        # Android's own screencap (emulator 36.5) the rows come top-down.
+        return np.ascontiguousarray(rgb[:, :, ::-1])
 
 
 def decode_image(data: bytes) -> Frame | None:
