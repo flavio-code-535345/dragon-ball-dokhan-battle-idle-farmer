@@ -20,6 +20,9 @@ services:
     environment:
       MEMORY: ${ANDROID_MEMORY:-6144}
       CORES: ${ANDROID_CORES:-4}
+      # Android's screen refresh rate: 30 fps halves the CPU spent drawing the game
+      # (60 = smoother, more CPU). The farm runs the same either way.
+      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30}
     volumes:
       # Android's storage (apps, game data) survives restarts and updates.
       - android-data:/data

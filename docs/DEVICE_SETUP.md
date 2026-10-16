@@ -99,8 +99,10 @@ Dokkan and the game starts and shows its first screen.
 5. ▶ *Launch game*, sign in or transfer your account, download all game data, then continue with
    the stage and template setup like on a phone (README, steps 4 to 6).
 
-Settings: `ANDROID_MEMORY` (MB, default 6144) and `ANDROID_CORES` (default 4). The emulator
-renders on the CPU.
+Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4) and `ANDROID_FPS`
+(Android's refresh rate, default 30; 60 is smoother but costs more CPU). The emulator renders on
+the CPU. The Screen tab's *Live* menu sets how often the web page fetches a new picture (up to
+10 fps); with *Touch control* on, your keyboard types into Android.
 
 ### C2. redroid
 

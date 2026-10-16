@@ -131,6 +131,7 @@ select { padding-right: 28px; }
 label { display: block; font-size: 0.9rem; color: var(--muted); }
 label > input:not([type="checkbox"]), label > select { display: block; width: 100%; margin-top: 4px; }
 .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; }
+.switch > select { display: inline-block; width: auto; margin: 0; padding: 4px 26px 4px 8px; font-size: 0.85rem; }
 
 .pill {
   display: inline-block;

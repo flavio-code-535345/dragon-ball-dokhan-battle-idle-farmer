@@ -155,6 +155,7 @@ All settings are environment variables:
 | `RUN_AS_ROOT` | `false` | Needed for USB passthrough (`/dev/bus/usb`). |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail. |
 | `ANDROID_MEMORY` / `ANDROID_CORES` | `6144` / `4` | Emulator stack: RAM (MB) and CPU cores of the emulated Android. |
+| `ANDROID_FPS` | `30` | Emulator stack: Android's screen refresh rate (60 = smoother, more CPU). |
 | `EMULATOR_IMAGE` | `halimqarroum/docker-android:api-30-playstore` | Emulator stack: the emulator image. Keep API 30 (ARM translation). |
 | `REDROID_GPU_MODE` | `guest` | redroid stack: `guest` renders on the CPU, `host` on the server's Intel/AMD GPU. |
 | `REDROID_FPS` | `30` | redroid stack: Android's frame rate (lower = less CPU). |

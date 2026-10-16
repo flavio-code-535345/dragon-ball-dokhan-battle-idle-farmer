@@ -346,3 +346,27 @@ def test_upload_and_install_through_the_api(tmp_path):
         assert apps["abi"] == "armeabi-v7a" and apps["abi_ok"] is False
         info = client.get("/api/status").json()["device"]["info"]
         assert info["native_bridge"] == "libnb.so"
+
+
+def test_live_screen_in_one_request(client):
+    first = client.get("/api/screen/live.jpg?w=360")
+    assert first.status_code == 200 and first.headers["content-type"] == "image/jpeg"
+    assert first.content[:2] == b"\xff\xd8" and first.headers["cache-control"] == "no-store"
+    frame_id = int(first.headers["x-frame-id"])
+    second = client.get(f"/api/screen/live.jpg?w=360&after={frame_id}")
+    assert second.status_code == 200 and int(second.headers["x-frame-id"]) > frame_id
+
+    # While farming the viewer gets the farm loop's frames, and 204 until a newer one exists.
+    assert client.post("/api/farm/start", json={"routine": "dokkan_auto_farm"}).status_code == 200
+    assert wait_for(lambda: client.get("/api/status").json()["farm"]["frame_id"])
+    latest = client.ctx.farmer.frames.latest_id()
+    assert client.get(f"/api/screen/live.jpg?after={latest}").status_code in (200, 204)
+    client.ctx.farmer.stop()
+    stopped_latest = client.ctx.farmer.frames.latest_id()
+    fresh = client.get(f"/api/screen/live.jpg?after={stopped_latest}")
+    assert fresh.status_code == 200  # not farming: a new capture
+
+
+def test_keyboard_keys(client):
+    for key in ("DPAD_UP", "dpad_left", "FORWARD_DEL", "TAB"):
+        assert client.post("/api/device/key", json={"key": key}).status_code == 200

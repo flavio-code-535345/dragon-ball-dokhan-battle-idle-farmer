@@ -412,6 +412,26 @@ def create_app(ctx: AppContext) -> FastAPI:
             headers={"Cache-Control": "no-store", "X-Frame-Id": str(frame_id)},
         )
 
+    @app.get("/api/screen/live.jpg")
+    def screen_live(w: int = Query(720, ge=120, le=2160), after: int | None = None) -> Response:
+        """A fresh screenshot as JPEG in one request (the farm loop's latest while farming).
+
+        ``after``: the frame the viewer already shows; answered with 204 when nothing newer
+        exists yet (while farming, frames come at the farm loop's pace).
+        """
+        frame_id = ctx.farmer.capture()
+        if after is not None and frame_id == after:
+            return Response(status_code=204, headers={"Cache-Control": "no-store"})
+        result = ctx.farmer.frames.jpeg(frame_id, max_width=w)
+        if result is None:
+            raise HTTPException(404, "No screenshot yet")
+        frame_id, data = result
+        return Response(
+            data,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-store", "X-Frame-Id": str(frame_id)},
+        )
+
     @app.post("/api/screen/capture")
     def screen_capture(pin: bool = False) -> dict[str, Any]:
         frame_id = ctx.farmer.capture()

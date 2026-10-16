@@ -203,11 +203,6 @@
 
     if (ui.tab === "farm") updatePreview(false);
     $("#screen-offline").classList.toggle("hidden", status.device.connected);
-    if (ui.tab === "screen" && active && farm.frame_id && farm.frame_id !== ui.shownFrameId
-        && $("#toggle-live").checked) {
-      ui.screenDetections = farm.detections || [];
-      showFrame(farm.frame_id);
-    }
     if (ui.tab === "device") renderDevice();
   }
 
@@ -387,6 +382,44 @@
     return Boolean(ui.status && ui.status.device && ui.status.device.connected);
   }
 
+  let lastAnalysis = 0;
+  let liveUrl = null;
+  let liveTimer = null;
+
+  function liveFps() {
+    return Number($("#live-fps").value) || 0;
+  }
+
+  async function errorText(res) {
+    try {
+      const data = await res.json();
+      if (data && typeof data.detail === "string") return data.detail;
+    } catch (err) {
+      // not JSON
+    }
+    return res.statusText || `HTTP ${res.status}`;
+  }
+
+  function showBlob(blob, frameId) {
+    return new Promise((resolve) => {
+      const img = $("#screen-img");
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        if (liveUrl) URL.revokeObjectURL(liveUrl);
+        liveUrl = url;
+        $("#screen-empty").classList.add("hidden");
+        drawOverlay();
+        resolve();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.src = url;
+      ui.shownFrameId = frameId;
+    });
+  }
+
   async function refreshScreen(force) {
     if (screenBusy) return;
     // Without a device every capture fails: wait for a manual Refresh or a connection.
@@ -395,37 +428,49 @@
     try {
       const farm = ui.status && ui.status.farm;
       const active = farm && isActive(farm.state);
-      let frameId = farm && farm.frame_id;
-      if (force || !active) {
-        try {
-          const cap = await api("/api/screen/capture", { method: "POST" });
-          frameId = cap.frame_id;
-        } catch (err) {
-          if (force) toast(err.message, "error");
-        }
+      // While farming, frames come from the farm loop: ask only for a newer one.
+      const after = !force && ui.shownFrameId ? `&after=${ui.shownFrameId}` : "";
+      let res;
+      try {
+        res = await fetch(`/api/screen/live.jpg?w=${screenWidth()}${after}`, { cache: "no-store" });
+      } catch (err) {
+        if (force) toast("The farmer is not reachable", "error");
+        return;
       }
-      if (!frameId) return;
-      if (active) {
-        ui.screenDetections = farm.detections || [];
-      } else if ($("#toggle-boxes").checked) {
-        const res = await api(`/api/screen/analyze?frame=${frameId}`).catch(() => null);
-        ui.screenDetections = res ? res.results.filter((r) => r.found) : [];
+      if (res.status === 204) return;
+      if (!res.ok) {
+        if (force) toast(await errorText(res), "error");
+        return;
       }
-      if (frameId !== ui.shownFrameId) showFrame(frameId);
-      else drawOverlay();
+      const frameId = Number(res.headers.get("X-Frame-Id"));
+      const blob = await res.blob();
+      if (active) ui.screenDetections = farm.detections || [];
+      else if (!$("#toggle-boxes").checked) ui.screenDetections = [];
+      await showBlob(blob, frameId);
+      if (!active && $("#toggle-boxes").checked && (force || Date.now() - lastAnalysis > 1500)) {
+        lastAnalysis = Date.now();
+        api(`/api/screen/analyze?frame=${frameId}`).then((r) => {
+          if (ui.shownFrameId !== frameId) return;
+          ui.screenDetections = r.results.filter((d) => d.found);
+          drawOverlay();
+        }).catch(() => {});
+      }
     } finally {
       screenBusy = false;
     }
   }
 
-  function showFrame(frameId) {
-    const img = $("#screen-img");
-    img.onload = () => {
-      $("#screen-empty").classList.add("hidden");
-      drawOverlay();
-    };
-    img.src = `/api/screen.jpg?frame=${frameId}&w=${screenWidth()}`;
-    ui.shownFrameId = frameId;
+  // The live view: one frame at a time, at most "Live" frames per second.
+  async function liveTick() {
+    clearTimeout(liveTimer);
+    const fps = liveFps();
+    if (fps && ui.tab === "screen" && !document.hidden && deviceConnected()) {
+      const started = Date.now();
+      await refreshScreen(false);
+      liveTimer = setTimeout(liveTick, Math.max(50, 1000 / fps - (Date.now() - started)));
+    } else {
+      liveTimer = setTimeout(liveTick, 1000);
+    }
   }
 
   function drawOverlay() {
@@ -498,7 +543,7 @@
             method: "POST", body: { x1: begin.x, y1: begin.y, x2: end.x, y2: end.y, ms },
           });
         }
-        setTimeout(() => refreshScreen(true), 700);
+        setTimeout(() => refreshScreen(true), 350);
       });
     });
     canvas.addEventListener("pointercancel", () => { start = null; });
@@ -511,7 +556,7 @@
   $("#btn-refresh-screen").addEventListener("click", () => refreshScreen(true));
   $$("[data-devkey]").forEach((b) => b.addEventListener("click", () => run(async () => {
     await api("/api/device/key", { method: "POST", body: { key: b.dataset.devkey } });
-    setTimeout(() => refreshScreen(true), 700);
+    setTimeout(() => refreshScreen(true), 350);
   })));
   $$("[data-app]").forEach((b) => b.addEventListener("click", () => run(async () => {
     await api("/api/device/app", { method: "POST", body: { action: b.dataset.app } });
@@ -524,7 +569,7 @@
     await run(async () => {
       await api("/api/device/text", { method: "POST", body: { text } });
       input.value = "";
-      setTimeout(() => refreshScreen(true), 700);
+      setTimeout(() => refreshScreen(true), 350);
     });
   }
   $("#btn-type").addEventListener("click", typeText);
@@ -533,11 +578,61 @@
   });
   window.addEventListener("resize", () => { drawOverlay(); drawCapture(); });
 
-  setInterval(() => {
-    if (ui.tab !== "screen" || document.hidden || !$("#toggle-live").checked) return;
-    const farm = ui.status && ui.status.farm;
-    if (!farm || !isActive(farm.state)) refreshScreen(false);
-  }, 2000);
+  try {
+    const saved = localStorage.getItem("liveFps");
+    if (saved !== null && $(`#live-fps option[value="${saved}"]`)) $("#live-fps").value = saved;
+  } catch (err) {
+    // storage blocked: keep the default
+  }
+  $("#live-fps").addEventListener("change", () => {
+    try {
+      localStorage.setItem("liveFps", $("#live-fps").value);
+    } catch (err) {
+      // storage blocked
+    }
+    liveTick();
+  });
+
+  // Keyboard: with Touch control on, keys go to the device (text is sent in batches).
+  const KEY_MAP = {
+    Backspace: "DEL", Delete: "FORWARD_DEL", Enter: "ENTER", Escape: "BACK", Tab: "TAB",
+    ArrowUp: "DPAD_UP", ArrowDown: "DPAD_DOWN", ArrowLeft: "DPAD_LEFT", ArrowRight: "DPAD_RIGHT",
+  };
+  let keyBuffer = "";
+  let keyTimer = null;
+  let keyChain = Promise.resolve();
+
+  function sendInOrder(fn) {
+    keyChain = keyChain.then(fn).catch((err) => toast(err.message || String(err), "error"));
+  }
+
+  function flushKeys() {
+    clearTimeout(keyTimer);
+    if (!keyBuffer) return;
+    const text = keyBuffer;
+    keyBuffer = "";
+    sendInOrder(() => api("/api/device/text", { method: "POST", body: { text } }));
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (ui.tab !== "screen" || !$("#toggle-control").checked) return;
+    if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (e.key.length === 1 && e.key >= " " && e.key <= "~") {
+      e.preventDefault();
+      keyBuffer += e.key;
+      clearTimeout(keyTimer);
+      keyTimer = setTimeout(flushKeys, 150);
+      if (keyBuffer.length >= 200) flushKeys();
+      return;
+    }
+    const key = KEY_MAP[e.key];
+    if (!key) return;
+    e.preventDefault();
+    flushKeys();
+    sendInOrder(() => api("/api/device/key", { method: "POST", body: { key } }));
+    setTimeout(() => refreshScreen(true), 350);
+  });
 
   // =============================================================== templates
   async function loadTemplates() {
@@ -1180,6 +1275,7 @@
     loadSessions();
     showTab(location.hash.slice(1) || "farm");
     setTimeout(pollStatus, 2000);
+    liveTick();
   }
 
   init();

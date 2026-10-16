@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import struct
 import sys
 import textwrap
 
@@ -38,7 +39,8 @@ elif cmd == "get-state":
         sys.stderr.write("error: device unauthorized.\n"); sys.exit(1)
     print("device")
 elif cmd == "exec-out":
-    with open(os.environ["FAKE_ADB_PNG"], "rb") as fh:
+    raw = args[1:] == ["screencap"] and os.environ.get("FAKE_ADB_RAW")
+    with open(raw or os.environ["FAKE_ADB_PNG"], "rb") as fh:
         sys.stdout.buffer.write(fh.read())
 elif cmd == "pair":
     print("Successfully paired to %s [guid=adb-123]" % args[1])
@@ -259,3 +261,55 @@ def test_runnable_abis_and_app_abi(fake_adb, monkeypatch):
     assert device.runnable_abis() == ["x86_64", "x86", "arm64-v8a"]
     monkeypatch.setenv("FAKE_ADB_MODE", "emulator-odd")
     assert device.runnable_abis() is None
+
+
+def raw_screencap(path, header_size: int = 16, fmt: int = 1):
+    """What `adb exec-out screencap` prints: width, height, format[, colour space], RGBA."""
+    rgba = np.zeros((40, 30, 4), np.uint8)
+    rgba[:, :, 0] = 200  # red
+    rgba[:, :, 3] = 255
+    header = struct.pack("<III", 30, 40, fmt) + b"\0" * (header_size - 12)
+    path.write_bytes(header + rgba.tobytes())
+
+
+@pytest.mark.parametrize("header_size", [12, 16])
+def test_raw_screenshots_skip_png(fake_adb, monkeypatch, tmp_path, header_size):
+    path, calls = fake_adb
+    raw = tmp_path / "screen.raw"
+    raw_screencap(raw, header_size)
+    monkeypatch.setenv("FAKE_ADB_RAW", str(raw))
+    device = AdbDevice("redroid:5555", adb_path=path)
+    for _ in range(2):
+        image = device.screenshot()
+        assert image.shape == (40, 30, 3) and tuple(image[0, 0]) == (0, 0, 200)  # BGR
+    assert device.capture_method == "raw"
+    assert ["-s", "redroid:5555", "exec-out", "screencap", "-p"] not in calls()
+
+
+def test_unreadable_raw_output_falls_back_to_png(fake_adb, monkeypatch, tmp_path):
+    path, calls = fake_adb
+    raw = tmp_path / "screen.raw"
+    raw_screencap(raw, fmt=4)  # RGB_565: not handled
+    monkeypatch.setenv("FAKE_ADB_RAW", str(raw))
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    assert device.screenshot()[0, 0, 2] == 200  # from the PNG
+    assert device.capture_method == "png"
+    device.screenshot()
+    raw_calls = [c for c in calls() if c[2:] == ["exec-out", "screencap"]]
+    assert len(raw_calls) == 1  # not retried
+    device.set_serial("192.168.1.51:5555")
+    assert device.capture_method is None
+
+
+def test_slow_raw_screenshots_are_compared_with_png(fake_adb, monkeypatch, tmp_path):
+    from dokkan_farmer.device import adb
+
+    path, calls = fake_adb
+    raw = tmp_path / "screen.raw"
+    raw_screencap(raw)
+    monkeypatch.setenv("FAKE_ADB_RAW", str(raw))
+    monkeypatch.setattr(adb, "RAW_FAST_ENOUGH", 0.0)
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    assert device.screenshot().shape == (40, 30, 3)
+    assert device.capture_method in ("raw", "png")
+    assert ["-s", "192.168.1.50:5555", "exec-out", "screencap", "-p"] in calls()

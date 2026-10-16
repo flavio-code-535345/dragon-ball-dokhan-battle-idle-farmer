@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import re
 import shlex
+import struct
 import subprocess
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,10 @@ _RESUMED_RE = re.compile(
     r"([A-Za-z][\w.]*)/"
 )
 _FOCUS_RE = re.compile(r"mCurrentFocus=Window\{[^}]*?\s([A-Za-z][\w.]*)/")
+#: Raw `screencap` pixel formats: RGBA_8888, RGBX_8888, BGRA_8888.
+_RAW_FORMATS = {1: cv2.COLOR_RGBA2BGR, 2: cv2.COLOR_RGBA2BGR, 5: cv2.COLOR_BGRA2BGR}
+#: A raw capture faster than this is kept without comparing it with PNG.
+RAW_FAST_ENOUGH = 0.35
 
 
 def validate_serial(serial: str) -> str:
@@ -75,6 +81,9 @@ class AdbDevice(Device):
         self._serial = validate_serial(serial) if serial.strip() else ""
         self.adb_path = adb_path
         self.timeout = timeout
+        #: "raw" or "png" once known: raw pixels skip the device's slow PNG encoding but
+        #: are ~4x bigger, which only pays off on a fast link (emulator, LAN).
+        self.capture_method: str | None = None
 
     # ------------------------------------------------------------------ plumbing
     @property
@@ -83,6 +92,7 @@ class AdbDevice(Device):
 
     def set_serial(self, serial: str) -> None:
         self._serial = validate_serial(serial) if serial.strip() else ""
+        self.capture_method = None
 
     @property
     def is_network(self) -> bool:
@@ -182,6 +192,39 @@ class AdbDevice(Device):
 
     # ------------------------------------------------------------------- screen
     def screenshot(self) -> np.ndarray:
+        if self.capture_method == "png":
+            return self._screenshot_png()
+        started = time.monotonic()
+        image = self._screenshot_raw()
+        took = time.monotonic() - started
+        if image is None:  # raw output not understood: PNG from now on
+            self.capture_method = "png"
+            return self._screenshot_png()
+        if self.capture_method == "raw" or took < RAW_FAST_ENOUGH:
+            self.capture_method = "raw"
+            return image
+        # Raw was slow (e.g. a phone on Wi-Fi): keep whichever is faster.
+        started = time.monotonic()
+        png = self._screenshot_png()
+        self.capture_method = "png" if time.monotonic() - started < took else "raw"
+        log.info("Screenshots: using %s (raw took %.2fs)", self.capture_method, took)
+        return png
+
+    def _screenshot_raw(self) -> np.ndarray | None:
+        data = self._exec(["exec-out", "screencap"]).stdout
+        if len(data) < 16:
+            return None
+        width, height, fmt = struct.unpack_from("<III", data)
+        pixels = width * height * 4
+        header = len(data) - pixels  # 12 bytes, or 16 with the colour space (Android 9+)
+        if fmt not in _RAW_FORMATS or not (0 < width <= 8192 and 0 < height <= 8192):
+            return None
+        if header not in (12, 16):
+            return None
+        rgba = np.frombuffer(data, np.uint8, count=pixels, offset=header)
+        return cv2.cvtColor(rgba.reshape(height, width, 4), _RAW_FORMATS[fmt])
+
+    def _screenshot_png(self) -> np.ndarray:
         proc = self._exec(["exec-out", "screencap", "-p"])
         image = _decode_png(proc.stdout)
         if image is None:
