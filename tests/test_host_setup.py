@@ -29,14 +29,15 @@ echo "binder_linux 249856 0 - Live 0x0000000000000000" >> "$FAKE_ROOT/proc/modul
 
 @pytest.fixture
 def host(tmp_path: Path):
-    for directory in ("proc", "dev", "modules", "etc/modules-load.d", "etc/modprobe.d", "bin"):
+    for directory in ("proc/self", "dev", "modules", "etc/modules-load.d", "etc/modprobe.d", "bin"):
         (tmp_path / directory).mkdir(parents=True)
+    (tmp_path / "proc" / "self" / "uid_map").write_text("         0          0 4294967295\n")
     (tmp_path / "proc" / "filesystems").write_text("nodev\tsysfs\nnodev\tproc\n\text4\n")
     (tmp_path / "proc" / "modules").write_text("overlay 212992 1 - Live 0x0\n")
     modprobe = tmp_path / "bin" / "modprobe"
     modprobe.write_text(FAKE_MODPROBE)
     modprobe.chmod(0o755)
-    kernel = subprocess.run(["uname", "-r"], capture_output=True, text=True).stdout.strip()
+    kernel = "6.8.0-45-generic"
     (tmp_path / "modules" / kernel).mkdir()
 
     def run(**env: str) -> subprocess.CompletedProcess[str]:
@@ -48,6 +49,7 @@ def host(tmp_path: Path):
             "HOST_SETUP_DEV": str(tmp_path / "dev"),
             "HOST_SETUP_MODULES": str(tmp_path / "modules"),
             "HOST_SETUP_ETC": str(tmp_path / "etc"),
+            "HOST_SETUP_KERNEL": kernel,
             **env,
         }
         return subprocess.run(
@@ -103,3 +105,23 @@ def test_works_without_the_host_etc_mounts(host):
     result = run()
     assert result.returncode == 0 and "binder is ready" in result.stdout
     assert "boot" not in result.stdout  # nothing claimed about reboots
+
+
+def test_unprivileged_lxc_points_to_the_emulator(host):
+    root, run = host
+    (root / "proc" / "self" / "uid_map").write_text("         0     100000      65536\n")
+    with open(root / "proc" / "filesystems", "a") as fh:
+        fh.write("nodev\tbinder\n")  # even with binder loaded on the host
+    result = run()
+    assert result.returncode == 1
+    assert "unprivileged LXC" in result.stdout and "docker-compose.emulator.yml" in result.stdout
+    assert "pct set 102 -dev0 /dev/kvm" in result.stdout
+    assert not (root / "modprobe.args").exists()
+
+
+def test_proxmox_kernel_failure_points_to_the_emulator(host):
+    _, run = host
+    result = run(FAKE_MODPROBE_FAIL="1", HOST_SETUP_KERNEL="7.0.14-14-pve")
+    assert result.returncode == 1
+    assert "This is Proxmox" in result.stdout and "docker-compose.emulator.yml" in result.stdout
+    assert "linux-modules-extra" not in result.stdout
