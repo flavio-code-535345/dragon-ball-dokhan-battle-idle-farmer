@@ -3,12 +3,12 @@ name: Android emulator end-to-end
 # Runs the emulator stack (docker-compose.emulator.yml) on a GitHub runner with
 # KVM: Android 11 with Google Play boots, the farmer connects and sees ARM
 # translation. With "game" ticked it installs Dokkan (APKPure's build, through the
-# farmer's upload) and starts it; screenshots and logs are kept as an artifact.
+# farmer's Apps card source) and starts it; screenshots and logs are kept as an artifact.
 on:
   workflow_dispatch:
     inputs:
       game:
-        description: Also install Dokkan (APKPure, via apkeep) and start it
+        description: Also install Dokkan (APKPure, through the farmer) and start it
         type: boolean
         default: true
       emulator_flags:
@@ -155,26 +155,15 @@ jobs:
             done
             ls -la /tmp/s | tail -3' || true
 
-      - name: Download Dokkan (APKPure via apkeep)
+      - name: Install Dokkan through the farmer (APKPure, the Apps card's button)
         if: inputs.game
         env:
           GAME_ARCH: ${{ inputs.game_arch }}
         run: |
-          curl -fsSL -o apkeep \
-            https://github.com/EFForg/apkeep/releases/download/1.1.0/apkeep-x86_64-unknown-linux-gnu
-          chmod +x apkeep
-          mkdir game
-          ./apkeep -d apk-pure -o "acknowledge_dangers=true${GAME_ARCH:+,arch=$GAME_ARCH}" \
-            -a com.bandainamcogames.dbzdokkanww game
-          unzip -l game/* | grep -iE '\.apk|lib/' | head -20 || true
-          ls -la game
-
-      - name: Install Dokkan through the farmer (upload)
-        if: inputs.game
-        run: |
-          file=$(ls game/* | head -n 1)
-          curl -sS --fail-with-body -T "$file" "$BASE/api/apps/upload?filename=$(basename "$file")"
-          for i in $(seq 1 300); do
+          source="apkpure:com.bandainamcogames.dbzdokkanww${GAME_ARCH:+@$GAME_ARCH}"
+          curl -sS --fail-with-body -X POST "$BASE/api/apps/install" -H 'Content-Type: application/json' \
+            -d "{\"source\": \"$source\"}"
+          for i in $(seq 1 450); do
             job=$(curl -sS --fail-with-body "$BASE/api/apps/job")
             state=$(echo "$job" | jq -r .job.state)
             { [ "$state" = done ] || [ "$state" = error ]; } && break
