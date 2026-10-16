@@ -125,9 +125,9 @@ No spare phone? Run Android in a container next to the farmer, so nothing else h
 - [`docker-compose.redroid.yml`](docker-compose.redroid.yml): redroid, Android 14 without Google
   Play. Lighter, but needs a Linux host where Docker may load the kernel's binder driver.
 
-Deploy one of them instead of `docker-compose.yml` (no `ADB_SERIAL` needed), install Dokkan from
-the Play Store (emulator) or through the Device tab's *Apps* card (redroid), and continue with
-step 4 above. Details: [docs/DEVICE_SETUP.md, option C](docs/DEVICE_SETUP.md#c-all-in-one-android-on-the-server).
+Deploy one of them instead of `docker-compose.yml` (no `ADB_SERIAL` needed), install Dokkan
+through the Device tab's *Apps* card (*Install Dokkan (APKPure)* on the emulator, Aurora Store on
+redroid), and continue with step 4 above. Details: [docs/DEVICE_SETUP.md, option C](docs/DEVICE_SETUP.md#c-all-in-one-android-on-the-server).
 
 ## Configuration
 
@@ -156,6 +156,7 @@ All settings are environment variables:
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail. |
 | `ANDROID_MEMORY` / `ANDROID_CORES` | `6144` / `4` | Emulator stack: RAM (MB) and CPU cores of the emulated Android. |
 | `ANDROID_FPS` | `30` | Emulator stack: Android's screen refresh rate (60 = smoother, more CPU). |
+| `ANDROID_GPU` | `host` | Emulator stack: Android's renderer (`host`, `swangle_indirect`, `swiftshader_indirect`, `guest`; all on the CPU). Dokkan is drawn right with `host`. |
 | `EMULATOR_CONSOLE` | *(empty)* | Emulator stack: the emulator's console (`android:5554`) for fast screenshots, through the shared folder `EMULATOR_SCREENSHOTS` (`/screens`). |
 | `EMULATOR_IMAGE` | `halimqarroum/docker-android:api-30-playstore` | Emulator stack: the emulator image. Keep API 30 (ARM translation). |
 | `REDROID_GPU_MODE` | `guest` | redroid stack: `guest` renders on the CPU, `host` on the server's Intel/AMD GPU. |

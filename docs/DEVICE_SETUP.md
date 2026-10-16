@@ -80,7 +80,7 @@ emulator headless in a container. Its Android 11 Google Play image translates bo
 32-bit ARM code (`libndk_translation`), so Dokkan runs, and the Play Store and Google sign-in
 work like on a phone. The [emulator end-to-end workflow](../.github/workflows/emulator-e2e.yml)
 tests it on a GitHub runner: Android boots in about 40 seconds, the farmer connects, installs
-Dokkan and the game starts and shows its first screen.
+Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create User* screen.
 
 1. **KVM.** The container needs `/dev/kvm`. Docker in a **Proxmox LXC container** cannot see it
    by default; on the Proxmox host run (102 = the container's ID, see `pct list`):
@@ -94,14 +94,19 @@ Dokkan and the game starts and shows its first screen.
    into the *Web editor*). Set `WEB_PASSWORD`, `TZ` and, if needed, `HOST_PORT`. The first start
    downloads the emulator (about 2.5 GB); Android then boots in a minute or two.
 3. **Device** tab: *connected*, *ARM apps: ✅ translated*.
-4. **Screen** tab → *Touch control* on → open the Play Store, sign in with your Google account
-   (type with the text field under the screen) and install Dragon Ball Z Dokkan Battle.
+4. **Device** tab → *Apps* → **Install Dokkan (APKPure)**. That is the game's 32-bit ARM build,
+   the one tested on this emulator; the Play Store may install another build, which can close
+   right after starting. Already installed from the Play Store and it closes? *Uninstall game*
+   first (Android refuses to replace a newer version with an older one).
 5. ▶ *Launch game*, sign in or transfer your account, download all game data, then continue with
-   the stage and template setup like on a phone (README, steps 4 to 6).
+   the stage and template setup like on a phone (README, steps 4 to 6). The Play Store (for
+   Google sign-in) is there too: **Screen** tab → *Touch control* on.
 
-Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4) and `ANDROID_FPS`
-(Android's refresh rate, default 30; 60 is smoother but costs more CPU). The emulator renders on
-the CPU. The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about
+Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `ANDROID_FPS`
+(Android's refresh rate, default 30; 60 is smoother but costs more CPU) and `ANDROID_GPU` (the
+renderer, default `host`). The emulator renders on the CPU. With the image's own renderer
+(`swiftshader_indirect`) Dokkan's shaders fail: its log fills with `glGetAttribLocation ... error
+0x501` and the game is drawn in red only; `host` draws it right. The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about
 0.1 s each) instead of through Android (about 1 s), so the Screen tab's *Live* view can show up to
 10 fps; with *Touch control* on, your keyboard types into Android.
 
