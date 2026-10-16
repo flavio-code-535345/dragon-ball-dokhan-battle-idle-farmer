@@ -24,7 +24,7 @@ on:
         type: string
         default: ""
       grow_disk:
-        description: "Grow Android's data partition after the first boot: flag (-partition-size), commit (qemu-img commit, then the flag) or config (config.ini); empty = no"
+        description: "Test that a restart and growing Android's storage to 32 GB keep its data (any value = yes)"
         type: string
         default: ""
 
@@ -139,48 +139,47 @@ jobs:
           # stale or rotated frame: 60+.
           sys.exit(0 if diff < 25 else "not the screen Android shows")'
 
-      - name: Android's storage
+      - name: Android's storage (and with grow_disk, that restarts keep Android's data)
         env:
           GROW: ${{ inputs.grow_disk }}
         run: |
           adb() { docker exec -u farmer dokkan-farmer adb -s android:5555 "$@"; }
           show() {
             adb shell df -h /data | tail -1
-            docker exec dokkan-android sh -c 'grep -iE "partition|sdcard" /data/android.avd/config.ini; ls -la /data/android.avd | grep -iE "userdata|sdcard"' || true
+            docker exec dokkan-android sh -c 'grep -iE "dataPartition.size" /data/android.avd/config.ini; ls -la /data/android.avd | grep -iE "userdata"' || true
           }
+          wait_boot() {
+            boot=""
+            for i in $(seq 1 60); do
+              docker exec -u farmer dokkan-farmer adb connect android:5555 >/dev/null 2>&1 || true
+              boot=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
+              [ "$boot" = "1" ] && return 0
+              sleep 5
+            done
+            return 1
+          }
+          mark() { adb shell "echo $1 > /sdcard/Download/$1.txt"; }
+          kept() { [ "$(adb shell cat /sdcard/Download/$1.txt | tr -d '\r')" = "$1" ] && echo "== $1: the file written just before is still there"; }
           show
           [ -n "$GROW" ] || exit 0
-          # Something to keep: a file on Android's data partition.
-          adb shell 'echo kept > /sdcard/Download/marker.txt && ls -la /sdcard/Download/marker.txt'
-          if [ "$GROW" = commit ]; then
-            # Merge the emulator's overlay (Android's changes) into the disk image first.
-            docker stop dokkan-android
-            docker run --rm --volumes-from dokkan-android --entrypoint sh "${EMULATOR_IMAGE:-halimqarroum/docker-android:api-30-playstore}" -c \
-              'ls /opt/android/emulator | grep -i qemu-img; cd /data/android.avd && ls -la userdata-qemu.img* && /opt/android/emulator/qemu-img commit userdata-qemu.img.qcow2 && ls -la userdata-qemu.img*'
-            printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 32768"\n' >> e2e.override.yml
-            docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
-          elif [ "$GROW" = config ]; then
-            docker stop dokkan-android
-            docker run --rm --volumes-from dokkan-android --entrypoint sh alpine:3.20 -c \
-              'sed -i "/^disk.dataPartition.size/d" /data/android.avd/config.ini && echo "disk.dataPartition.size=32G" >> /data/android.avd/config.ini'
-            docker start dokkan-android
-          else
-            printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 32768"\n' >> e2e.override.yml
-            docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
-          fi
-          boot=""
-          for i in $(seq 1 60); do
-            docker exec -u farmer dokkan-farmer adb connect android:5555 >/dev/null 2>&1 || true
-            boot=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
-            [ "$boot" = "1" ] && break
-            sleep 5
-          done
-          docker logs --tail 80 dokkan-android 2>&1 | grep -v "bad fde" | grep -iE "partition|userdata|resiz|disk|error|warn" || true
-          [ "$boot" = "1" ]
-          echo "== after growing ($GROW)"
+
+          # 1. A restart keeps what Android wrote just before (clean shutdown on docker stop).
+          mark restart
+          time docker stop dokkan-android
+          docker logs --tail 15 dokkan-android 2>&1 | grep -v "bad fde" || true
+          docker start dokkan-android
+          wait_boot
+          kept restart
+
+          # 2. Growing the storage keeps Android's data too.
+          mark grow
+          printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 32768"\n' >> e2e.override.yml
+          docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
+          wait_boot
+          echo "== after growing"
           show
-          [ "$(adb shell cat /sdcard/Download/marker.txt | tr -d '\r')" = kept ]
-          echo "The file written before growing is still there."
+          kept grow
+          kept restart
 
       - name: Live view speed (10 frames, 720 px wide)
         run: |

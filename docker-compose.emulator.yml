@@ -29,7 +29,20 @@ services:
         if [ "$$EMULATOR_GPU" = host ]; then export GPU_ACCELERATED=true; fi
         sed "s/GPU_MODE=\"swiftshader_indirect\"/GPU_MODE=\"$$EMULATOR_GPU\"/" /opt/start-emulator.sh > /tmp/start-emulator.sh
         chmod +x /tmp/start-emulator.sh
-        exec /tmp/start-emulator.sh
+        # On "docker stop": flush Android's disk, then close the emulator cleanly. Killed, it
+        # loses what Android wrote last (game data, settings).
+        stop() {
+          timeout 20 adb -s emulator-5554 shell sync
+          timeout 20 adb -s emulator-5554 emu kill
+          wait "$$pid"
+          exit 0
+        }
+        trap stop TERM INT
+        /tmp/start-emulator.sh &
+        pid=$$!
+        wait "$$pid"
+    # Time for the clean shutdown above (Docker kills after 10 s by default).
+    stop_grace_period: 60s
     devices:
       - /dev/kvm
     # The "host" renderer logs many harmless "libunwind: ... bad fde" lines: keep the log small.
