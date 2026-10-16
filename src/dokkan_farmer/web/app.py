@@ -12,8 +12,15 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
+import anyio
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -24,6 +31,7 @@ from ..device import AdbDevice, DeviceError, normalize_key
 from ..device.adb import validate_package
 from ..installer import MAX_DOWNLOAD, InstallError
 from ..library import validate_routine_id
+from ..live import BOUNDARY, mjpeg_part, open_feed
 from ..logging_setup import LOG_BUFFER, ensure_log_buffer
 from ..routine import Routine, RoutineError, parse_routine
 
@@ -433,6 +441,37 @@ def create_app(ctx: AppContext) -> FastAPI:
             data,
             media_type="image/jpeg",
             headers={"Cache-Control": "no-store", "X-Frame-Id": str(frame_id)},
+        )
+
+    @app.get("/api/screen/stream.mjpg")
+    async def screen_stream(
+        w: int = Query(540, ge=120, le=1080),
+        fps: float = Query(10, ge=0.5, le=30),
+        n: int = Query(0, ge=0, le=100000),
+    ) -> StreamingResponse:
+        """The live view as one MJPEG stream, at most ``fps`` frames a second.
+
+        ``n``: stop after that many frames (0 = until the browser closes it).
+        """
+        feed = await anyio.to_thread.run_sync(open_feed, ctx.farmer, w, fps)
+
+        async def parts() -> AsyncIterator[bytes]:
+            sent = 0
+            try:
+                while not n or sent < n:
+                    # abandon_on_cancel: a closed tab must not wait for the next frame.
+                    jpeg = await anyio.to_thread.run_sync(feed.next_jpeg, abandon_on_cancel=True)
+                    yield mjpeg_part(jpeg)
+                    sent += 1
+            except DeviceError as exc:
+                log.info("Live view stream ended: %s", exc)
+            finally:
+                feed.close()
+
+        return StreamingResponse(
+            parts(),
+            media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )
 
     @app.post("/api/screen/capture")

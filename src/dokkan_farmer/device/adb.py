@@ -17,6 +17,7 @@ import numpy as np
 
 from .base import KEYCODES, Device, DeviceError, normalize_key
 from .emulator import EmulatorConsole
+from .emulator_grpc import EmulatorGrpc, FrameStream
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class AdbDevice(Device):
         adb_path: str = "adb",
         timeout: float = 20.0,
         console: EmulatorConsole | None = None,
+        grpc: EmulatorGrpc | None = None,
     ) -> None:
         self._serial = validate_serial(serial) if serial.strip() else ""
         self.adb_path = adb_path
@@ -96,6 +98,10 @@ class AdbDevice(Device):
         self.console = console
         self._console_ok = False
         self._console_retry_at = 0.0
+        #: Screenshots and the live view's frame stream from the emulator's gRPC port.
+        self.grpc = grpc
+        self._grpc_ok = False
+        self._grpc_retry_at = 0.0
         #: The last adb command for this device worked. Console screenshots skip adb, so after
         #: an adb failure they wait until adb answers again: a dead link must not look alive.
         self._adb_ok = True
@@ -218,10 +224,12 @@ class AdbDevice(Device):
         return result
 
     # ------------------------------------------------------------------- screen
+    def _is_emulator_host(self, host: str) -> bool:
+        """The emulator's own ports serve this device: not once the UI points at a phone."""
+        return self._serial.rpartition(":")[0].lower() == host.lower()
+
     def _console_for_this_device(self) -> bool:
-        """The console belongs to the emulator: not used once the UI points at a phone."""
-        host = self._serial.rpartition(":")[0]
-        return self.console is not None and host.lower() == self.console.host.lower()
+        return self.console is not None and self._is_emulator_host(self.console.host)
 
     def _screen_rotation(self) -> int:
         """Android's screen rotation (0 = natural), checked every few seconds."""
@@ -249,7 +257,40 @@ class AdbDevice(Device):
             and self._screen_rotation() == 0
         )
 
+    def _use_grpc(self) -> bool:
+        return (
+            self.grpc is not None
+            and self._is_emulator_host(self.grpc.host)
+            and time.monotonic() >= self._grpc_retry_at
+            and self._adb_ok
+            and self._screen_rotation() == 0
+        )
+
+    def live_stream(self, width: int) -> FrameStream | None:
+        if not self._use_grpc():
+            return None
+        assert self.grpc is not None
+        try:
+            return self.grpc.stream(width)
+        except DeviceError as exc:
+            self._grpc_retry_at = time.monotonic() + 60
+            log.warning("The emulator's frame stream failed, screenshots for a minute: %s", exc)
+            return None
+
     def screenshot(self) -> np.ndarray:
+        if self._use_grpc():
+            assert self.grpc is not None
+            try:
+                image = self.grpc.screenshot()
+            except DeviceError as exc:
+                self._grpc_ok = False
+                self._grpc_retry_at = time.monotonic() + 60
+                log.warning("Emulator gRPC screenshots failed, others for a minute: %s", exc)
+            else:
+                if not self._grpc_ok:
+                    log.info("Screenshots: from the emulator's gRPC port %s", self.grpc.address)
+                    self._grpc_ok = True
+                return image
         if self._use_console():
             assert self.console is not None
             try:
@@ -485,3 +526,5 @@ class AdbDevice(Device):
     def close(self) -> None:
         if self.console is not None:
             self.console.close()
+        if self.grpc is not None:
+            self.grpc.close()

@@ -218,8 +218,32 @@ jobs:
             curl -sS --fail-with-body -o /dev/null -w "%{time_total}\n" "$BASE/api/screen/live.jpg?w=720"
           done | awk '{ sum += $1; print "frame " NR ": " $1 " s" } END { printf "average %.3f s = %.1f fps\n", sum / NR, NR / sum }'
           docker logs dokkan-farmer 2>&1 | grep -i "screenshots" || true
-          # docker-compose.emulator.yml sets EMULATOR_CONSOLE: the emulator's own screenshots.
-          docker logs dokkan-farmer 2>&1 | grep -q "Screenshots: from the emulator console"
+          # docker-compose.emulator.yml sets EMULATOR_GRPC: the emulator's own screenshots.
+          docker logs dokkan-farmer 2>&1 | grep -q "Screenshots: from the emulator's gRPC port"
+
+      - name: Live stream (MJPEG of the emulator's gRPC frames)
+        run: |
+          # Frames in 5 seconds at up to 30 fps (the home screen hardly moves: few new frames).
+          curl -sN --max-time 5 "$BASE/api/screen/stream.mjpg?w=540&fps=30" -o stream.bin || true
+          echo "home screen: $(grep -c 'Content-Type: image/jpeg' stream.bin) frames in 5 s"
+          # A streamed frame shows what Android shows (upright, same picture).
+          curl -sS --fail-with-body "$BASE/api/screen/stream.mjpg?w=1080&fps=1&n=1" -o one.bin
+          docker exec -u farmer dokkan-farmer adb -s android:5555 exec-out screencap -p > android-stream.png
+          docker cp one.bin dokkan-farmer:/tmp/one.bin
+          docker cp android-stream.png dokkan-farmer:/tmp/as.png
+          docker exec dokkan-farmer python -c '
+          import sys, cv2, numpy as np
+          data = open("/tmp/one.bin", "rb").read()
+          start, end = data.index(b"\xff\xd8"), data.rindex(b"\xff\xd9") + 2
+          a = cv2.imdecode(np.frombuffer(data[start:end], np.uint8), cv2.IMREAD_COLOR)
+          b = cv2.imread("/tmp/as.png")
+          print("stream frame", a.shape, "android", b.shape)
+          if a.shape != b.shape:
+              b = cv2.resize(b, (a.shape[1], a.shape[0]), interpolation=cv2.INTER_AREA)
+          diff = float(np.abs(a.astype(int) - b.astype(int)).mean())
+          flipped = float(np.abs(a[::-1].astype(int) - b.astype(int)).mean())
+          print("mean difference %.2f (upside down: %.2f)" % (diff, flipped))
+          sys.exit(0 if diff < 25 and diff < flipped else "the stream is not the screen Android shows")'
 
       - name: Screenshot speed inside the emulator container (diagnostics)
         run: |
@@ -277,6 +301,12 @@ jobs:
             echo "== tap $round: pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r')"
           done
           adb shell "dumpsys package com.bandainamcogames.dbzdokkanww | grep -E 'primaryCpuAbi|versionName' | head -n 3"
+          # The live stream while the game animates.
+          for fps in 10 30; do
+            curl -sN --max-time 5 "$BASE/api/screen/stream.mjpg?w=540&fps=$fps" -o game-stream.bin || true
+            echo "live stream in the game at up to $fps fps: $(grep -c 'Content-Type: image/jpeg' game-stream.bin) frames in 5 s"
+          done
+          docker stats --no-stream dokkan-android dokkan-farmer || true
           # The game's screen from the farmer (emulator console) and from Android's screencap.
           id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
           curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=1080" -o farmer-game.jpg

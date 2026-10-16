@@ -112,6 +112,7 @@
     if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
     window.scrollTo({ top: 0 });
     if (name === "screen") refreshScreen(true);
+    else stopStream();
     if (name === "templates") { loadTemplates(); renderChecklist(); }
     if (name === "routines") loadEditor(ui.editorId || ui.routineId);
     if (name === "logs") pollLogs();
@@ -421,6 +422,10 @@
   }
 
   async function refreshScreen(force) {
+    if (streamUrl) {
+      refreshBoxes(force); // the stream already shows the screen
+      return;
+    }
     if (screenBusy) return;
     // Without a device every capture fails: wait for a manual Refresh or a connection.
     if (!force && ui.status && !deviceConnected()) return;
@@ -444,6 +449,7 @@
       }
       const frameId = Number(res.headers.get("X-Frame-Id"));
       const blob = await res.blob();
+      if (streamUrl) return; // the stream started meanwhile: it shows the screen
       if (active) ui.screenDetections = farm.detections || [];
       else if (!$("#toggle-boxes").checked) ui.screenDetections = [];
       await showBlob(blob, frameId);
@@ -460,11 +466,104 @@
     }
   }
 
-  // The live view: one frame at a time, at most "Live" frames per second.
+  // The live view streams (MJPEG, /api/screen/stream.mjpg: one connection, the emulator's
+  // frames as Android draws them) where the browser and any proxy pass it through.
+  // Otherwise it fetches one frame at a time (live.jpg).
+  let streamUrl = null;
+  let streamShown = false;
+  let streamCheck = null;
+  let streamRetryAt = 0;
+
+  function startStream(fps) {
+    const url = `/api/screen/stream.mjpg?w=${Math.min(720, screenWidth())}&fps=${fps}`;
+    if (streamUrl === url) return;
+    const img = $("#screen-img");
+    streamUrl = url;
+    streamShown = false;
+    img.onload = () => {
+      if (streamUrl !== url) return;
+      streamShown = true;
+      $("#screen-empty").classList.add("hidden");
+      drawOverlay();
+    };
+    img.onerror = () => {
+      if (streamUrl !== url) return;
+      stopStream();
+      streamRetryAt = Date.now() + 10000; // e.g. the device dropped: single frames for a while
+    };
+    img.src = url;
+    if (liveUrl) {
+      URL.revokeObjectURL(liveUrl);
+      liveUrl = null;
+    }
+    clearTimeout(streamCheck);
+    // A proxy that holds the stream back never shows its first frame: single frames instead.
+    streamCheck = setTimeout(() => {
+      if (streamUrl !== url || streamShown) return;
+      stopStream();
+      streamRetryAt = Date.now() + 5 * 60000;
+      toast("The live stream does not get through (a proxy?): showing single frames", "error");
+    }, 8000);
+  }
+
+  function stopStream() {
+    if (!streamUrl) return;
+    streamUrl = null;
+    clearTimeout(streamCheck);
+    const img = $("#screen-img");
+    img.onload = null;
+    img.onerror = null;
+    img.removeAttribute("src"); // closes the connection
+  }
+
+  // While streaming, the boxes come from the farm loop, or from an analysis every 1.5 s.
+  async function refreshBoxes(force) {
+    const farm = ui.status && ui.status.farm;
+    if (farm && isActive(farm.state)) {
+      ui.screenDetections = farm.detections || [];
+      drawOverlay();
+      return;
+    }
+    if (!$("#toggle-boxes").checked) {
+      if (ui.screenDetections.length) {
+        ui.screenDetections = [];
+        drawOverlay();
+      }
+      return;
+    }
+    if (screenBusy || (!force && Date.now() - lastAnalysis < 1500)) return;
+    lastAnalysis = Date.now();
+    screenBusy = true;
+    try {
+      const shot = await api("/api/screen/capture", { method: "POST" });
+      const res = await api(`/api/screen/analyze?frame=${shot.frame_id}`);
+      if (streamUrl) {
+        ui.screenDetections = res.results.filter((d) => d.found);
+        drawOverlay();
+      }
+    } catch (err) {
+      // the next tick tries again
+    } finally {
+      screenBusy = false;
+    }
+  }
+
+  // At most "Live" frames per second: streamed, or one at a time.
   async function liveTick() {
     clearTimeout(liveTimer);
     const fps = liveFps();
-    if (fps && ui.tab === "screen" && !document.hidden && deviceConnected()) {
+    const showing = ui.tab === "screen" && !document.hidden && deviceConnected();
+    if (fps && showing && Date.now() >= streamRetryAt) {
+      startStream(fps);
+      refreshBoxes(false);
+      liveTimer = setTimeout(liveTick, 1000);
+      return;
+    }
+    if (streamUrl) {
+      stopStream();
+      if (showing) refreshScreen(true); // Live off: a still picture rather than none
+    }
+    if (fps && showing) {
       const started = Date.now();
       await refreshScreen(false);
       liveTimer = setTimeout(liveTick, Math.max(50, 1000 / fps - (Date.now() - started)));
@@ -1348,7 +1447,8 @@
 
   // ================================================================== start
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && ui.tab === "screen") refreshScreen(false);
+    if (document.hidden) stopStream(); // no stream for a hidden tab
+    else if (ui.tab === "screen") liveTick();
   });
 
   async function init() {

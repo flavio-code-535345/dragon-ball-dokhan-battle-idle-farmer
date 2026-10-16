@@ -70,8 +70,10 @@ services:
       # fail ("glGetAttribLocation ... error 0x501") and the game shows in red only.
       EMULATOR_GPU: ${ANDROID_GPU:-host}
       # Android's screen refresh rate: 30 fps halves the CPU spent drawing the game
-      # (60 = smoother, more CPU). The farm runs the same either way.
-      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30}
+      # (60 = smoother, more CPU). The farm runs the same either way. -grpc: the emulator's
+      # gRPC port, without a token: the farmer's live view gets frames as they are drawn
+      # (no port is published, only the stack's containers reach it).
+      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30} -grpc 8554
       # Android's storage in MB, for a new Android (the image's own 6 GB fills up during
       # Dokkan's download: "insufficient space"). An existing Android keeps its size.
       STORAGE_MB: ${ANDROID_STORAGE_MB:-32768}
@@ -94,8 +96,10 @@ services:
     environment:
       # Android of the emulator service above (the farmer waits for it to boot).
       ADB_SERIAL: android:5555
-      # Screenshots straight from the emulator (~0.1 s instead of ~1 s through Android).
+      # Screenshots straight from the emulator (~0.1 s instead of ~1 s through Android), and
+      # the live view at the game's frame rate (gRPC; the console is the fallback).
       EMULATOR_CONSOLE: android:5554
+      EMULATOR_GRPC: android:8554
       GAME_PACKAGE: ${GAME_PACKAGE:-global}
       AUTOSTART: ${AUTOSTART:-resume}
       ACTIVE_HOURS: ${ACTIVE_HOURS:-}

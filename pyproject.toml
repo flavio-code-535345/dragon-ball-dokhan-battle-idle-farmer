@@ -17,6 +17,7 @@ dependencies = [
   "numpy>=1.26",
   "PyYAML>=6.0",
   "apprise>=1.8",
+  "grpcio>=1.60",
 ]
 
 [project.optional-dependencies]

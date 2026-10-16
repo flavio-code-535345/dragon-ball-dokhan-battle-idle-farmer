@@ -66,6 +66,8 @@ class Settings:
     emulator_console: str = ""
     #: folder shared with the emulator for those screenshots (same path in both containers)
     emulator_screenshots: str = "/screens"
+    #: host:port of the emulator's gRPC port (emulator stack): live view at the game's frame rate
+    emulator_grpc: str = ""
     game_package: str = GAME_PACKAGES["global"]
     routine: str = "dokkan_auto_farm"
     autostart: str = "resume"
@@ -102,6 +104,7 @@ class Settings:
             adb_path=_text(env, "ADB_PATH", "adb"),
             emulator_console=_text(env, "EMULATOR_CONSOLE", ""),
             emulator_screenshots=_text(env, "EMULATOR_SCREENSHOTS", "/screens"),
+            emulator_grpc=_text(env, "EMULATOR_GRPC", ""),
             game_package=resolve_game_package(_text(env, "GAME_PACKAGE", "global")),
             routine=_text(env, "ROUTINE", "dokkan_auto_farm"),
             autostart=autostart,
@@ -146,6 +149,7 @@ class Settings:
             "device_backend": self.device_backend,
             "adb_serial": self.adb_serial,
             "emulator_console": self.emulator_console,
+            "emulator_grpc": self.emulator_grpc,
             "game_package": self.game_package,
             "routine": self.routine,
             "autostart": self.autostart,
