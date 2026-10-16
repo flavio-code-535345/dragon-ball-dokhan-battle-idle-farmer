@@ -8,7 +8,7 @@
 #   pct set 102 -dev0 /dev/kvm,mode=0666 && pct reboot 102
 #
 # The emulator image (github.com/HQarroum/docker-android) translates ARM apps such as
-# Dokkan, comes with the Play Store, and lets the farmer connect without a prompt.
+# Dokkan and comes with the Play Store.
 # Plan ~8 GB RAM and ~20 GB disk for Android + Dokkan.
 services:
   android:
@@ -23,6 +23,8 @@ services:
     volumes:
       # Android's storage (apps, game data) survives restarts and updates.
       - android-data:/data
+      # The emulator lets its own adb key in without a prompt; the farmer uses it too.
+      - adb-keys:/root/.android
 
   farmer:
     image: ${IMAGE:-flavio11113/dokkan-idle-farmer}:${IMAGE_TAG:-latest}
@@ -48,7 +50,9 @@ services:
       PGID: ${PGID:-1000}
     volumes:
       - farmer-data:/data
+      - adb-keys:/data/adb
 
 volumes:
   android-data:
   farmer-data:
+  adb-keys:
