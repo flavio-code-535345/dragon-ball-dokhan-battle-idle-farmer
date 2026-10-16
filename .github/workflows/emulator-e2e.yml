@@ -203,6 +203,15 @@ jobs:
           show
           adb shell df -k /data | tail -1 | awk '{ exit !($2 > 30000000) }'
 
+      - name: Emulator gRPC (diagnostics)
+        if: contains(inputs.emulator_flags, '-grpc')
+        run: |
+          docker exec dokkan-android sh -c '
+            (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -E "8554|5554|5555" || true
+            f=$(find / -name "emulator_controller.proto" 2>/dev/null | head -1); echo "proto: $f"
+            [ -n "$f" ] && grep -nE "^(syntax|package|option java)|message ImageFormat|message Image |message Rotation|enum ImgFormat|enum SkinRotation|rpc (getScreenshot|streamScreenshot)" "$f"
+            [ -n "$f" ] && sed -n "/^message ImageFormat/,/^}/p;/^message Image /,/^}/p;/^message Rotation/,/^}/p" "$f"' || true
+
       - name: Live view speed (10 frames, 720 px wide)
         run: |
           for i in $(seq 1 10); do
