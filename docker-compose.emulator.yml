@@ -9,8 +9,7 @@
 #
 # The emulator image (github.com/HQarroum/docker-android) translates ARM apps such as
 # Dokkan and comes with the Play Store.
-# Plan ~8 GB RAM and ~20 GB disk for Android + Dokkan (Android's 32 GB disk image only takes
-# the space it really uses).
+# Plan ~8 GB RAM and ~20 GB disk for Android + Dokkan.
 services:
   android:
     image: ${EMULATOR_IMAGE:-halimqarroum/docker-android:api-30-playstore}
@@ -48,9 +47,7 @@ services:
       EMULATOR_GPU: ${ANDROID_GPU:-host}
       # Android's screen refresh rate: 30 fps halves the CPU spent drawing the game
       # (60 = smoother, more CPU). The farm runs the same either way.
-      # Android's storage (MB): the image's default 6 GB fills up during Dokkan's download
-      # ("insufficient space"). Raising it later grows the existing disk, data included.
-      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30} -partition-size ${ANDROID_STORAGE_MB:-32768}
+      EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30}
     volumes:
       # Android's storage (apps, game data) survives restarts and updates.
       - android-data:/data
