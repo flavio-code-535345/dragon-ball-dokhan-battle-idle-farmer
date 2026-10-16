@@ -1209,6 +1209,7 @@
     const broken = res.installed && res.abi_ok === false;
     badge.className = `badge ${res.installed && !broken ? "ok" : "required"}${res.installed === null ? " hidden" : ""}`;
     badge.textContent = res.installed ? `${broken ? "✗" : "✓"} game installed${res.abi ? ` (${res.abi})` : ""}` : "game not installed";
+    $("#btn-uninstall-game").classList.toggle("hidden", !res.installed);
     const warning = $("#game-abi-warning");
     warning.classList.toggle("hidden", !broken);
     warning.textContent = broken
@@ -1260,6 +1261,15 @@
   }
 
   $("#btn-install-aurora").addEventListener("click", () => startInstall("fdroid:com.aurora.store"));
+  $("#btn-uninstall-game").addEventListener("click", () => {
+    const question = "Uninstall the game? Its data on this Android is deleted: if you already "
+      + "play on this device, link your account first (Dokkan: Menu → Data Transfer).";
+    if (!confirm(question)) return;
+    run(async () => {
+      await api("/api/apps/uninstall", { method: "POST" });
+      loadApps();
+    }, "Game uninstalled");
+  });
   $("#btn-install-apkpure").addEventListener("click", () => {
     const pkg = ui.status && ui.status.settings && ui.status.settings.game_package;
     if (!pkg) {

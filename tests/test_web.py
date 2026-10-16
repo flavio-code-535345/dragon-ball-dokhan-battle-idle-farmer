@@ -301,6 +301,9 @@ class InstallableAdb(AdbDevice):
     def is_installed(self, package: str) -> bool:
         return bool(self.installed)
 
+    def uninstall(self, package: str) -> None:
+        self.installed.clear()
+
     def app_abi(self, package: str) -> str:
         return "armeabi-v7a"
 
@@ -348,6 +351,15 @@ def test_upload_and_install_through_the_api(tmp_path):
         assert apps["abi"] == "armeabi-v7a" and apps["abi_ok"] is False
         info = client.get("/api/status").json()["device"]["info"]
         assert info["native_bridge"] == "libnb.so"
+
+        # A build this Android cannot run: remove it.
+        gone = client.post("/api/apps/uninstall").json()
+        assert gone == {"ok": True, "package": settings.game_package}
+        assert client.get("/api/apps").json()["installed"] is False
+
+
+def test_uninstall_needs_adb_and_a_stopped_farm(client):
+    assert client.post("/api/apps/uninstall").status_code == 400  # the simulator
 
 
 def test_live_screen_in_one_request(client):

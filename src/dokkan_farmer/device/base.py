@@ -99,6 +99,10 @@ class Device(abc.ABC):
         """Copy a file to the device."""
         raise DeviceError("This device cannot receive files")
 
+    def uninstall(self, package: str) -> None:
+        """Remove an app and its data from the device."""
+        raise DeviceError("This device cannot uninstall apps")
+
     def is_installed(self, package: str) -> bool | None:
         """Whether an app is installed (``None`` if unknown)."""
         return None

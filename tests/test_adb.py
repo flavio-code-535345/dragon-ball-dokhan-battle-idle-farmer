@@ -51,6 +51,10 @@ elif cmd in ("install", "install-multiple"):
               "Failed to extract native libraries, res=-113]")
         sys.exit(1)
     print("Success")
+elif cmd == "uninstall":
+    if mode == "uninstall_fail":
+        print("Failure [DELETE_FAILED_INTERNAL_ERROR]"); sys.exit(1)
+    print("Success")
 elif cmd == "push":
     print("%s: 1 file pushed, 0 skipped." % args[1])
 elif cmd == "devices":
@@ -239,6 +243,18 @@ def test_held_keys_are_pressed_in_one_command(fake_adb):
     path, calls = fake_adb
     AdbDevice("192.168.1.50:5555", adb_path=path).press("DEL", 3)
     assert calls()[-1][2:] == ["shell", "input", "keyevent", *["KEYCODE_DEL"] * 3]
+
+
+def test_uninstall(fake_adb, monkeypatch):
+    path, calls = fake_adb
+    device = AdbDevice("192.168.1.50:5555", adb_path=path)
+    device.uninstall("com.bandainamcogames.dbzdokkanww")
+    assert calls()[-1][2:] == ["uninstall", "com.bandainamcogames.dbzdokkanww"]
+    monkeypatch.setenv("FAKE_ADB_MODE", "uninstall_fail")
+    with pytest.raises(DeviceError, match="DELETE_FAILED_INTERNAL_ERROR"):
+        device.uninstall("com.bandainamcogames.dbzdokkanww")
+    with pytest.raises(ValueError):
+        device.uninstall("not a package")
 
 
 def test_install_push_and_is_installed(fake_adb, monkeypatch, tmp_path):

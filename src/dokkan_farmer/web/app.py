@@ -569,6 +569,19 @@ def create_app(ctx: AppContext) -> FastAPI:
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from None
 
+    @app.post("/api/apps/uninstall")
+    def apps_uninstall() -> dict[str, Any]:
+        """Remove the game (e.g. a build this Android cannot run) and its data."""
+        _require_adb()
+        if ctx.farmer.is_running:
+            raise HTTPException(409, "Stop the farm first")
+        if ctx.installer.busy:
+            raise HTTPException(409, "An install is still running")
+        package = ctx.settings.game_package
+        ctx.farmer.device_call(lambda d: d.uninstall(package))
+        log.info("Uninstalled %s", package)
+        return {"ok": True, "package": package}
+
     @app.put("/api/apps/upload")
     async def apps_upload(
         request: Request, filename: str = Query(min_length=1, max_length=200)

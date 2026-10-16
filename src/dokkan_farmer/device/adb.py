@@ -381,6 +381,14 @@ class AdbDevice(Device):
     def push(self, local: Path, remote: str) -> None:
         self._exec(["push", str(local), remote], timeout=900)
 
+    def uninstall(self, package: str) -> None:
+        validate_package(package)
+        proc = self._exec(["uninstall", package], timeout=120, check=False)
+        text = _output(proc)
+        if "Success" not in text:
+            failure = re.search(r"Failure \[([^\]]+)\]", text)
+            raise DeviceError(f"Uninstall failed: {failure.group(1) if failure else text[-300:]}")
+
     def is_installed(self, package: str) -> bool | None:
         validate_package(package)
         proc = self._exec(["shell", "pm", "path", package], timeout=15, check=False)
