@@ -199,6 +199,19 @@ jobs:
             echo "== tap $round: pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r')"
           done
           adb shell "dumpsys package com.bandainamcogames.dbzdokkanww | grep -E 'primaryCpuAbi|versionName' | head -n 3"
+          # The game's screen from the farmer (emulator console) and from Android's screencap.
+          id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+          curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=1080" -o farmer-game.jpg
+          adb exec-out screencap -p > android-game.png
+          docker cp farmer-game.jpg dokkan-farmer:/tmp/fg.jpg
+          docker cp android-game.png dokkan-farmer:/tmp/ag.png
+          docker exec dokkan-farmer python -c '
+          import cv2
+          a, b = cv2.imread("/tmp/fg.jpg"), cv2.imread("/tmp/ag.png")
+          for name, im in (("farmer (console)", a), ("android screencap", b)):
+              print(name, im.shape, "mean B G R", [round(float(im[:, :, c].mean()), 1) for c in range(3)])
+          cv2.imwrite("/tmp/ag.jpg", cv2.resize(b, (360, 640), interpolation=cv2.INTER_AREA))'
+          docker cp dokkan-farmer:/tmp/ag.jpg shots/dokkan-screencap.jpg
           adb logcat -d -b crash > shots/logcat-crash.txt || true
           adb logcat -d > shots/logcat.txt || true
           grep -iE "dokkan|bandai|native.?bridge|ndk_trans|FATAL|SIGILL|SIGSEGV|root" \
