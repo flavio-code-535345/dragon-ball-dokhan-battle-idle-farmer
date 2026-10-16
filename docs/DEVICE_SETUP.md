@@ -95,12 +95,13 @@ Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create 
    downloads the emulator (about 2.5 GB); Android then boots in a minute or two.
 3. **Device** tab: *connected*, *ARM apps: ✅ translated*.
 4. **Device** tab → *Apps* → **Install Dokkan (APKPure)**. That is the game's 32-bit ARM build,
-   the one tested on this emulator; the Play Store may install another build, which can close
-   right after starting. Already installed from the Play Store and it closes? *Uninstall game*
-   first (Android refuses to replace a newer version with an older one). Deployed this stack
-   before? Paste the current [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) into
-   the stack and update it first: pulling the images alone keeps the old renderer, with the game
-   drawn in red.
+   the one tested on this emulator. Do not install it from the Play Store: that gives the 64-bit
+   build, which closes a few seconds after starting (the emulator's ARM translation lacks an
+   instruction it uses: `ndk_translation: Undefined instruction` and `SIGILL` in the log; the
+   *Apps* card warns about it). Already installed from the Play Store? *Uninstall game* first.
+   Deployed this stack before? Paste the current
+   [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) into the stack and update it
+   first: pulling the images alone keeps the old renderer, with the game drawn in red.
 5. ▶ *Launch game*, sign in or transfer your account, download all game data, then continue with
    the stage and template setup like on a phone (README, steps 4 to 6). The Play Store (for
    Google sign-in) is there too: **Screen** tab → *Touch control* on.
@@ -109,9 +110,11 @@ Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `AND
 (Android's refresh rate, default 30; 60 is smoother but costs more CPU) and `ANDROID_GPU` (the
 renderer, default `host`). The emulator renders on the CPU. With the image's own renderer
 (`swiftshader_indirect`) Dokkan's shaders fail: its log fills with `glGetAttribLocation ... error
-0x501` and the game is drawn in red only; `host` draws it right. The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about
-0.1 s each) instead of through Android (about 1 s), so the Screen tab's *Live* view can show up to
-10 fps; with *Touch control* on, your keyboard types into Android.
+0x501` and the game is drawn in red only; `host` draws it right. If the game closes, the
+**Logs** tab's *Android log* shows why: Android's crash reports and the log lines about the game.
+The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about 0.1 s each)
+instead of through Android (about 1 s), so the Screen tab's *Live* view can show up to 10 fps;
+with *Touch control* on, your keyboard types into Android.
 
 ### C2. redroid
 
