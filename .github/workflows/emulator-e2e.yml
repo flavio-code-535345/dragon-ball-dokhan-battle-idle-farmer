@@ -162,7 +162,14 @@ jobs:
             done
             return 1
           }
-          mark() { adb shell "echo $1 > /sdcard/Download/$1.txt"; }
+          mark() {
+            # Right after boot Android's shared storage needs a moment before it is writable.
+            for i in $(seq 1 30); do
+              adb shell "echo $1 > /sdcard/Download/$1.txt" 2>/dev/null && return 0
+              sleep 2
+            done
+            return 1
+          }
           kept() { [ "$(adb shell cat /sdcard/Download/$1.txt | tr -d '\r')" = "$1" ] && echo "== $1: the file written just before is still there"; }
           show
           [ -n "$GROW" ] || exit 0
