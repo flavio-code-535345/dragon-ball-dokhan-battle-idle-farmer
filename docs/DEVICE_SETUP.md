@@ -113,9 +113,11 @@ Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `AND
 (`swiftshader_indirect`) Dokkan's shaders fail: its log fills with `glGetAttribLocation ... error
 0x501` and the game is drawn in red only; `host` draws it right. If the game closes, the
 **Logs** tab's *Android log* shows why: Android's crash reports and the log lines about the game.
-The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about 0.1 s each)
-instead of through Android (about 1 s), so the Screen tab's *Live* view can show up to 10 fps;
-with *Touch control* on, your keyboard types into Android.
+The farmer takes its screenshots from the emulator itself instead of through Android (about 1 s
+each): from its gRPC port (`EMULATOR_GRPC`, raw pixels, no PNG), or its console
+(`EMULATOR_CONSOLE`, a PNG in about 0.1 s). The Screen tab's *Live* view is one continuous
+stream of the frames the emulator draws, up to 30 fps; behind a proxy that holds streams back it
+falls back to single frames. With *Touch control* on, your keyboard types into Android.
 
 **The game says "insufficient space" / the download stops.** Android's storage is full: the
 emulator image creates Android with 6 GB, too little for Dokkan's data. The stack gives a *new*
