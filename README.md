@@ -234,7 +234,10 @@ and `IMAGE` in the compose files.
 - **redroid stack does not start**: open the logs of the `host-setup` container. It explains
   what to install, or to use the emulator stack (e.g. Docker in a Proxmox LXC container).
 - **Emulator stack: no device**: the `android` container needs `/dev/kvm` (see above); its logs
-  show `Boot completed` once Android is up.
+  show `Boot completed` once Android is up. *"error gathering device information while adding
+  custom device /dev/kvm"* means the Docker host (e.g. the Proxmox LXC container) has no
+  `/dev/kvm` yet: run the `pct set … -dev0 /dev/kvm` line and reboot the container. Keep the
+  `devices: - /dev/kvm` lines in the stack, the emulator cannot start without them.
 - **Logs** are in the Logs tab and in `/data/logs/farmer.log`. Screenshots of stuck screens are in
   `/data/screenshots`.
 
