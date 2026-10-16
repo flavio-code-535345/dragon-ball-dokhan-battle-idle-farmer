@@ -226,7 +226,14 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
   user-select: none;
   -webkit-user-drag: none;
 }
-.screen-wrap img { max-height: calc(100vh - 250px); max-height: calc(100dvh - 250px); }
+/* The live view's size comes from the layout (the card's width, the window's height, the
+   screen's shape), never from the picture's pixels: frames are fetched at the shown size times
+   the pixel ratio, so sizing the picture by its pixels made it grow with every frame. */
+.screen-wrap { width: min(100%, calc((100vh - 250px) * var(--screen-aspect, 0.5625))); }
+@supports (height: 100dvh) {
+  .screen-wrap { width: min(100%, calc((100dvh - 250px) * var(--screen-aspect, 0.5625))); }
+}
+.screen-wrap img { width: 100%; max-width: none; }
 .capture-wrap img { max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px); }
 .screen-wrap canvas, .capture-wrap canvas {
   position: absolute;

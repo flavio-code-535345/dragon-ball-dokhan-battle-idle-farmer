@@ -554,6 +554,7 @@
     const fps = liveFps();
     const showing = ui.tab === "screen" && !document.hidden && deviceConnected();
     if (fps && showing && Date.now() >= streamRetryAt) {
+      fitScreen(); // later frames of a stream fire no load event (e.g. after a rotation)
       startStream(fps);
       refreshBoxes(false);
       liveTimer = setTimeout(liveTick, 1000);
@@ -572,7 +573,19 @@
     }
   }
 
+  // The shape of the device's screen (portrait, landscape) sizes the live view (style.css).
+  function fitScreen() {
+    const img = $("#screen-img");
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const aspect = (img.naturalWidth / img.naturalHeight).toFixed(4);
+    const wrap = $("#screen-wrap");
+    if (wrap.style.getPropertyValue("--screen-aspect") !== aspect) {
+      wrap.style.setProperty("--screen-aspect", aspect);
+    }
+  }
+
   function drawOverlay() {
+    fitScreen();
     const img = $("#screen-img");
     const canvas = $("#screen-overlay");
     const width = img.clientWidth;
