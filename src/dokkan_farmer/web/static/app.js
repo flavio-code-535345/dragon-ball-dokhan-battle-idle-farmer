@@ -641,7 +641,7 @@
         const tapInfo = $("#screen-tap");
         tapInfo.textContent = `Last tap: x ${begin.x.toFixed(2)}, y ${begin.y.toFixed(2)} (as in a routine's tap_xy)`;
         tapInfo.classList.remove("hidden");
-        queueInput({ call: () => api("/api/device/tap", { method: "POST", body: { x: begin.x, y: begin.y } }) });
+        queueTap(begin.x, begin.y);
       } else {
         const ms = Math.min(1500, Math.max(120, Date.now() - begin.t));
         const body = { x1: begin.x, y1: begin.y, x2: end.x, y2: end.y, ms };
@@ -649,6 +649,7 @@
       }
     });
     canvas.addEventListener("pointercancel", () => { start = null; });
+    canvas.addEventListener("dblclick", (e) => e.preventDefault());
   })();
 
   $("#toggle-control").addEventListener("change", (e) => {
@@ -714,7 +715,38 @@
     return el.tagName === "INPUT" && !NOT_TEXT_INPUTS.includes(el.type);
   }
 
+  // A tap waits DOUBLE_TAP_MS for a second one on the same spot: the two then go to Android
+  // as one double tap (sent separately they would land too far apart).
+  const DOUBLE_TAP_MS = 250;
+  let heldTap = null;
+
+  function sendTap(x, y, count) {
+    queueInput({ tap: true, call: () => api("/api/device/tap", { method: "POST", body: { x, y, count } }) });
+  }
+
+  function releaseTap() {
+    if (!heldTap) return;
+    const tap = heldTap;
+    heldTap = null;
+    clearTimeout(tap.timer);
+    sendTap(tap.x, tap.y, 1);
+  }
+
+  function queueTap(x, y) {
+    if (heldTap && Math.hypot(x - heldTap.x, y - heldTap.y) < 0.04) {
+      const first = heldTap;
+      heldTap = null;
+      clearTimeout(first.timer);
+      sendTap(first.x, first.y, 2);
+      return;
+    }
+    releaseTap(); // a tap somewhere else: the held one goes first
+    heldTap = { x, y, timer: setTimeout(releaseTap, DOUBLE_TAP_MS) };
+  }
+
   function queueInput(item) {
+    // Keys and swipes after a tap must not overtake it (typing into the field just tapped).
+    if (!item.tap) releaseTap();
     const last = keyQueue[keyQueue.length - 1];
     if (last && item.key && last.key === item.key && last.count < 50) {
       last.count += 1;

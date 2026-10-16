@@ -304,7 +304,7 @@ class Farmer:
         frame = self.device_call(lambda d: d.screenshot())
         return self.frames.add(frame, self.wall())
 
-    def tap_relative(self, x: float, y: float) -> tuple[int, int]:
+    def tap_relative(self, x: float, y: float, count: int = 1) -> tuple[int, int]:
         entry = self.frames.get()
         if entry is None:
             self.capture()
@@ -312,7 +312,10 @@ class Farmer:
         assert entry is not None
         height, width = entry[1].shape[:2]
         px, py = to_pixels(x, y, width, height)
-        self.device_call(lambda d: d.tap(px, py))
+        if count == 2:
+            self.device_call(lambda d: d.double_tap(px, py))
+        else:
+            self.device_call(lambda d: d.tap(px, py))
         return px, py
 
     def swipe_relative(self, x1: float, y1: float, x2: float, y2: float, ms: int = 300) -> None:

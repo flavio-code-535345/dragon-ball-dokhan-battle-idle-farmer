@@ -123,6 +123,8 @@ class OptionsRequest(BaseModel):
 class TapRequest(BaseModel):
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
+    #: 2 = a double tap (a double-click in the web UI)
+    count: int = Field(1, ge=1, le=2)
 
 
 class SwipeRequest(BaseModel):
@@ -498,7 +500,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     # ----------------------------------------------------------------- device
     @app.post("/api/device/tap")
     def device_tap(body: TapRequest) -> dict[str, Any]:
-        px, py = ctx.farmer.tap_relative(body.x, body.y)
+        px, py = ctx.farmer.tap_relative(body.x, body.y, body.count)
         return {"x": px, "y": py}
 
     @app.post("/api/device/swipe")

@@ -63,6 +63,11 @@ class Device(abc.ABC):
     @abc.abstractmethod
     def tap(self, x: int, y: int) -> None: ...
 
+    def double_tap(self, x: int, y: int) -> None:
+        """Two quick taps on one spot (a double-click in the web UI)."""
+        self.tap(x, y)
+        self.tap(x, y)
+
     @abc.abstractmethod
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> None: ...
 

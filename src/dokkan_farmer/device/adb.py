@@ -349,6 +349,12 @@ class AdbDevice(Device):
     def tap(self, x: int, y: int) -> None:
         self.shell("input", "tap", str(int(x)), str(int(y)))
 
+    def double_tap(self, x: int, y: int) -> None:
+        # Each `input` takes a few hundred ms to start: one after the other, the taps land too
+        # far apart for a double tap. Started 80 ms apart, they land about 80 ms apart.
+        tap = f"input tap {int(x)} {int(y)}"
+        self.shell(f"{tap} & sleep 0.08; {tap}; wait")
+
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> None:
         coords = [str(int(v)) for v in (x1, y1, x2, y2, max(1, duration_ms))]
         self.shell("input", "swipe", *coords)
