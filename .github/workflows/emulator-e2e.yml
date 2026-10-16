@@ -11,6 +11,10 @@ on:
         description: Also install Dokkan (APKPure, via apkeep) and start it
         type: boolean
         default: true
+      emulator_flags:
+        description: Override the emulator's EXTRA_FLAGS (empty = the stack's default)
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -51,12 +55,18 @@ jobs:
         run: docker build -t "$IMAGE:$IMAGE_TAG" .
 
       - name: Start the emulator stack
+        env:
+          EMULATOR_FLAGS: ${{ inputs.emulator_flags }}
         run: |
           cat > e2e.override.yml <<'EOF'
           services:
             farmer:
               pull_policy: never
           EOF
+          if [ -n "$EMULATOR_FLAGS" ]; then
+            printf '  android:\n    environment:\n      EXTRA_FLAGS: "%s"\n' "$EMULATOR_FLAGS" >> e2e.override.yml
+          fi
+          cat e2e.override.yml
           ANDROID_CORES=$(nproc) docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d
 
       - name: Wait for Android to boot
@@ -81,6 +91,7 @@ jobs:
           done
           jq . device.json
           jq -e '.connected and (.info.abilist | contains("arm64-v8a")) and (.info.abilist | contains("armeabi-v7a"))' device.json
+          docker exec -u farmer dokkan-farmer adb -s android:5555 shell "wm size; wm density"
           docker exec -u farmer dokkan-farmer adb -s android:5555 shell pm path com.android.vending
           mkdir -p shots
           id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
