@@ -24,7 +24,7 @@ on:
         type: string
         default: ""
       grow_disk:
-        description: "Grow Android's data partition after the first boot: flag (-partition-size) or config (config.ini); empty = no"
+        description: "Grow Android's data partition after the first boot: flag (-partition-size), commit (qemu-img commit, then the flag) or config (config.ini); empty = no"
         type: string
         default: ""
 
@@ -152,7 +152,14 @@ jobs:
           [ -n "$GROW" ] || exit 0
           # Something to keep: a file on Android's data partition.
           adb shell 'echo kept > /sdcard/Download/marker.txt && ls -la /sdcard/Download/marker.txt'
-          if [ "$GROW" = config ]; then
+          if [ "$GROW" = commit ]; then
+            # Merge the emulator's overlay (Android's changes) into the disk image first.
+            docker stop dokkan-android
+            docker run --rm --volumes-from dokkan-android --entrypoint sh "${EMULATOR_IMAGE:-halimqarroum/docker-android:api-30-playstore}" -c \
+              'ls /opt/android/emulator | grep -i qemu-img; cd /data/android.avd && ls -la userdata-qemu.img* && /opt/android/emulator/qemu-img commit userdata-qemu.img.qcow2 && ls -la userdata-qemu.img*'
+            printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 32768"\n' >> e2e.override.yml
+            docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
+          elif [ "$GROW" = config ]; then
             docker stop dokkan-android
             docker run --rm --volumes-from dokkan-android --entrypoint sh alpine:3.20 -c \
               'sed -i "/^disk.dataPartition.size/d" /data/android.avd/config.ini && echo "disk.dataPartition.size=32G" >> /data/android.avd/config.ini'
