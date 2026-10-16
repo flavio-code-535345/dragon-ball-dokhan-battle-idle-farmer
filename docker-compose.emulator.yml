@@ -29,6 +29,20 @@ services:
         if [ "$$EMULATOR_GPU" = host ]; then export GPU_ACCELERATED=true; fi
         sed "s/GPU_MODE=\"swiftshader_indirect\"/GPU_MODE=\"$$EMULATOR_GPU\"/" /opt/start-emulator.sh > /tmp/start-emulator.sh
         chmod +x /tmp/start-emulator.sh
+        # Android's storage: STORAGE_MB, never less than it already has. The emulator keeps
+        # Android's changes in an overlay that a resize throws away, so merge them into the
+        # disk image first; if that fails, keep the current size.
+        img=/data/android.avd/userdata-qemu.img
+        if [ -f "$$img" ]; then
+          have=$$(( $$(stat -c %s "$$img") / 1048576 ))
+          if [ "$$STORAGE_MB" -le "$$have" ]; then
+            STORAGE_MB=$$have
+          elif [ -f "$$img.qcow2" ]; then
+            echo "Growing Android's storage from $$have to $$STORAGE_MB MB (merging its changes first)"
+            /opt/android/emulator/qemu-img commit "$$img.qcow2" || STORAGE_MB=$$have
+          fi
+        fi
+        export EXTRA_FLAGS="$$EXTRA_FLAGS -partition-size $$STORAGE_MB"
         # On "docker stop": flush Android's disk, then close the emulator cleanly. Killed, it
         # loses what Android wrote last (game data, settings).
         stop() {
@@ -61,6 +75,9 @@ services:
       # Android's screen refresh rate: 30 fps halves the CPU spent drawing the game
       # (60 = smoother, more CPU). The farm runs the same either way.
       EXTRA_FLAGS: -vsync-rate ${ANDROID_FPS:-30}
+      # Android's storage in MB. The image's own 6 GB fills up during Dokkan's download
+      # ("insufficient space"); raising it grows the existing storage, data kept.
+      STORAGE_MB: ${ANDROID_STORAGE_MB:-32768}
     volumes:
       # Android's storage (apps, game data) survives restarts and updates.
       - android-data:/data

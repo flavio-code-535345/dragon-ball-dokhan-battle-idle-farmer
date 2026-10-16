@@ -71,6 +71,7 @@ jobs:
         env:
           EMULATOR_FLAGS: ${{ inputs.emulator_flags }}
           GPU: ${{ inputs.gpu }}
+          GROW: ${{ inputs.grow_disk }}
         run: |
           cat > e2e.override.yml <<'EOF'
           services:
@@ -79,6 +80,9 @@ jobs:
           EOF
           if [ -n "$EMULATOR_FLAGS" ]; then
             printf '  android:\n    environment:\n      EXTRA_FLAGS: "%s"\n' "$EMULATOR_FLAGS" >> e2e.override.yml
+          elif [ -n "$GROW" ]; then
+            # Start with the image's own 6 GB, to grow it later.
+            printf '  android:\n    environment:\n      STORAGE_MB: "6144"\n' >> e2e.override.yml
           fi
           cat e2e.override.yml
           [ -n "$GPU" ] && export ANDROID_GPU="$GPU"
@@ -171,10 +175,13 @@ jobs:
           wait_boot
           kept restart
 
-          # 2. Growing the storage keeps Android's data too.
+          # 2. Growing the storage (the stack's default 32 GB) keeps Android's data too.
           mark grow
-          printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 32768"\n' >> e2e.override.yml
+          sed -i '/STORAGE_MB/d' e2e.override.yml
+          sed -i '/^  android:$/{N;/\n    environment:$/d}' e2e.override.yml
+          cat e2e.override.yml
           docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
+          docker logs dokkan-android 2>&1 | grep -iE "Growing|commit" || true
           wait_boot
           echo "== after growing"
           show
