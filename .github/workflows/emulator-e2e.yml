@@ -98,7 +98,7 @@ jobs:
           cat e2e.override.yml
           for pair in $ANDROID_ENV; do export "$pair"; done  # the stack's variables too
           [ -n "$GPU" ] && export ANDROID_GPU="$GPU"
-          ANDROID_CORES=$(nproc) docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d
+          ANDROID_CORES=${ANDROID_CORES:-$(nproc)} docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d
           sleep 5
           docker exec dokkan-android grep -n "GPU_MODE=" /tmp/start-emulator.sh || true
 
@@ -296,6 +296,8 @@ jobs:
         run: |
           adb() { docker exec -u farmer dokkan-farmer adb -s android:5555 "$@"; }
           adb logcat -c || true
+          # No "Viewing full screen" hint over the game (its button moves with the screen size).
+          adb shell settings put secure immersive_mode_confirmations confirmed
           curl -sS --fail-with-body -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
             -d '{"action": "launch"}'
           for t in 20 40 60 90 120 180; do
@@ -375,6 +377,7 @@ jobs:
           sleep 5
           adb shell 'dumpsys power | grep -E "mWakefulness="'
           measure "screen off (game paused)"
+          measure "screen off, a minute later"
           adb shell input keyevent WAKEUP
           sleep 10
           echo "after waking: game pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r'), $(adb shell "dumpsys activity activities | grep -m1 ResumedActivity")"
