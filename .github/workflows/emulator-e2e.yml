@@ -23,13 +23,17 @@ on:
         description: The emulator's renderer (ANDROID_GPU), empty = the stack's default
         type: string
         default: ""
+      grow_disk:
+        description: "Grow Android's data partition after the first boot: flag (-partition-size) or config (config.ini); empty = no"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
   # Runs with different settings may run side by side.
-  group: emulator-e2e-${{ inputs.emulator_flags }}-${{ inputs.game_arch }}-${{ inputs.gpu }}
+  group: emulator-e2e-${{ inputs.emulator_flags }}-${{ inputs.game_arch }}-${{ inputs.gpu }}-${{ inputs.grow_disk }}
   cancel-in-progress: true
 
 jobs:
@@ -134,6 +138,38 @@ jobs:
           # Same screen: ~6 (JPEG), ~15 with the host renderer (16-bit display); a black,
           # stale or rotated frame: 60+.
           sys.exit(0 if diff < 25 else "not the screen Android shows")'
+
+      - name: Android's storage
+        env:
+          GROW: ${{ inputs.grow_disk }}
+        run: |
+          adb() { docker exec -u farmer dokkan-farmer adb -s android:5555 "$@"; }
+          show() {
+            adb shell df -h /data | tail -1
+            docker exec dokkan-android sh -c 'grep -iE "partition|sdcard" /data/android.avd/config.ini; ls -la /data/android.avd | grep -iE "userdata|sdcard"' || true
+          }
+          show
+          [ -n "$GROW" ] || exit 0
+          if [ "$GROW" = config ]; then
+            docker stop dokkan-android
+            docker run --rm --volumes-from dokkan-android --entrypoint sh alpine:3.20 -c \
+              'sed -i "/^disk.dataPartition.size/d" /data/android.avd/config.ini && echo "disk.dataPartition.size=16G" >> /data/android.avd/config.ini'
+            docker start dokkan-android
+          else
+            printf '  android:\n    environment:\n      EXTRA_FLAGS: "-vsync-rate 30 -partition-size 16384"\n' >> e2e.override.yml
+            docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
+          fi
+          boot=""
+          for i in $(seq 1 60); do
+            docker exec -u farmer dokkan-farmer adb connect android:5555 >/dev/null 2>&1 || true
+            boot=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
+            [ "$boot" = "1" ] && break
+            sleep 5
+          done
+          docker logs --tail 80 dokkan-android 2>&1 | grep -v "bad fde" | grep -iE "partition|userdata|resiz|disk|error|warn" || true
+          [ "$boot" = "1" ]
+          echo "== after growing ($GROW)"
+          show
 
       - name: Live view speed (10 frames, 720 px wide)
         run: |
