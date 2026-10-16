@@ -107,8 +107,12 @@ Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create 
    Google sign-in) is there too: **Screen** tab → *Touch control* on.
 
 Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `ANDROID_FPS`
-(Android's refresh rate, default 30; 60 is smoother but costs more CPU) and `ANDROID_GPU` (the
-renderer, default `host`). The emulator renders on the CPU. With the image's own renderer
+(Android's refresh rate, default 30; 60 is smoother but costs more CPU), `ANDROID_STORAGE_MB`
+(Android's storage, default 32768) and `ANDROID_GPU` (the renderer, default `host`). The
+emulator image's own storage is 6 GB, which fills up during Dokkan's data download (*insufficient
+space*): with `-partition-size` in `EXTRA_FLAGS` (the stack sets it from `ANDROID_STORAGE_MB`) the
+existing storage grows at the next start and keeps its data; the disk image only takes the space
+Android really uses. The emulator renders on the CPU. With the image's own renderer
 (`swiftshader_indirect`) Dokkan's shaders fail: its log fills with `glGetAttribLocation ... error
 0x501` and the game is drawn in red only; `host` draws it right. If the game closes, the
 **Logs** tab's *Android log* shows why: Android's crash reports and the log lines about the game.
