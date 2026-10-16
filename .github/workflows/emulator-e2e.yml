@@ -24,7 +24,7 @@ on:
         type: string
         default: ""
       grow_disk:
-        description: "Test that a restart and growing Android's storage to 32 GB keep its data (any value = yes)"
+        description: "Test Android's storage: restarts keep its data, an existing Android keeps its size, a new one gets 32 GB (any value = yes)"
         type: string
         default: ""
 
@@ -143,7 +143,7 @@ jobs:
           # stale or rotated frame: 60+.
           sys.exit(0 if diff < 25 else "not the screen Android shows")'
 
-      - name: Android's storage (and with grow_disk, that restarts keep Android's data)
+      - name: Android's storage (with grow_disk, restarts and a new 32 GB Android)
         env:
           GROW: ${{ inputs.grow_disk }}
         run: |
@@ -182,18 +182,26 @@ jobs:
           wait_boot
           kept restart
 
-          # 2. Growing the storage (the stack's default 32 GB) keeps Android's data too.
-          mark grow
+          # 2. A bigger STORAGE_MB (the stack's default 32 GB) leaves an existing Android as it
+          #    is: same size, data kept, a hint in the log.
+          mark bigger
           sed -i '/STORAGE_MB/d' e2e.override.yml
           sed -i '/^  android:$/{N;/\n    environment:$/d}' e2e.override.yml
-          cat e2e.override.yml
           docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d android
-          docker logs dokkan-android 2>&1 | grep -iE "Growing|commit" || true
           wait_boot
-          echo "== after growing"
+          docker logs dokkan-android 2>&1 | grep "storage stays"
           show
-          kept grow
+          kept bigger
           kept restart
+
+          # 3. A new Android gets the 32 GB.
+          docker stop dokkan-android
+          docker run --rm --volumes-from dokkan-android --entrypoint sh alpine:3.20 -c 'rm -rf /data/android.avd /data/android.ini'
+          docker start dokkan-android
+          wait_boot
+          echo "== new Android"
+          show
+          adb shell df -k /data | tail -1 | awk '{ exit !($2 > 30000000) }'
 
       - name: Live view speed (10 frames, 720 px wide)
         run: |
