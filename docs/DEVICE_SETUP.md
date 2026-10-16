@@ -7,7 +7,7 @@ Pick one of these:
 |---|---|---|---|
 | **A. Spare phone or tablet on Wi-Fi** | low | ★★★ | Recommended. A real device, so the game is officially supported. |
 | **B. Emulator on a PC** (BlueStacks, LDPlayer, MuMu) | medium | ★★☆ | The PC has to stay on. |
-| **C. All-in-one: Android in a container on the server** | low | ★★☆ | Nothing else has to stay on. Needs a Linux kernel with binder; game support not confirmed yet. |
+| **C. All-in-one: Android on the server** | low | ★★☆ | Nothing else has to stay on. Emulator (needs KVM, e.g. Proxmox) or redroid (needs binder). |
 | **D. Phone on USB at the server** | medium | ★★★ | Needs USB passthrough into the container. |
 
 ## Tips for every option
@@ -63,12 +63,51 @@ Emulators only listen on `127.0.0.1`, so make the port reachable:
 
   and use `ADB_SERIAL=<pc-ip>:5555`.
 
-## C. All-in-one: Android in a container on the server (redroid)
+## C. All-in-one: Android on the server
 
-[redroid](https://github.com/remote-android/redroid-doc) runs Android in Docker next to the
-farmer, so nothing else has to stay on: deploy
-[`docker-compose.redroid.yml`](../docker-compose.redroid.yml) instead of `docker-compose.yml`.
-The stack has three services:
+Android runs in a container next to the farmer, so no phone or PC has to stay on. There are two
+stacks; deploy one of them instead of `docker-compose.yml`:
+
+| Stack | Android | Needs | Good for |
+|---|---|---|---|
+| [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) | Google's emulator: Android 11 **with Google Play** | `/dev/kvm` (hardware virtualization) | **Proxmox** (Docker in an LXC container), most PCs and servers |
+| [`docker-compose.redroid.yml`](../docker-compose.redroid.yml) | redroid: Android 14, no Google Play | a Linux host where Docker may load the binder driver | Docker directly on Ubuntu/Debian, lighter on RAM |
+
+### C1. Emulator (recommended)
+
+[HQarroum/docker-android](https://github.com/HQarroum/docker-android) runs Google's Android
+emulator headless in a container. Its Android 11 Google Play image translates both 64-bit and
+32-bit ARM code (`libndk_translation`), so Dokkan runs, and the Play Store and Google sign-in
+work like on a phone. The [emulator end-to-end workflow](../.github/workflows/emulator-e2e.yml)
+tests it on a GitHub runner: Android boots in about 40 seconds, the farmer connects, installs
+Dokkan and the game starts and shows its first screen.
+
+1. **KVM.** The container needs `/dev/kvm`. Docker in a **Proxmox LXC container** cannot see it
+   by default; on the Proxmox host run (102 = the container's ID, see `pct list`):
+
+   ```sh
+   pct set 102 -dev0 /dev/kvm,mode=0666 && pct reboot 102
+   ```
+
+   Directly on Linux: `ls -l /dev/kvm` must exist (enable virtualization in the BIOS).
+2. Deploy [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) (Portainer: paste it
+   into the *Web editor*). Set `WEB_PASSWORD`, `TZ` and, if needed, `HOST_PORT`. The first start
+   downloads the emulator (about 2.5 GB); Android then boots in a minute or two.
+3. **Device** tab: *connected*, *ARM apps: ✅ translated*.
+4. **Screen** tab → *Touch control* on → open the Play Store, sign in with your Google account
+   (type with the text field under the screen) and install Dragon Ball Z Dokkan Battle.
+5. ▶ *Launch game*, sign in or transfer your account, download all game data, then continue with
+   the stage and template setup like on a phone (README, steps 4 to 6).
+
+Settings: `ANDROID_MEMORY` (MB, default 6144) and `ANDROID_CORES` (default 4). The emulator
+renders on the CPU.
+
+### C2. redroid
+
+[redroid](https://github.com/remote-android/redroid-doc) runs Android itself as a container. It
+is lighter than the emulator but needs the host kernel's binder driver, which Docker inside an
+unprivileged LXC container (Proxmox) cannot use: take the emulator there. The stack has three
+services:
 
 1. **host-setup** runs once at every deploy. Android needs the *binder* driver of the server's
    kernel: it loads it (`modprobe binder_linux`) and writes `/etc/modules-load.d/redroid.conf` and
@@ -81,21 +120,21 @@ The stack has three services:
    On ARM64 servers the game runs natively.
 3. **farmer** connects to `redroid:5555` by itself and waits up to 5 minutes for Android to boot.
 
-### Requirements
+#### Requirements
 
 - A **Linux** server or VM (x86_64 or ARM64), ~4 GB of free RAM and ~15 GB of disk for Android,
   the game and its data. 4+ CPU cores are recommended.
 - A kernel with **binder** (`CONFIG_ANDROID_BINDER_IPC`, module `binder_linux`; binderfs works
   too). host-setup loads it and stops the stack with instructions if it is missing:
   - Ubuntu: `sudo apt install linux-modules-extra-$(uname -r)`, then redeploy.
-  - Proxmox: run the stack in a VM. An LXC container shares the Proxmox kernel: there, load the
-    module on the Proxmox host (`modprobe binder_linux devices=binder,hwbinder,vndbinder`).
+  - Proxmox: use the emulator (C1). Docker in an unprivileged LXC container cannot run redroid,
+    even with binder loaded on the Proxmox host.
   - Docker Desktop (Windows/macOS), Synology and Unraid kernels usually lack binder: use option A
     or B there.
 - The stack starts two **privileged** containers (host-setup and redroid). Only deploy it on a
   machine you control.
 
-### Setup
+#### Setup
 
 1. Portainer → *Stacks* → *Add stack* → paste
    [`docker-compose.redroid.yml`](../docker-compose.redroid.yml) into the *Web editor* (or use
@@ -120,7 +159,7 @@ The stack has three services:
 5. Download all game data in the game, then continue with the stage and template setup like on a
    phone (README, steps 4 to 6).
 
-### Performance
+#### Performance
 
 - `REDROID_GPU_MODE=guest` (default) renders on the CPU. It works everywhere and costs a few CPU
   cores while the game is on screen.
@@ -128,7 +167,7 @@ The stack has three services:
   saves CPU. If the screen stays black, go back to `guest`.
 - `REDROID_FPS` (default 30) can be lowered to save more CPU.
 
-### Good to know
+#### Good to know
 
 - **What has been tested.** The
   [Android end-to-end workflow](../.github/workflows/android-e2e.yml) runs this stack on a GitHub

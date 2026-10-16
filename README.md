@@ -115,23 +115,19 @@ ADB_SERIAL=192.168.1.50:5555 WEB_PASSWORD=change-me docker compose up -d
 
 ## All-in-one: Android on the server
 
-[`docker-compose.redroid.yml`](docker-compose.redroid.yml) runs Android 14
-([redroid](https://github.com/remote-android/redroid-doc)) in a container next to the farmer, so
-no phone or PC has to stay on. It needs a Linux server whose kernel has the *binder* driver; a
-one-shot `host-setup` service loads it. On Intel/AMD servers Android translates Dokkan's ARM code.
+No spare phone? Run Android in a container next to the farmer, so nothing else has to stay on:
 
-1. Deploy `docker-compose.redroid.yml` as the stack (instead of `docker-compose.yml`). No
-   `ADB_SERIAL` needed.
-2. Device tab → *Apps* → **Install Aurora Store**, then **Open Aurora Store**, log in
-   anonymously and install Dokkan with touch control on the Screen tab (or install an
-   `.apk`/`.xapk` file from a link or upload).
-3. Launch the game, transfer your account (the Screen tab can type text), download the data and
-   continue with step 4 above.
+- [`docker-compose.emulator.yml`](docker-compose.emulator.yml): Google's Android emulator,
+  Android 11 **with Google Play**. Needs `/dev/kvm`; on Proxmox (Docker in an LXC container) run
+  `pct set <CTID> -dev0 /dev/kvm,mode=0666 && pct reboot <CTID>` on the host first. Tested: the
+  [emulator end-to-end workflow](.github/workflows/emulator-e2e.yml) installs Dokkan through the
+  farmer and the game starts.
+- [`docker-compose.redroid.yml`](docker-compose.redroid.yml): redroid, Android 14 without Google
+  Play. Lighter, but needs a Linux host where Docker may load the kernel's binder driver.
 
-Details, requirements and caveats: [docs/DEVICE_SETUP.md, option C](docs/DEVICE_SETUP.md#c-all-in-one-android-in-a-container-on-the-server-redroid).
-The [Android end-to-end workflow](.github/workflows/android-e2e.yml) boots this stack on a GitHub
-runner to test it (Android, ARM translation, Aurora Store). Dokkan itself has not been tested on
-redroid yet: see the caveats there.
+Deploy one of them instead of `docker-compose.yml` (no `ADB_SERIAL` needed), install Dokkan from
+the Play Store (emulator) or through the Device tab's *Apps* card (redroid), and continue with
+step 4 above. Details: [docs/DEVICE_SETUP.md, option C](docs/DEVICE_SETUP.md#c-all-in-one-android-on-the-server).
 
 ## Configuration
 
@@ -158,9 +154,11 @@ All settings are environment variables:
 | `PUID` / `PGID` | `1000` | Owner of the files in the data volume. |
 | `RUN_AS_ROOT` | `false` | Needed for USB passthrough (`/dev/bus/usb`). |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail. |
-| `REDROID_GPU_MODE` | `guest` | All-in-one stack: `guest` renders on the CPU, `host` on the server's Intel/AMD GPU. |
-| `REDROID_FPS` | `30` | All-in-one stack: Android's frame rate (lower = less CPU). |
-| `REDROID_IMAGE` | `redroid/redroid:14.0.0-latest` | All-in-one stack: the Android image. Keep 14 on x86_64 (ARM translation). |
+| `ANDROID_MEMORY` / `ANDROID_CORES` | `6144` / `4` | Emulator stack: RAM (MB) and CPU cores of the emulated Android. |
+| `EMULATOR_IMAGE` | `halimqarroum/docker-android:api-30-playstore` | Emulator stack: the emulator image. Keep API 30 (ARM translation). |
+| `REDROID_GPU_MODE` | `guest` | redroid stack: `guest` renders on the CPU, `host` on the server's Intel/AMD GPU. |
+| `REDROID_FPS` | `30` | redroid stack: Android's frame rate (lower = less CPU). |
+| `REDROID_IMAGE` | `redroid/redroid:14.0.0-latest` | redroid stack: the Android image. Keep 14 on x86_64 (ARM translation). |
 
 Everything you configure in the UI (templates, routines, options, device address, statistics)
 lives in the `/data` volume.
@@ -233,8 +231,10 @@ and `IMAGE` in the compose files.
   if a button is not found.
 - **It taps the wrong thing**: make the template more distinctive (include the text), uncheck
   "whole screen", or enable colour matching. A popup's dimmed background is ignored automatically.
-- **All-in-one stack does not start**: open the logs of the `host-setup` container. It explains
-  what to install when the kernel has no binder driver.
+- **redroid stack does not start**: open the logs of the `host-setup` container. It explains
+  what to install, or to use the emulator stack (e.g. Docker in a Proxmox LXC container).
+- **Emulator stack: no device**: the `android` container needs `/dev/kvm` (see above); its logs
+  show `Boot completed` once Android is up.
 - **Logs** are in the Logs tab and in `/data/logs/farmer.log`. Screenshots of stuck screens are in
   `/data/screenshots`.
 
