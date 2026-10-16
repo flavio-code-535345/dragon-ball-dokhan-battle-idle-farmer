@@ -1,0 +1,54 @@
+# All-in-one stack with Google's Android emulator: Android 11 with Google Play runs in a
+# container next to the farmer. Use it where Docker cannot reach the kernel's binder
+# driver that redroid needs, e.g. Docker inside a Proxmox LXC container.
+# Read docs/DEVICE_SETUP.md ("Option C") for the details.
+#
+# Needs hardware virtualization (KVM, /dev/kvm). For Docker in a Proxmox LXC container,
+# run this once on the Proxmox host (102 = the container's ID), then deploy:
+#   pct set 102 -dev0 /dev/kvm,mode=0666 && pct reboot 102
+#
+# The emulator image (github.com/HQarroum/docker-android) translates ARM apps such as
+# Dokkan, comes with the Play Store, and lets the farmer connect without a prompt.
+# Plan ~8 GB RAM and ~20 GB disk for Android + Dokkan.
+services:
+  android:
+    image: ${EMULATOR_IMAGE:-halimqarroum/docker-android:api-30-playstore}
+    container_name: dokkan-android
+    restart: unless-stopped
+    devices:
+      - /dev/kvm
+    environment:
+      MEMORY: ${ANDROID_MEMORY:-6144}
+      CORES: ${ANDROID_CORES:-4}
+    volumes:
+      # Android's storage (apps, game data) survives restarts and updates.
+      - android-data:/data
+
+  farmer:
+    image: ${IMAGE:-flavio11113/dokkan-idle-farmer}:${IMAGE_TAG:-latest}
+    pull_policy: always
+    container_name: dokkan-farmer
+    restart: unless-stopped
+    depends_on:
+      - android
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      # Android of the emulator service above (the farmer waits for it to boot).
+      ADB_SERIAL: android:5555
+      GAME_PACKAGE: ${GAME_PACKAGE:-global}
+      AUTOSTART: ${AUTOSTART:-resume}
+      ACTIVE_HOURS: ${ACTIVE_HOURS:-}
+      TZ: ${TZ:-UTC}
+      WEB_USERNAME: ${WEB_USERNAME:-admin}
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+      NOTIFY_URLS: ${NOTIFY_URLS:-}
+      NOTIFY_EVERY_RUNS: ${NOTIFY_EVERY_RUNS:-0}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - farmer-data:/data
+
+volumes:
+  android-data:
+  farmer-data:

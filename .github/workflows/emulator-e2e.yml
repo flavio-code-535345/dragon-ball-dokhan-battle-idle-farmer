@@ -1,0 +1,157 @@
+name: Android emulator end-to-end
+
+# Runs the emulator stack (docker-compose.emulator.yml) on a GitHub runner with
+# KVM: Android 11 with Google Play boots, the farmer connects and sees ARM
+# translation. With "game" ticked it installs Dokkan (APKPure's build, through the
+# farmer's upload) and starts it; screenshots and logs are kept as an artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: Also install Dokkan (APKPure, via apkeep) and start it
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emulator-e2e
+  cancel-in-progress: true
+
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IMAGE: dokkan-farmer
+      IMAGE_TAG: e2e
+      BASE: http://localhost:8080
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to Docker Hub (higher pull limits)
+        if: env.DOCKER_USERNAME != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+          nproc; free -g; df -h / | tail -1
+
+      - name: Build the farmer image
+        run: docker build -t "$IMAGE:$IMAGE_TAG" .
+
+      - name: Start the emulator stack
+        run: |
+          cat > e2e.override.yml <<'EOF'
+          services:
+            farmer:
+              pull_policy: never
+          EOF
+          ANDROID_CORES=$(nproc) docker compose -f docker-compose.emulator.yml -f e2e.override.yml up -d
+
+      - name: Wait for Android to boot
+        run: |
+          adb() { docker exec -u farmer dokkan-farmer adb "$@"; }
+          boot=""
+          for i in $(seq 1 120); do
+            adb connect android:5555 >/dev/null 2>&1 || true
+            boot=$(adb -s android:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
+            [ "$boot" = "1" ] && break
+            sleep 5
+          done
+          docker logs dokkan-android 2>&1 | tail -40
+          [ "$boot" = "1" ] || exit 1
+          echo "Android booted after about $((i * 5)) s"
+
+      - name: The farmer sees Android with ARM translation and Google Play
+        run: |
+          for i in $(seq 1 30); do
+            curl -sS --fail-with-body -X POST "$BASE/api/device/refresh" > device.json && jq -e .connected device.json >/dev/null && break
+            sleep 5
+          done
+          jq . device.json
+          jq -e '.connected and (.info.abilist | contains("arm64-v8a")) and (.info.abilist | contains("armeabi-v7a"))' device.json
+          docker exec -u farmer dokkan-farmer adb -s android:5555 shell pm path com.android.vending
+          mkdir -p shots
+          id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+          curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o shots/home.jpg
+
+      - name: Download Dokkan (APKPure via apkeep)
+        if: inputs.game
+        run: |
+          curl -fsSL -o apkeep \
+            https://github.com/EFForg/apkeep/releases/download/1.1.0/apkeep-x86_64-unknown-linux-gnu
+          chmod +x apkeep
+          mkdir game
+          ./apkeep -d apk-pure -o acknowledge_dangers=true -a com.bandainamcogames.dbzdokkanww game
+          ls -la game
+
+      - name: Install Dokkan through the farmer (upload)
+        if: inputs.game
+        run: |
+          file=$(ls game/* | head -n 1)
+          curl -sS --fail-with-body -T "$file" "$BASE/api/apps/upload?filename=$(basename "$file")"
+          for i in $(seq 1 300); do
+            job=$(curl -sS --fail-with-body "$BASE/api/apps/job")
+            state=$(echo "$job" | jq -r .job.state)
+            { [ "$state" = done ] || [ "$state" = error ]; } && break
+            sleep 2
+          done
+          echo "$job" | jq .
+          [ "$state" = done ]
+          curl -sS --fail-with-body "$BASE/api/apps" | tee apps.json | jq .
+          jq -e '.installed and .abi_ok != false' apps.json
+
+      - name: Start Dokkan and watch it
+        if: inputs.game
+        run: |
+          adb() { docker exec -u farmer dokkan-farmer adb -s android:5555 "$@"; }
+          adb logcat -c || true
+          curl -sS --fail-with-body -X POST "$BASE/api/device/app" -H 'Content-Type: application/json' \
+            -d '{"action": "launch"}'
+          for t in 20 40 60 90 120 180; do
+            sleep $((t - ${last:-0})); last=$t
+            id=$(curl -sS --fail-with-body -X POST "$BASE/api/screen/capture" | jq -r .frame_id)
+            curl -sS --fail-with-body "$BASE/api/screen.jpg?frame=$id&w=360" -o "shots/dokkan-${t}s.jpg"
+            echo "== ${t}s: pid $(adb shell pidof com.bandainamcogames.dbzdokkanww | tr -d '\r')"
+            adb shell "dumpsys activity activities | grep -E 'ResumedActivity' | head -2"
+          done
+          adb shell "dumpsys package com.bandainamcogames.dbzdokkanww | grep -E 'primaryCpuAbi|versionName' | head -n 3"
+          adb logcat -d -b crash > shots/logcat-crash.txt || true
+          adb logcat -d > shots/logcat.txt || true
+          grep -iE "dokkan|bandai|native.?bridge|ndk_trans|FATAL|SIGILL|SIGSEGV|root" \
+            shots/logcat.txt | tail -120 || true
+          echo "== crash buffer"; tail -60 shots/logcat-crash.txt
+
+      - name: Screenshots in the log (base64 JPEG, one per line)
+        if: always()
+        run: |
+          for f in shots/*.jpg; do
+            [ -f "$f" ] && echo "SHOT $(basename "$f") $(base64 -w0 "$f")"
+          done
+          true
+
+      - name: Keep screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: emulator-e2e
+          path: shots/
+          if-no-files-found: ignore
+
+      - name: Logs of the stack
+        if: always()
+        run: |
+          docker compose -f docker-compose.emulator.yml -f e2e.override.yml ps -a || true
+          docker logs dokkan-android 2>&1 | tail -60 || true
+          docker logs dokkan-farmer 2>&1 | tail -60 || true
