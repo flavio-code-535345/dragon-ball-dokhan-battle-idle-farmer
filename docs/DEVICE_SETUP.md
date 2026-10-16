@@ -107,14 +107,34 @@ Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create 
    Google sign-in) is there too: **Screen** tab → *Touch control* on.
 
 Settings: `ANDROID_MEMORY` (MB, default 6144), `ANDROID_CORES` (default 4), `ANDROID_FPS`
-(Android's refresh rate, default 30; 60 is smoother but costs more CPU) and `ANDROID_GPU` (the
-renderer, default `host`). The emulator renders on the CPU. With the image's own renderer
+(Android's refresh rate, default 30; 60 is smoother but costs more CPU), `ANDROID_STORAGE_MB`
+(Android's storage, default 32768, for a new Android) and `ANDROID_GPU` (the renderer, default
+`host`). The emulator renders on the CPU. With the image's own renderer
 (`swiftshader_indirect`) Dokkan's shaders fail: its log fills with `glGetAttribLocation ... error
 0x501` and the game is drawn in red only; `host` draws it right. If the game closes, the
 **Logs** tab's *Android log* shows why: Android's crash reports and the log lines about the game.
 The farmer takes its screenshots from the emulator itself (`EMULATOR_CONSOLE`, about 0.1 s each)
 instead of through Android (about 1 s), so the Screen tab's *Live* view can show up to 10 fps;
 with *Touch control* on, your keyboard types into Android.
+
+**The game says "insufficient space" / the download stops.** Android's storage is full: the
+emulator image creates Android with 6 GB, too little for Dokkan's data. The stack gives a *new*
+Android 32 GB (`ANDROID_STORAGE_MB`), but an existing one keeps its size: Android encrypts its
+storage, and resizing it would lose its data. Check with the android container's console
+(Portainer → Containers → dokkan-android → Console, `/bin/sh`): `adb -e shell df -h /data`. To
+start a new Android with the 32 GB:
+
+1. Link your Dokkan account first if you already play on it (in the game: Menu → Data Transfer
+   or Bandai Namco ID): the new Android starts empty.
+2. Paste the current [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) into the
+   stack and update it.
+3. In the android container's console: `rm -rf /data/android.avd /data/android.ini`, then restart
+   the container (Portainer → Containers → dokkan-android → Restart). The first start of a new
+   Android takes a few minutes.
+4. **Device** tab → *Apps* → **Install Dokkan (APKPure)** again, ▶ *Launch game*.
+
+Stopping or redeploying the stack is safe: the emulator is shut down cleanly (`docker stop` gives
+it 60 s), so what Android wrote last is kept.
 
 ### C2. redroid
 
