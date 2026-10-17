@@ -186,6 +186,10 @@ stage on Normal the way Dokkan Clear New Stages does, and when a saga has no NEW
 back to the wheel, turns it one saga further (a short swipe down) and opens that saga. When several
 sagas in a row had nothing to play (option *Stop after this many sagas*), the series is done.
 
+Quest: Dokkan Story (START → Quest) works too: a chapter is a list of areas, and an area with
+uncleared stages has a NEW mark. When an area has no NEW stage left, the routine goes back to the
+area list and opens the next NEW area.
+
 Start it on the saga wheel turned to the saga to begin with (the first saga is at the bottom), or
 in that saga's stage list. Besides the templates of Dokkan Clear New Stages it needs `saga_wheel`
 (the "TAP" marker above the selected saga), `back_button` (the "<<<" of the stage list) and

@@ -9,9 +9,14 @@
 # back to the saga wheel, turns it one saga further and opens that one. When
 # several sagas in a row have nothing to play, the series is done and it stops.
 #
+# Quest: Dokkan Story (START → Quest) works the same way: a chapter is a list
+# of areas, and an area with uncleared stages has a NEW mark; when an area has
+# no NEW stage left, the routine goes back to the area list and opens the next
+# NEW area.
+#
 # How to use it: open the saga wheel of a series in Dokkan and turn it to the
 # saga to start with (the first one: the bottom of the wheel), or open that
-# saga's stage list. Then start this routine. Templates are shared with
+# saga's stage list, or a Quest chapter's area list. Then start this routine. Templates are shared with
 # Dokkan Clear New Stages; this one also needs saga_wheel and back_button.
 #
 # Full reference: docs/ROUTINES.md
@@ -346,6 +351,13 @@ rules:
   - name: Open a NEW stage
     when: {visible: [stage_list, new_mark]}
     do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}]
+    cooldown: 4
+
+  # Quest: Dokkan Story has chapters of areas instead of a saga wheel; an area with
+  # uncleared stages carries a NEW mark in the area list (which has no MISSION button).
+  - name: Open a NEW area
+    when: {visible: new_mark, not_visible: stage_list}
+    do: [{tap: new_mark}, {reset: misses}]
     cooldown: 4
 
   - name: Pick Normal

@@ -84,6 +84,42 @@ class StoryGame(QuestGame):
             super().swipe(y1, y2)
 
 
+class AreaGame(StoryGame):
+    """Quest: Dokkan Story: a list of areas (NEW on those with uncleared stages) instead
+    of a saga wheel; an area opens with a tap on its row, Back returns to the list."""
+
+    def __init__(self, areas: list[set[int]]) -> None:
+        super().__init__(areas)
+        self.screen = "areas"
+
+    def render(self):
+        if self.screen != "areas":
+            img = super().render()
+            return img
+        self.screen = "wheel"
+        img = QuestGame.render(self)  # a blank canvas
+        self.screen = "areas"
+        _button(img, TITLE, "CHAPTER 5", "retry")
+        for row, area in enumerate(self.sagas[:4]):
+            top = LIST_TOP + row * 200
+            _text(img, f"AREA {row + 31}", (220, top + 90), 1.2)
+            if any(not done for done in area.values()):
+                _button(img, new_badge(top), "NEW", "danger")
+        return img
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "areas":
+            row = int((y - LIST_TOP) // 200) if y >= LIST_TOP else -1
+            if 0 <= row < min(4, len(self.sagas)):
+                self.saga, self.screen, self.offset = row, "list", 0
+                self.cleared = self.sagas[row]
+            return
+        if self.screen == "list" and BACK.contains(x, y):
+            self.screen = "areas"
+            return
+        super().tap(x, y)
+
+
 def capture_templates(store: TemplateStore) -> None:
     game = StoryGame([set()])
     game.cleared = game.sagas[0]
@@ -148,3 +184,11 @@ def test_plays_saga_after_saga_to_the_end_of_the_series(play):
     assert {d for _, d in game.played} == {DIFFICULTIES[0]}
     assert summary["counters"]["stages_cleared"] == 3
     assert "series is done" in summary["reason"] and not summary["error"]
+
+
+def test_quest_areas_are_opened_by_their_new_mark(play):
+    # Area 31 is done; 32 has one stage left, 33 two.
+    game = AreaGame([set(range(STAGES)), {0, 1, 2}, {0, 1}])
+    play(game)
+    assert sorted(game.story) == [(1, 3), (2, 2), (2, 3)]
+    assert all(all(done for done in area.values()) for area in game.sagas)
