@@ -1,0 +1,202 @@
+# Dokkan Collect Rewards: claims the finished missions, then empties the
+# Present Box, then stops. Run it once a day, or after a farm.
+#
+# How it works: start it on Dokkan's home screen. It opens Missions, presses
+# "Claim all" on every mission tab you captured, goes back, opens the Present
+# Box (where the mission rewards land), presses "Accept all" until nothing is
+# left, goes back and stops. A screen is only left after its button has been
+# missing for three looks in a row, so slow loading does not cut it short.
+#
+# Templates are shared with the other routines: OK, Close and Retry you
+# captured for them work here too.
+#
+# Full reference: docs/ROUTINES.md
+name: Dokkan Collect Rewards
+description: >-
+  Claims all finished missions (every tab you captured), then accepts
+  everything in the Present Box, then stops. Start it on the home screen.
+version: 1
+
+options:
+  max_minutes:
+    label: Give up after (minutes)
+    type: number
+    default: 15
+    min: 2
+    max: 120
+
+settings:
+  tick_interval: 1.0
+  action_delay: 1.5
+  stop_after_minutes: $max_minutes
+  run_counter: claims
+  ensure_foreground: true
+  stuck:
+    static_seconds: 120
+    idle_seconds: 120
+    recovery:
+      - key: BACK
+      - wait: 3
+    restart_after: 2
+    max_restarts: 1
+
+templates:
+  home_screen:
+    level: required
+    description: >-
+      Something that only the home screen shows, e.g. the label of a button in
+      its bottom bar that no other screen has.
+  home_missions:
+    level: required
+    description: The Missions button on the home screen.
+  missions_screen:
+    level: required
+    description: The title of the Missions screen.
+  claim_all:
+    level: required
+    description: >-
+      The "Claim all" / "Receive all" button of the Missions screen while it can
+      be pressed (not greyed out).
+  home_presents:
+    level: required
+    description: The Present Box (gift) button on the home screen.
+  present_screen:
+    level: required
+    description: The title of the Present Box screen.
+  accept_all:
+    level: required
+    description: The "Accept all" button of the Present Box while it can be pressed.
+  ok_button:
+    level: recommended
+    description: >-
+      An "OK" / "Yes" button of the confirm and reward dialogs. Tick "search the
+      whole screen".
+  back_button:
+    level: recommended
+    description: >-
+      The Back arrow of the Missions and Present Box screens (without it the
+      routine sends Android's Back key).
+  mission_tab_1:
+    level: optional
+    description: >-
+      The first mission tab to claim (e.g. Daily). Capture the tabs in order:
+      tab 2 is only visited when tab 1 is captured, and so on. Without tabs the
+      routine claims only the tab that is open.
+  mission_tab_2:
+    level: optional
+    description: The second mission tab (e.g. Main).
+  mission_tab_3:
+    level: optional
+    description: The third mission tab (e.g. Event).
+  mission_tab_4:
+    level: optional
+    description: The fourth mission tab.
+  close_button:
+    level: optional
+    description: The "Close" / "X" of news and login-bonus popups.
+  error_retry:
+    level: optional
+    description: The "Retry" button of connection error dialogs.
+
+rules:
+  # --- Errors and popups --------------------------------------------------------
+  - name: Connection error → Retry
+    when: {visible: error_retry}
+    do: [{tap: error_retry}]
+    cooldown: 3
+
+  - name: Confirm (OK)
+    when: {visible: ok_button}
+    do: [{tap: ok_button}]
+    cooldown: 2
+
+  - name: Close popup
+    when: {visible: close_button}
+    do: [{tap: close_button}]
+    cooldown: 2
+
+  # --- Missions -------------------------------------------------------------------
+  - name: Missions → claim all
+    when: {visible: [missions_screen, claim_all]}
+    do: [{tap: claim_all}, {count: claims}, {reset: misses}]
+    cooldown: 3
+
+  # Only give up on a tab after three looks without "Claim all" (it may still load).
+  - name: Missions → nothing to claim yet?
+    when: {visible: missions_screen, counter_below: {misses: 3}}
+    do: [{count: misses}]
+    cooldown: 1
+
+  - name: Missions → tab 1
+    when:
+      visible: [missions_screen, mission_tab_1]
+      counter_below: {tabs: 1}
+    do: [{tap: mission_tab_1}, {count: tabs}, {reset: misses}]
+
+  - name: Missions → tab 2
+    when:
+      visible: [missions_screen, mission_tab_2]
+      counter_at_least: {tabs: 1}
+      counter_below: {tabs: 2}
+    do: [{tap: mission_tab_2}, {count: tabs}, {reset: misses}]
+
+  - name: Missions → tab 3
+    when:
+      visible: [missions_screen, mission_tab_3]
+      counter_at_least: {tabs: 2}
+      counter_below: {tabs: 3}
+    do: [{tap: mission_tab_3}, {count: tabs}, {reset: misses}]
+
+  - name: Missions → tab 4
+    when:
+      visible: [missions_screen, mission_tab_4]
+      counter_at_least: {tabs: 3}
+      counter_below: {tabs: 4}
+    do: [{tap: mission_tab_4}, {count: tabs}, {reset: misses}]
+
+  - name: Missions done → back
+    when: {visible: [missions_screen, back_button]}
+    do: [{count: missions_done}, {reset: misses}, {tap: back_button}]
+    cooldown: 3
+
+  - name: Missions done → Back key
+    when: {visible: missions_screen}
+    do: [{count: missions_done}, {reset: misses}, {key: BACK}]
+    cooldown: 3
+
+  # --- Present Box ------------------------------------------------------------------
+  - name: Present Box → accept all
+    when: {visible: [present_screen, accept_all]}
+    do: [{tap: accept_all}, {count: claims}, {reset: misses}]
+    cooldown: 3
+
+  - name: Present Box → nothing left?
+    when: {visible: present_screen, counter_below: {misses: 3}}
+    do: [{count: misses}]
+    cooldown: 1
+
+  - name: Present Box done → back
+    when: {visible: [present_screen, back_button]}
+    do: [{count: presents_done}, {reset: misses}, {tap: back_button}]
+    cooldown: 3
+
+  - name: Present Box done → Back key
+    when: {visible: present_screen}
+    do: [{count: presents_done}, {reset: misses}, {key: BACK}]
+    cooldown: 3
+
+  # --- Home screen: missions first (their rewards land in the Present Box) --------
+  - name: Home → Missions
+    when: {visible: [home_screen, home_missions], counter_below: {missions_done: 1}}
+    do: [{tap: home_missions}]
+    cooldown: 4
+
+  - name: Home → Present Box
+    when: {visible: [home_screen, home_presents], counter_below: {presents_done: 1}}
+    do: [{tap: home_presents}]
+    cooldown: 4
+
+  - name: All collected → stop
+    when: {visible: home_screen, counter_at_least: {presents_done: 1}}
+    do:
+      - stop: "Rewards collected ({runs} claims)"

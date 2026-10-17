@@ -191,8 +191,9 @@ screenshot), when the device is unreachable and, with `NOTIFY_EVERY_RUNS`, every
   optional colour check. See [docs/TEMPLATES.md](docs/TEMPLATES.md).
 - **Routines** are YAML files with options (shown as a form in the UI) and an ordered list of rules
   (`when` this is on screen, `do` these actions). The first matching rule wins. The bundled
-  [`dokkan_auto_farm.yaml`](src/dokkan_farmer/routines/dokkan_auto_farm.yaml) and
-  [`dokkan_clear_new_stages.yaml`](src/dokkan_farmer/routines/dokkan_clear_new_stages.yaml) are
+  [`dokkan_auto_farm.yaml`](src/dokkan_farmer/routines/dokkan_auto_farm.yaml),
+  [`dokkan_clear_new_stages.yaml`](src/dokkan_farmer/routines/dokkan_clear_new_stages.yaml) and
+  [`dokkan_collect_rewards.yaml`](src/dokkan_farmer/routines/dokkan_collect_rewards.yaml) are
   commented examples. See [docs/ROUTINES.md](docs/ROUTINES.md).
 
 ## Demo mode

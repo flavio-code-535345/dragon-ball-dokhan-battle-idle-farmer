@@ -157,6 +157,16 @@ To set it up:
    *Touch control* on, the Screen tab shows the coordinates of the spot you tapped.
 4. Press Start and watch the first stage.
 
+## Collecting mission rewards and presents
+
+**Dokkan Collect Rewards** claims what is waiting and stops: start it on the home screen. It opens
+Missions and presses "Claim all" on the open tab and on each `mission_tab_1` ... `mission_tab_4`
+you captured (in that order), goes back, opens the Present Box (where mission rewards land),
+presses "Accept all" until nothing is left, goes back and stops. A screen is left only after its
+button was missing for three looks in a row. Capture `claim_all` and `accept_all` while they can be
+pressed (not greyed out), `ok_button` with *search the whole screen* for the confirm and reward
+dialogs, and `back_button` (else Android's Back key is sent).
+
 ## The safety net
 
 On top of your rules the engine:
