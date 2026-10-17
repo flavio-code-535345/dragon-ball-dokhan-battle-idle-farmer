@@ -31,6 +31,8 @@ OK = Box(240, 780, 240, 90)
 GIVE_UP = Box(240, 740, 240, 90)
 #: Like Dokkan's bottom bar (HP, Dokkan meter, NEXT UP): on the map and in battles.
 HUD = Box(0, 1180, 720, 100)
+#: The bright blue of Dokkan's path arrows (HSV about 104, 247, 224).
+ARROW_BGR = (224, 125, 7)
 
 
 def new_badge(row_top: int) -> Box:
@@ -56,6 +58,7 @@ class QuestGame:
         self.played: list[tuple[int, str]] = []
         self.paid = False
         self.team_tapped = False
+        self.forked = False  # the path fork of the current map was taken
 
     def new(self, stage: int) -> bool:
         return not self.cleared[stage]  # one cleared difficulty: CLEARED!, no NEW mark
@@ -87,6 +90,8 @@ class QuestGame:
             _button(img, TITLE, "MAP", "auto_on")
             _button(img, HUD, "NEXT UP", "auto_on")
             _text(img, f"step {self.steps}", (360, 600), 2.0)
+            if self.fork_open():
+                cv2.fillPoly(img, [self.arrow()], ARROW_BGR)
         elif screen == "battle":
             _button(img, PAUSE, "II", "auto_off")
             _button(img, HUD, "NEXT UP", "auto_on")
@@ -112,8 +117,11 @@ class QuestGame:
         elif screen == "support" and SUPPORT.contains(x, y):
             self.screen = "team"
         elif screen == "team" and START.contains(x, y):
-            self.screen, self.steps = "map", 0
+            self.screen, self.steps, self.forked = "map", 0, False
             self.played.append((self.stage, self.difficulty))
+        elif screen == "map" and self.fork_open():
+            x0, y0, w, h = cv2.boundingRect(self.arrow())
+            self.forked = x0 <= x < x0 + w and y0 <= y < y0 + h  # only the arrow goes on
         elif screen == "map" and 1000 < y < HUD.y:
             self.steps += 1
             if self.steps == 3:
@@ -135,6 +143,17 @@ class QuestGame:
                 self.screen = "list"
             elif Box(240, 900, 240, 90).contains(x, y):
                 self.paid = True
+
+    def fork_open(self) -> bool:
+        """After the first move the path forks: a blue arrow must be tapped."""
+        return self.screen == "map" and self.steps == 1 and not self.forked
+
+    def arrow(self) -> np.ndarray:
+        """The fork's arrow, pointing another way (and elsewhere) on every stage."""
+        cx, cy = (480, 560) if (self.stage or 0) % 2 else (230, 430)
+        flip = -1 if (self.stage or 0) % 2 else 1
+        points = [(-60, -20), (10, -20), (10, -45), (60, 0), (10, 45), (10, 20), (-60, 20)]
+        return np.array([(cx + flip * dx, cy + dy) for dx, dy in points], np.int32)
 
     def swipe(self, y1: float, y2: float) -> None:
         if self.screen != "list":
@@ -270,6 +289,7 @@ def test_clears_every_new_stage_on_normal_and_stops(play):
     assert summary["counters"]["stages_cleared"] == 2 and summary["runs"] == 2
     assert "No uncleared stage left" in summary["reason"] and not summary["error"]
     assert not game.team_tapped  # the map's move spot is never tapped in battle
+    assert game.forked  # each map's fork was passed by tapping its arrow
 
 
 def test_a_new_stage_above_the_screen_is_found(play):

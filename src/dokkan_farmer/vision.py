@@ -458,6 +458,50 @@ class Matcher:
             return cached
 
 
+class ColorBlob(NamedTuple):
+    #: Fraction of the screen the blob covers.
+    area: float
+    #: Its centre of mass, in screen pixels.
+    x: float
+    y: float
+
+
+#: Colour blobs are looked for on a frame this wide (faster; areas are fractions anyway).
+COLOR_WIDTH = 360
+
+
+def find_color_blobs(
+    frame: np.ndarray,
+    hsv_min: list[int],
+    hsv_max: list[int],
+    min_area: float,
+    max_area: float,
+    region: list[float] | None = None,
+) -> list[ColorBlob]:
+    """Connected areas of pixels within an HSV range, sized ``min_area``..``max_area`` of the
+    screen, largest first (e.g. the blue path arrows of the map, whichever way they point)."""
+    width = frame.shape[1]
+    scale = min(1.0, COLOR_WIDTH / width)
+    small = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    sh, sw = small.shape[:2]
+    x0 = y0 = 0
+    if region:
+        rx, ry, rw, rh = region
+        x0, y0 = int(rx * sw), int(ry * sh)
+        small = small[y0 : max(y0 + 1, int((ry + rh) * sh)), x0 : max(x0 + 1, int((rx + rw) * sw))]
+    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, np.array(hsv_min, np.uint8), np.array(hsv_max, np.uint8))
+    count, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
+    total = float(sw * sh)
+    blobs = []
+    for i in range(1, count):
+        area = stats[i, cv2.CC_STAT_AREA] / total
+        if min_area <= area <= max_area:
+            cx, cy = centroids[i]
+            blobs.append(ColorBlob(area, (cx + x0) / scale, (cy + y0) / scale))
+    return sorted(blobs, key=lambda b: -b.area)
+
+
 class FrameAnalysis:
     """Lazy, cached template lookups for one screenshot."""
 
@@ -467,6 +511,15 @@ class FrameAnalysis:
         self.height, self.width = frame.shape[:2]
         self._prepared: dict[tuple[str, float], np.ndarray] = {}
         self._results: dict[str, Match | None] = {}
+        self._colors: dict[str, list[ColorBlob]] = {}
+
+    def color_blobs(self, name: str, spec: Any) -> list[ColorBlob]:
+        """Blobs of the routine colour ``name`` (a ``routine.ColorSpec``), largest first."""
+        if name not in self._colors:
+            self._colors[name] = find_color_blobs(
+                self.frame, spec.hsv_min, spec.hsv_max, spec.min_area, spec.max_area, spec.region
+            )
+        return self._colors[name]
 
     def _frame(self, mode: str, scale: float) -> np.ndarray:
         key = (mode, scale)

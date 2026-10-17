@@ -226,3 +226,22 @@ def test_sanitize_options_drops_stale_values():
     saved = {"policy": "removed-choice", "n": "4", "gone": 1}
     assert routine.sanitize_options(saved) == {"n": 4}
     assert routine.option_values(routine.sanitize_options(saved)) == {"policy": "wait", "n": 4}
+
+
+def test_colours_are_declared_and_checked():
+    base = (
+        "name: C\nrules:\n  - name: Arrow\n"
+        "    when: {color_visible: arrow}\n    do: [{tap_color: arrow}]\n"
+    )
+    with pytest.raises(RoutineError, match="unknown colour"):
+        parse_routine(base)
+    colors = "colors:\n  arrow: {hsv_min: [95, 200, 150], hsv_max: [115, 255, 255]}\n"
+    routine = parse_routine(colors + base)
+    assert routine.colors["arrow"].min_area == 0.001
+    assert routine.rules[0].do[0].args == {"color": "arrow"}
+    bad = "colors:\n  arrow: {hsv_min: [200, 0, 0], hsv_max: [115, 255, 255]}\n"
+    with pytest.raises(RoutineError, match="hue 0-179"):
+        parse_routine(bad + base)
+    upside = "colors:\n  arrow: {hsv_min: [115, 0, 0], hsv_max: [95, 255, 255]}\n"
+    with pytest.raises(RoutineError, match="hsv_min"):
+        parse_routine(upside + base)

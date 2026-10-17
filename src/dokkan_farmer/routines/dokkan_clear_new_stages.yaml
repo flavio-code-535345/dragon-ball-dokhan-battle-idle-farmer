@@ -130,6 +130,16 @@ counters:
     appears: stage_result
     rearm: start_button
 
+# Colours the routine looks for (hue 0-179, saturation and value 0-255, as in OpenCV).
+colors:
+  path_arrow:
+    description: The bright blue arrows where the path on the map forks.
+    hsv_min: [95, 200, 150]
+    hsv_max: [115, 255, 255]
+    min_area: 0.0015
+    max_area: 0.02
+    region: [0, 0.05, 1, 0.68]
+
 templates:
   new_mark:
     level: required
@@ -204,21 +214,6 @@ templates:
   friend_request:
     level: optional
     description: The title of the "send a friend request?" popup after a stage.
-  path_arrow:
-    level: optional
-    description: >-
-      An arrow you tap where the path on the map splits (crop only the arrow,
-      search the whole screen). Arrows point in different directions: capture
-      the others as path_arrow_2, path_arrow_3 and path_arrow_4.
-  path_arrow_2:
-    level: optional
-    description: A path arrow pointing another way (see path_arrow).
-  path_arrow_3:
-    level: optional
-    description: A path arrow pointing a third way (see path_arrow).
-  path_arrow_4:
-    level: optional
-    description: A path arrow pointing a fourth way (see path_arrow).
   back_button:
     level: optional
     description: >-
@@ -309,29 +304,15 @@ rules:
     do: [{tap: skip_button}]
     cooldown: 3
 
-  # The map's bottom bar (HP, Dokkan meter, NEXT UP) is also there in battles: a
-  # map_screen cropped from it matches in battle too, where the move spot would hit a
-  # character. Hence not_visible: battle_screen (the battle rule waits between taps).
-  # Path arrows only appear on the map, so they need no map_screen (the arrows may cover
-  # it). One rule per direction: whichever arrow is on screen gets tapped.
+  # Where the path forks, blue arrows next to your character show the ways on (the
+  # move cards turn grey). They point any of eight ways, so instead of one template per
+  # direction the routine looks for their colour (see colors: path_arrow) and taps the
+  # biggest arrow. Battles have blue ki spheres: hence not_visible: battle_screen.
   - name: Map → choose a path
-    when: {visible: path_arrow, not_visible: battle_screen}
-    do: [{tap: path_arrow}]
-    cooldown: 3
-
-  - name: Map → choose a path (2)
-    when: {visible: path_arrow_2, not_visible: battle_screen}
-    do: [{tap: path_arrow_2}]
-    cooldown: 3
-
-  - name: Map → choose a path (3)
-    when: {visible: path_arrow_3, not_visible: battle_screen}
-    do: [{tap: path_arrow_3}]
-    cooldown: 3
-
-  - name: Map → choose a path (4)
-    when: {visible: path_arrow_4, not_visible: battle_screen}
-    do: [{tap: path_arrow_4}]
+    when:
+      color_visible: path_arrow
+      not_visible: [battle_screen, stage_list, start_button]
+    do: [{tap_color: path_arrow}]
     cooldown: 3
 
   - name: Map → move

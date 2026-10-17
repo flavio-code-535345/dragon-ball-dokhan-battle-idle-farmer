@@ -102,6 +102,7 @@ All listed conditions must hold.
 | `option: {policy: wait}` | the option currently has this value |
 | `counter_below: {stone_refills: $max_stone_refills}` | counter < value |
 | `counter_at_least: {runs: 10}` | counter ≥ value |
+| `color_visible: path_arrow` | a blob of this colour (from `colors`, below) is on screen |
 | `always: true` | always (use with a cooldown) |
 
 ## Actions (`do`)
@@ -110,6 +111,7 @@ All listed conditions must hold.
 |---|---|
 | `tap: name` | tap the template where it was found: its middle, or the tap point set when capturing it (random offset, see `TAP_JITTER`) |
 | `tap: {template: name, offset: [0.0, 0.8]}` | tap relative to the template: offset in template widths/heights from its centre (instead of its tap point) |
+| `tap_color: path_arrow` | tap the middle of the biggest blob of this colour (from `colors`) |
 | `tap_xy: [0.5, 0.15]` | tap a point: values ≤ 1 are fractions of the screen, larger values are pixels |
 | `swipe: {from: [0.5, 0.8], to: [0.5, 0.3], ms: 400}` | swipe (also `[x1, y1, x2, y2, ms]`) |
 | `key: BACK` | press a key: `BACK`, `HOME`, `ENTER`, `ESCAPE`, `MENU`, `APP_SWITCH`, `WAKEUP`, `POWER` |
@@ -122,6 +124,22 @@ All listed conditions must hold.
 | `stop: "reason"` | stop farming |
 | `launch_app` / `stop_app` / `restart_app` | start, force-stop or restart the game |
 | `screenshot: label` | save a debug screenshot in `/data/screenshots` |
+
+## Colours (`colors`)
+
+Some things have no fixed look but a fixed colour, such as the map's blue path arrows, which point
+any of eight ways. A routine can declare colours and use them with `color_visible` and `tap_color`:
+
+```yaml
+colors:
+  path_arrow:
+    description: The bright blue arrows where the path on the map forks.
+    hsv_min: [95, 200, 150]     # hue 0-179, saturation and value 0-255 (OpenCV's scales)
+    hsv_max: [115, 255, 255]
+    min_area: 0.0015            # a blob must cover at least this much of the screen...
+    max_area: 0.02              # ...and at most this much (skips small dots and big areas)
+    region: [0, 0.05, 1, 0.68]  # optional: where to look, [x, y, w, h] fractions
+```
 
 Any number value can be an option reference like `$max_runs`. Texts of `notify`, `log` and `stop`
 can use `{placeholders}`: option names, counter names, `{runs}`, `{elapsed}` and `{routine}`.

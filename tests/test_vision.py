@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
-from dokkan_farmer.vision import Matcher, TemplateStore, validate_name
+from dokkan_farmer.vision import Matcher, TemplateStore, find_color_blobs, validate_name
 
 
 def background(width: int = 720, height: int = 1280, seed: int = 1) -> np.ndarray:
@@ -174,3 +174,18 @@ def test_a_tap_point_moves_with_the_template(store):
     plain = Matcher(store).analyze(frame).find("plain")
     assert plain.tap is None and "tap" not in plain.to_dict(720, 1280)
     assert store.update("again", reset_tap=True).tap is None
+
+
+def test_color_blobs_find_the_arrow_whichever_way_it_points():
+    frame = background()
+    frame[:] = (40, 120, 40)  # a green map
+    arrow = np.array([(400, 500), (520, 560), (400, 620), (420, 560)], np.int32)
+    cv2.fillPoly(frame, [arrow], (224, 125, 7))  # Dokkan's arrow blue
+    cv2.circle(frame, (100, 300), 8, (224, 125, 7), -1)  # a small blue node: too small
+    frame[1100:1280, :] = (224, 125, 7)  # a big blue area: too big
+    blobs = find_color_blobs(frame, [95, 200, 150], [115, 255, 255], 0.0015, 0.05)
+    assert len(blobs) == 1
+    assert abs(blobs[0].x - 440) < 10 and abs(blobs[0].y - 560) < 10
+    assert not find_color_blobs(
+        frame, [95, 200, 150], [115, 255, 255], 0.0015, 0.05, [0, 0, 1, 0.3]
+    )

@@ -729,6 +729,9 @@ class Farmer:
             return False
         if not all(analysis.visible(name) for name in when.visible):
             return False
+        colors = session.routine.colors
+        if not all(analysis.color_blobs(n, colors[n]) for n in when.color_visible):
+            return False
         if when.any_visible and not any(analysis.visible(name) for name in when.any_visible):
             return False
         return not any(analysis.visible(name) for name in when.not_visible)
@@ -839,6 +842,17 @@ class Farmer:
             width, height = self._frame_size(analysis)
             px = int(min(width - 1, max(0, round(cx))))
             py = int(min(height - 1, max(0, round(cy))))
+            self._with_device(lambda d: d.tap(px, py))
+        elif kind == "tap_color":
+            name = args["color"]
+            spec = session.routine.colors[name]
+            blobs = analysis.color_blobs(name, spec) if analysis is not None else []
+            if not blobs:
+                log.info("Tap on colour %s skipped: it is not on screen", name)
+                return
+            width, height = self._frame_size(analysis)
+            px = int(min(width - 1, max(0, round(blobs[0].x))))
+            py = int(min(height - 1, max(0, round(blobs[0].y))))
             self._with_device(lambda d: d.tap(px, py))
         elif kind == "tap_xy":
             width, height = self._frame_size(analysis)

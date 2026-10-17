@@ -181,6 +181,44 @@ def loose_equal(actual: Any, expected: Any) -> bool:
     return str(actual) == str(expected)
 
 
+# ---------------------------------------------------------------------- colours
+class ColorSpec(BaseModel):
+    """A colour to look for: blobs whose pixels are within an HSV range (OpenCV scales:
+    hue 0-179, saturation and value 0-255), sized ``min_area``..``max_area`` of the screen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = ""
+    hsv_min: list[int]
+    hsv_max: list[int]
+    min_area: float = Field(0.001, gt=0, le=1)
+    max_area: float = Field(0.05, gt=0, le=1)
+    #: ``[x, y, w, h]`` fractions of the screen to look in; ``None`` = all of it.
+    region: list[float] | None = None
+
+    @field_validator("hsv_min", "hsv_max")
+    @classmethod
+    def _hsv(cls, value: list[int]) -> list[int]:
+        if len(value) != 3 or not (0 <= value[0] <= 179) or not all(0 <= v <= 255 for v in value):
+            raise ValueError("an HSV colour is [hue 0-179, saturation 0-255, value 0-255]")
+        return value
+
+    @field_validator("region")
+    @classmethod
+    def _region(cls, value: list[float] | None) -> list[float] | None:
+        if value is not None and (len(value) != 4 or not all(0 <= v <= 1 for v in value)):
+            raise ValueError("region is [x, y, w, h], fractions of the screen")
+        return value
+
+    @model_validator(mode="after")
+    def _ranges(self) -> ColorSpec:
+        if any(lo > hi for lo, hi in zip(self.hsv_min, self.hsv_max, strict=True)):
+            raise ValueError("hsv_min must not be above hsv_max")
+        if self.min_area > self.max_area:
+            raise ValueError("min_area must not be above max_area")
+        return self
+
+
 # ------------------------------------------------------------------ conditions
 class Condition(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -193,9 +231,11 @@ class Condition(BaseModel):
     option: dict[str, Any] = {}
     counter_below: dict[str, NumRef] = {}
     counter_at_least: dict[str, NumRef] = {}
+    #: Colours (from the routine's ``colors``) that must all be on screen.
+    color_visible: NameList = []
     always: bool = False
 
-    @field_validator("visible", "any_visible", "not_visible")
+    @field_validator("visible", "any_visible", "not_visible", "color_visible")
     @classmethod
     def _template_names(cls, names: list[str]) -> list[str]:
         return [validate_name(n) for n in names]
@@ -218,6 +258,7 @@ class Condition(BaseModel):
             or self.option
             or self.counter_below
             or self.counter_at_least
+            or self.color_visible
             or self.always
         ):
             raise ValueError("'when' needs at least one condition (or 'always: true')")
@@ -231,6 +272,7 @@ class Condition(BaseModel):
 SIMPLE_ACTIONS = {"launch_app", "stop_app", "restart_app", "screenshot"}
 ACTION_KINDS = {
     "tap",
+    "tap_color",
     "tap_xy",
     "swipe",
     "key",
@@ -285,6 +327,10 @@ def parse_action(raw: Any) -> dict[str, Any]:
         if abs(dx) > 3 or abs(dy) > 3:
             raise ValueError("tap offset is a fraction of the template size, keep it within ±3")
         args = {"template": validate_name(template), "offset": [dx, dy]}
+    elif kind == "tap_color":
+        if not isinstance(value, str):
+            raise ValueError("tap_color needs the name of a colour from 'colors'")
+        args = {"color": validate_name(value)}
     elif kind == "tap_xy":
         x, y = _point(value, "tap_xy")
         args = {"x": x, "y": y}
@@ -447,6 +493,8 @@ class Routine(BaseModel):
     settings: RoutineSettings = Field(default_factory=RoutineSettings)
     templates: dict[str, Annotated[TemplateDoc, BeforeValidator(_template_doc)]] = {}
     counters: dict[str, CounterSpec] = {}
+    #: Named colours for ``color_visible`` and ``tap_color`` (e.g. the map's path arrows).
+    colors: dict[str, ColorSpec] = {}
     rules: list[Rule] = Field(min_length=1)
 
     @field_validator("templates")
@@ -463,6 +511,13 @@ class Routine(BaseModel):
             _counter_name(name)
         return value
 
+    @field_validator("colors")
+    @classmethod
+    def _color_keys(cls, value: dict[str, ColorSpec]) -> dict[str, ColorSpec]:
+        for name in value:
+            validate_name(name)
+        return value
+
     @model_validator(mode="after")
     def _check_references(self) -> Routine:
         missing = sorted(r for r in _collect_refs(self.model_dump()) if r not in self.options)
@@ -470,6 +525,15 @@ class Routine(BaseModel):
             refs = ", ".join("$" + m for m in missing)
             raise ValueError(f"unknown option reference(s) {refs}: declare them under 'options'")
         for rule in self.rules:
+            colors = set(rule.when.color_visible) | {
+                a.args["color"] for a in rule.do if a.kind == "tap_color"
+            }
+            unknown = sorted(colors - set(self.colors))
+            if unknown:
+                raise ValueError(
+                    f"rule {rule.name!r} uses unknown colour(s) {', '.join(unknown)}: "
+                    "declare them under 'colors'"
+                )
             for key, expected in rule.when.option.items():
                 spec = self.options.get(key)
                 if spec is None:
