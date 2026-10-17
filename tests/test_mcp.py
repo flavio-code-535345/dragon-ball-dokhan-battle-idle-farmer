@@ -117,6 +117,12 @@ def test_routines_in_short_and_edits(client):
     assert "continue_after=7" in call(client, "get_routine", id="dokkan_auto_farm")[0][0]["text"]
     content, error = call(client, "save_routine", id="dokkan_auto_farm", edits=[edit])
     assert error and "found 0 times" in content[0]["text"]
+    # Some clients send lists as JSON text.
+    back = {"old": "    default: 7\n", "new": "    default: 6\n"}
+    content, error = call(client, "save_routine", id="dokkan_auto_farm", edits=json.dumps([back]))
+    assert not error, content
+    content, error = call(client, "save_routine", id="dokkan_auto_farm", edits="[oops")
+    assert error and "edits must be a JSON array" in content[0]["text"]
     content, error = call(client, "save_routine", id="dokkan_auto_farm")
     assert error and "yaml or edits" in content[0]["text"]
     bad = {"old": "rules:", "new": "rulez:"}
@@ -136,7 +142,7 @@ def test_farm_status_and_logs(client):
     assert status["device"] == "connected" and "settings" not in status
     assert set(status) >= {"farm", "counters", "selected_routine"}
     content, error = call(client, "stop_farm")
-    assert not error and content[0]["text"].startswith("stopped: ")
+    assert not error and content[0]["text"].startswith("stopped")
     first = call(client, "logs")[0][0]["text"].splitlines()
     assert len(first) <= 21 and first[-1].startswith("(last_id ")
     last_id = int(first[-1].split()[1].rstrip(")"))

@@ -109,7 +109,7 @@ class McpServer:
     @staticmethod
     def _call(tool: Tool, args: dict[str, Any]) -> dict[str, Any]:
         try:
-            return {"content": tool.run(args), "isError": False}
+            return {"content": tool.run(_decoded(tool, args)), "isError": False}
         except HTTPException as exc:
             message = exc.detail if isinstance(exc.detail, str) else json.dumps(exc.detail)
         except (ToolError, DeviceError, RoutineError, ValueError, RuntimeError) as exc:
@@ -118,6 +118,23 @@ class McpServer:
             log.exception("MCP tool %s failed", tool.name)
             message = f"{type(exc).__name__}: {exc}"
         return {"content": [text(message)], "isError": True}
+
+
+def _decoded(tool: Tool, args: dict[str, Any]) -> dict[str, Any]:
+    """Some clients send array and object arguments as JSON text: decode those."""
+    kinds = {"array": list, "object": dict}
+    out = dict(args)
+    for name, schema in tool.params.items():
+        kind = kinds.get(schema.get("type"))
+        if kind and isinstance(out.get(name), str):
+            try:
+                value = json.loads(out[name])
+            except ValueError:
+                raise ToolError(f"{name} must be a JSON {schema['type']}") from None
+            if not isinstance(value, kind):
+                raise ToolError(f"{name} must be a JSON {schema['type']}")
+            out[name] = value
+    return out
 
 
 def _result(msg_id: Any, result: dict[str, Any]) -> dict[str, Any]:

@@ -913,9 +913,9 @@ def create_app(ctx: AppContext) -> FastAPI:
 
         def farm_line() -> str:
             farm = ctx.farmer.snapshot()
-            line = f"{farm['state']}: {farm.get('routine_name') or '-'}"
-            if farm.get("routine_id"):
-                line += f" ({farm['routine_id']})"
+            line = farm["state"]
+            if farm.get("routine_name"):
+                line += f": {farm['routine_name']} ({farm.get('routine_id')})"
             if farm.get("message"):
                 line += f" - {farm['message']}"
             disabled = [r["name"] for r in farm.get("disabled_rules") or []]
