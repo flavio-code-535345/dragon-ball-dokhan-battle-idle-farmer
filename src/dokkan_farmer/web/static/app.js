@@ -104,6 +104,30 @@
   }
 
   // =================================================================== tabs
+  // Wide screens: the Screen card sits next to these tabs, so the game is always in view.
+  const DOCK_TABS = ["farm", "templates", "routines"];
+  const DOCK_MIN_WIDTH = 1000;
+
+  function placeScreen() {
+    const card = $("#screen-card");
+    const dock = $("#screen-dock");
+    const docked = DOCK_TABS.includes(ui.tab) && window.innerWidth >= DOCK_MIN_WIDTH;
+    const home = docked ? dock : $("#tab-screen");
+    if (card.parentElement !== home) home.prepend(card);
+    dock.hidden = !docked;
+    $("main").classList.toggle("docked", docked);
+    return docked;
+  }
+
+  // Is the live screen on the page now (its tab, or docked)?
+  function screenShown() {
+    return ui.tab === "screen" || $("main").classList.contains("docked");
+  }
+
+  function screenIsOff() {
+    return Boolean(ui.status && ui.status.farm && ui.status.farm.screen_off);
+  }
+
   function showTab(name) {
     if (!$(`#tab-${name}`)) name = "farm";
     ui.tab = name;
@@ -111,7 +135,8 @@
     $$(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
     if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
     window.scrollTo({ top: 0 });
-    if (name === "screen") refreshScreen(true);
+    placeScreen();
+    if (screenShown()) refreshScreen(true);
     else stopStream();
     if (name === "templates") { loadTemplates(); renderChecklist(); }
     if (name === "routines") loadEditor(ui.editorId || ui.routineId);
@@ -121,6 +146,12 @@
   }
 
   $$(".tabbar button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  window.addEventListener("resize", () => {
+    const before = screenShown();
+    placeScreen();
+    if (screenShown() && !before) refreshScreen(true);
+    else if (!screenShown()) stopStream();
+  });
   window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 
   // ================================================================= status
@@ -205,6 +236,7 @@
     if (ui.tab === "farm") updatePreview(false);
     $("#screen-offline").classList.toggle("hidden", status.device.connected);
     $("#screen-sleeping").classList.toggle("hidden", !status.farm.screen_off);
+    $("#btn-screen-power").textContent = status.farm.screen_off ? "⏻ Screen on" : "⏻ Screen off";
     if (ui.tab === "device") renderDevice();
   }
 
@@ -423,6 +455,7 @@
   }
 
   async function refreshScreen(force) {
+    if (screenIsOff()) return; // a fresh screenshot would wake it (no farm running)
     if (streamUrl) {
       refreshBoxes(force); // the stream already shows the screen
       return;
@@ -553,7 +586,8 @@
   async function liveTick() {
     clearTimeout(liveTimer);
     const fps = liveFps();
-    const showing = ui.tab === "screen" && !document.hidden && deviceConnected();
+    // Screen off (power saving): no live view either, the picture would not change.
+    const showing = screenShown() && !document.hidden && deviceConnected() && !screenIsOff();
     if (fps && showing && Date.now() >= streamRetryAt) {
       fitScreen(); // later frames of a stream fire no load event (e.g. after a rotation)
       startStream(fps);
@@ -672,6 +706,15 @@
     e.target.blur(); // so the keys typed next go to Android, not to this switch
   });
   $("#toggle-boxes").addEventListener("change", () => refreshScreen(false));
+  $("#btn-screen-power").addEventListener("click", () => run(async () => {
+    const on = screenIsOff();
+    const res = await api("/api/device/screen", { method: "POST", body: { on } });
+    if (ui.status && ui.status.farm) ui.status.farm.screen_off = res.screen_off;
+    $("#btn-screen-power").textContent = res.screen_off ? "⏻ Screen on" : "⏻ Screen off";
+    $("#screen-sleeping").classList.toggle("hidden", !res.screen_off);
+    if (res.screen_off) stopStream();
+    else setTimeout(() => refreshScreen(true), 1500);
+  }, "Done"));
   $("#btn-refresh-screen").addEventListener("click", () => refreshScreen(true));
   $$("[data-devkey]").forEach((b) => b.addEventListener("click", () => {
     queueInput({ key: b.dataset.devkey, count: 1 });
@@ -796,7 +839,7 @@
   }
 
   document.addEventListener("keydown", (e) => {
-    if (ui.tab !== "screen" || !$("#toggle-control").checked) return;
+    if (!screenShown() || !$("#toggle-control").checked) return;
     if (e.isComposing || e.metaKey || isTextField(e.target)) return;
     if (e.key.length === 1) {
       // AltGr (Ctrl+Alt on Windows) and macOS Option type characters; other Ctrl/Alt
@@ -1557,7 +1600,7 @@
   // ================================================================== start
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stopStream(); // no stream for a hidden tab
-    else if (ui.tab === "screen") liveTick();
+    else if (screenShown()) liveTick();
   });
 
   async function init() {

@@ -149,6 +149,10 @@ class AppRequest(BaseModel):
     package: str | None = None
 
 
+class ScreenPowerRequest(BaseModel):
+    on: bool
+
+
 class TextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
@@ -526,6 +530,17 @@ def create_app(ctx: AppContext) -> FastAPI:
             time.sleep(WAKE_SETTLE_UI)
         ctx.farmer.swipe_relative(body.x1, body.y1, body.x2, body.y2, body.ms)
         return {"ok": True}
+
+    @app.post("/api/device/screen")
+    def device_screen(body: ScreenPowerRequest) -> dict[str, Any]:
+        """The Screen off/on button: Android's screen off saves the emulator's drawing."""
+        ctx.farmer.mark_watched()
+        if body.on:
+            if not ctx.farmer.screen_wake():
+                ctx.farmer.device_call(lambda d: d.wake_screen())
+        else:
+            ctx.farmer.screen_sleep("turned off in the web UI", force=True)
+        return {"screen_off": ctx.farmer.screen_off}
 
     @app.post("/api/device/key")
     def device_key(body: KeyRequest) -> dict[str, Any]:

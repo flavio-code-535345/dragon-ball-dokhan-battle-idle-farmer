@@ -70,6 +70,17 @@ h3 { font-size: 1.05rem; }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
 main { max-width: 780px; margin: 0 auto; padding: 14px 16px; }
+/* Wide screens: the live screen next to the Farm, Templates and Routine tabs. */
+main.docked {
+  max-width: 1320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+  gap: 16px;
+  align-items: start;
+}
+main.docked > .tab { grid-column: 1; grid-row: 1; min-width: 0; }
+.screen-dock { grid-column: 2; grid-row: 1; position: sticky; top: 14px; }
+.screen-dock .screen-wrap { width: min(100%, calc((100vh - 220px) * var(--screen-aspect, 0.5625))); }
 
 .card {
   background: var(--surface);

@@ -90,9 +90,10 @@
 
     <!-- ============================== SCREEN ============================== -->
     <section id="tab-screen" class="tab" data-tab="screen" hidden>
-      <div class="card">
+      <div class="card" id="screen-card">
         <div class="toolbar">
           <button class="btn small" id="btn-refresh-screen" type="button">⟳ Refresh</button>
+          <button class="btn small" id="btn-screen-power" type="button" title="Android's screen off: the emulator stops drawing (saves power)">⏻ Screen off</button>
           <label class="switch" title="How often the picture refreshes">Live
             <select id="live-fps">
               <option value="0">off</option>
@@ -319,6 +320,9 @@
         Unofficial fan project, not affiliated with Bandai Namco. Automating the game breaks its terms of service: use at your own risk.
       </p>
     </section>
+
+    <!-- Wide screens: the Screen card docks here next to Farm, Templates and Routine. -->
+    <aside id="screen-dock" class="screen-dock" hidden></aside>
   </main>
 
   <nav class="tabbar" aria-label="Sections">

@@ -325,10 +325,13 @@ class Farmer:
             return self.settings.power_save
         return self.device.is_emulator
 
-    def screen_sleep(self, why: str) -> None:
-        """Turn Android's screen off (power saving): the emulator stops drawing the game."""
+    def screen_sleep(self, why: str, *, force: bool = False) -> None:
+        """Turn Android's screen off (power saving): the emulator stops drawing the game.
+
+        ``force``: also without POWER_SAVE (the web UI's Screen off button).
+        """
         with self._screen_lock:
-            if not self.power_save or self._screen_off:
+            if not (self.power_save or force) or self._screen_off:
                 return
             try:
                 self._with_device(lambda d: d.sleep_screen())
