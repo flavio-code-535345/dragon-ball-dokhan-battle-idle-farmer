@@ -135,7 +135,8 @@ templates:
     level: required
     description: >-
       The "NEW" mark of an uncleared stage in the stage list. Tick "search the
-      whole screen" so it is found on any row. Crop only the letters. If the stage does not open when the mark is tapped,
+      whole screen" so it is found on any row. Crop only the letters. It
+      shimmers: a threshold of 0.75 finds it in every frame. If the stage does not open when the mark is tapped,
       set a tap point on the stage's row.
   stage_list:
     level: required
@@ -308,13 +309,23 @@ rules:
   # --- Finding the next NEW stage ------------------------------------------------
   - name: Open a NEW stage
     when: {visible: [stage_list, new_mark]}
-    do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}]
+    do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}]
     cooldown: 4
 
   - name: Pick Normal
     when: {visible: difficulty_normal}
     do: [{tap: difficulty_normal}]
     cooldown: 4
+
+  # The NEW label shimmers: one frame without it is no reason to scroll. Look three
+  # times first (misses), and only then swipe.
+  - name: No NEW mark on screen, look again
+    when:
+      visible: stage_list
+      not_visible: new_mark
+      counter_below: {misses: 3}
+    do: [{count: misses}]
+    cooldown: 1
 
   # Swiping up scrolls the list down. At the end of the list a swipe changes
   # nothing: after a few of those the engine pauses this rule, and the next one
@@ -323,24 +334,30 @@ rules:
     when:
       visible: stage_list
       not_visible: new_mark
+      counter_at_least: {misses: 3}
       counter_below: {scrolls_down: $max_scrolls}
-    do: [{swipe: {from: [0.5, 0.75], to: [0.5, 0.4], ms: 500}}, {count: scrolls_down}]
+    do:
+      - swipe: {from: [0.5, 0.75], to: [0.5, 0.4], ms: 500}
+      - count: scrolls_down
+      - reset: misses
     cooldown: 2
 
   - name: Look further up for a NEW stage
     when:
       visible: stage_list
       not_visible: new_mark
+      counter_at_least: {misses: 3}
       counter_below: {scrolls_up: $max_scrolls}
     do:
       - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
       - wait: 1
       - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
       - count: scrolls_up
+      - reset: misses
     cooldown: 2
 
   - name: No NEW stage left → stop
-    when: {visible: stage_list, not_visible: new_mark}
+    when: {visible: stage_list, not_visible: new_mark, counter_at_least: {misses: 3}}
     do:
       - screenshot: no_new_stage
       - stop: No uncleared stage left in this list ({stages_cleared} cleared). Open the next area and start again.
