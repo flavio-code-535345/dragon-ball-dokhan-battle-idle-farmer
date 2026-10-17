@@ -548,6 +548,7 @@
     img.onload = null;
     img.onerror = null;
     img.removeAttribute("src"); // closes the connection
+    $("#screen-empty").classList.remove("hidden"); // no picture now: say so (Refresh)
   }
 
   // While streaming, the boxes come from the farm loop, or from an analysis every 1.5 s.
