@@ -1,0 +1,466 @@
+# Dokkan Story: plays the Dragon Ball Story from where you are to the end of
+# the series, for the first-clear Dragon Stones of every stage.
+#
+# Dragon Ball Story (home screen → START → Dragon Ball Story) has series
+# (Dragon Ball, Z, GT, Movies), each a wheel of sagas; a saga's stage list shows
+# its cleared stages and the next one with a NEW mark. This routine plays that
+# stage on Normal like Dokkan Clear New Stages (it taps where you move on the
+# map and a ki sphere in battle), and when a saga has no NEW stage left it goes
+# back to the saga wheel, turns it one saga further and opens that one. When
+# several sagas in a row have nothing to play, the series is done and it stops.
+#
+# How to use it: open the saga wheel of a series in Dokkan and turn it to the
+# saga to start with (the first one: the bottom of the wheel), or open that
+# saga's stage list. Then start this routine. Templates are shared with
+# Dokkan Clear New Stages; this one also needs saga_wheel and back_button.
+#
+# Full reference: docs/ROUTINES.md
+name: Dokkan Story
+description: >-
+  Plays the Dragon Ball Story saga by saga for the first-clear Dragon Stones:
+  the NEW stage of each saga on Normal, then on to the next saga of the wheel,
+  until the end of the series.
+version: 1
+
+options:
+  max_stages:
+    label: Stop after N cleared stages (0 = at the end of the series)
+    type: number
+    default: 0
+    min: 0
+  retries:
+    label: Tries again after a defeat (0 = stop at the first defeat)
+    type: number
+    default: 1
+    min: 0
+    max: 20
+    help: >-
+      The farmer always taps "Give up", never a paid revive. The count starts
+      again after each cleared stage.
+  sphere_x:
+    label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
+    type: number
+    default: 0.5
+    min: 0
+    max: 1
+  sphere_y:
+    label: "Battle: where to tap a ki sphere, y (0 = top, 1 = bottom)"
+    type: number
+    default: 0.45
+    min: 0
+    max: 1
+    help: A spot in the middle of the ki spheres, between the enemy and your team.
+  tap_every:
+    label: "Battle: seconds between taps"
+    type: number
+    default: 1.5
+    min: 0.5
+    max: 10
+  move_x:
+    label: "Map: where to tap to move, x"
+    type: number
+    default: 0.5
+    min: 0
+    max: 1
+  move_y:
+    label: "Map: where to tap to move, y"
+    type: number
+    default: 0.85
+    min: 0
+    max: 1
+    help: Where you tap on the map to move on (the movement card or the button for it).
+  empty_sagas:
+    label: Stop after this many sagas in a row without a NEW stage
+    type: number
+    default: 4
+    min: 1
+    max: 50
+    help: >-
+      At the end of the series the wheel turns no further and the same saga opens
+      again; sagas you already finished count too.
+  max_scrolls:
+    label: Swipes to look for a NEW stage, each way
+    type: number
+    default: 1
+    min: 1
+    max: 30
+  act_policy:
+    label: When ACT runs out
+    type: choice
+    choices: [wait, item, stone, stop]
+    default: wait
+    help: >-
+      wait = let ACT regenerate, item = use ACT recovery items,
+      stone = spend Dragon Stones (up to the limit below), stop = stop.
+  act_wait_minutes:
+    label: Minutes to wait for ACT to regenerate
+    type: number
+    default: 60
+    min: 1
+    max: 1440
+  max_stone_refills:
+    label: Max Dragon Stones spent on ACT per session
+    type: number
+    default: 0
+    min: 0
+    max: 50
+  continue_after:
+    label: Seconds of a still screen before tapping to continue
+    type: number
+    default: 6
+    min: 2
+    max: 120
+
+settings:
+  tick_interval: 1.0
+  action_delay: 1.5
+  stop_after_runs: $max_stages
+  run_counter: stages_cleared
+  ensure_foreground: true
+  stuck:
+    static_seconds: 180
+    # Battles are played by the rules below, so a long silence means something
+    # unexpected is on screen.
+    idle_seconds: 300
+    recovery:
+      - key: BACK
+      - wait: 3
+    restart_after: 2
+    max_restarts: 3
+
+counters:
+  stages_cleared:
+    label: Stages cleared
+    appears: stage_result
+    rearm: start_button
+
+templates:
+  new_mark:
+    level: required
+    description: >-
+      The "NEW" mark of an uncleared stage in the stage list. Tick "search the
+      whole screen" so it is found on any row. Crop only the letters. It
+      shimmers: a threshold of 0.75 finds it in every frame. If the stage does not open when the mark is tapped,
+      set a tap point on the stage's row.
+  stage_list:
+    level: required
+    description: >-
+      Something that is only on the stage list of an area, e.g. its title bar.
+      The routine only looks for NEW marks while this is on screen.
+  difficulty_normal:
+    level: required
+    description: >-
+      The NORMAL bar on a stage's difficulty screen (the first row, with the
+      word NORMAL). The routine plays NEW stages on Normal.
+  start_button:
+    level: required
+    description: The "Start!" button on the team screen before a quest.
+  battle_screen:
+    level: required
+    description: >-
+      Something that is always on screen during a battle and nowhere else, e.g.
+      the pause / menu button of the battle screen.
+  stage_result:
+    level: required
+    description: >-
+      Something on the results screen at the end of a stage, e.g. "Obtained
+      Item" (counts the cleared stages).
+  stage_clear:
+    level: recommended
+    description: The "Battle Results" title after each won battle of a stage.
+  saga_wheel:
+    level: required
+    description: >-
+      The "TAP" marker above the selected saga of a series' saga wheel (crop
+      only "TAP" and its arrows, not the saga). Not "search the whole screen":
+      the series wheel has one too, higher up.
+  back_button:
+    level: required
+    description: The "<<<" back button at the bottom left of a stage list.
+  map_screen:
+    level: recommended
+    description: >-
+      Something that is always on the map (the board you move on) and not in
+      battles, e.g. the small difficulty label (NORMAL) next to MENU at the top.
+      While it is visible the routine taps "Map: where to tap to move".
+  ok_button:
+    level: recommended
+    description: An "OK" button. Search the whole screen, so it is found in any dialog.
+  select_support:
+    level: recommended
+    description: The first entry of the "select a support" list before a quest.
+  skip_button:
+    level: recommended
+    description: The "Skip" button of the story scenes that play on a first clear.
+  cancel_button:
+    level: recommended
+    description: >-
+      A "Cancel" / "No" button. Search the whole screen. Used to decline friend
+      requests and to close the not-enough-ACT dialog.
+  act_empty_dialog:
+    level: recommended
+    description: >-
+      The title of the "not enough ACT" dialog. Strongly recommended, so that
+      the farmer never presses a Dragon Stone button by accident.
+  defeat_give_up:
+    level: recommended
+    description: >-
+      The "Give up" / "No" button when your team is defeated and Dokkan offers a
+      revive for Dragon Stones.
+  error_retry:
+    level: recommended
+    description: The "Retry" button of connection error dialogs.
+  friend_request:
+    level: optional
+    description: The title of the "send a friend request?" popup after a stage.
+  path_arrow:
+    level: optional
+    description: >-
+      An arrow you tap where the path on the map splits (crop only the arrow,
+      search the whole screen). Arrows point in different directions: capture
+      the others as path_arrow_2, path_arrow_3 and path_arrow_4.
+  path_arrow_2:
+    level: optional
+    description: A path arrow pointing another way (see path_arrow).
+  path_arrow_3:
+    level: optional
+    description: A path arrow pointing a third way (see path_arrow).
+  path_arrow_4:
+    level: optional
+    description: A path arrow pointing a fourth way (see path_arrow).
+  close_button:
+    level: optional
+    description: The "Close" / "X" of popups (rewards, news).
+  act_use_item:
+    level: optional
+    description: The "use ACT recovery item" button (only with ACT policy = item).
+  act_use_stone:
+    level: optional
+    description: The "restore with Dragon Stone" button (only with ACT policy = stone).
+
+rules:
+  # --- Errors and dangerous dialogs first -----------------------------------
+  - name: Connection error → Retry
+    when: {visible: error_retry}
+    do: [{tap: error_retry}]
+    cooldown: 3
+
+  - name: Defeat → give up and stop
+    when: {visible: defeat_give_up, counter_at_least: {defeats: $retries}}
+    do:
+      - tap: defeat_give_up
+      - screenshot: defeat
+      - stop: Team was defeated after {stages_cleared} cleared stages. Use a stronger team for this stage.
+
+  - name: Defeat → give up and try again
+    when: {visible: defeat_give_up}
+    do:
+      - tap: defeat_give_up
+      - count: defeats
+      - notify: "Defeat #{defeats} (after {stages_cleared} cleared stages), trying again"
+    cooldown: 5
+
+  # --- ACT (stamina) ran out ---------------------------------------------------
+  - name: Out of ACT → stop
+    when: {visible: act_empty_dialog, option: {act_policy: stop}}
+    do:
+      - tap: cancel_button
+      - stop: Out of ACT after {stages_cleared} cleared stages
+
+  - name: Out of ACT → use item
+    when: {visible: [act_empty_dialog, act_use_item], option: {act_policy: item}}
+    do: [{tap: act_use_item}, {count: item_refills}]
+    cooldown: 5
+
+  - name: Out of ACT → use Dragon Stone
+    when:
+      visible: [act_empty_dialog, act_use_stone]
+      option: {act_policy: stone}
+      counter_below: {stone_refills: $max_stone_refills}
+    do:
+      - tap: act_use_stone
+      - count: stone_refills
+      - notify: "Spent a Dragon Stone on ACT ({stone_refills}/{max_stone_refills})"
+    cooldown: 5
+
+  - name: Out of ACT → wait
+    when: {visible: act_empty_dialog}
+    do:
+      - tap: cancel_button
+      - count: act_waits
+      - notify: "Out of ACT after {stages_cleared} cleared stages, waiting {act_wait_minutes} min"
+      - wait_minutes: $act_wait_minutes
+
+  # --- Playing a stage -----------------------------------------------------------
+  - name: Stage cleared → results
+    when: {visible: stage_result}
+    do: [{reset: defeats}, {reset: empty_sagas}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Battle won → results
+    when: {visible: stage_clear}
+    do: [{tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Battle → tap a ki sphere
+    when: {visible: battle_screen}
+    do: [{tap_xy: [$sphere_x, $sphere_y]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Skip story scene
+    when: {visible: skip_button}
+    do: [{tap: skip_button}]
+    cooldown: 3
+
+  # The map's bottom bar (HP, Dokkan meter, NEXT UP) is also there in battles: a
+  # map_screen cropped from it matches in battle too, where the move spot would hit a
+  # character. Hence not_visible: battle_screen (the battle rule waits between taps).
+  # Path arrows only appear on the map, so they need no map_screen (the arrows may cover
+  # it). One rule per direction: whichever arrow is on screen gets tapped.
+  - name: Map → choose a path
+    when: {visible: path_arrow, not_visible: battle_screen}
+    do: [{tap: path_arrow}]
+    cooldown: 3
+
+  - name: Map → choose a path (2)
+    when: {visible: path_arrow_2, not_visible: battle_screen}
+    do: [{tap: path_arrow_2}]
+    cooldown: 3
+
+  - name: Map → choose a path (3)
+    when: {visible: path_arrow_3, not_visible: battle_screen}
+    do: [{tap: path_arrow_3}]
+    cooldown: 3
+
+  - name: Map → choose a path (4)
+    when: {visible: path_arrow_4, not_visible: battle_screen}
+    do: [{tap: path_arrow_4}]
+    cooldown: 3
+
+  - name: Map → move
+    when: {visible: map_screen, not_visible: battle_screen}
+    do: [{tap_xy: [$move_x, $move_y]}]
+    cooldown: 2
+
+  - name: Decline friend request
+    when: {visible: friend_request}
+    do: [{tap: cancel_button}]
+    cooldown: 3
+
+  - name: Start quest
+    when: {visible: start_button}
+    do: [{tap: start_button}]
+    cooldown: 5
+
+  - name: Pick the first support
+    when: {visible: select_support}
+    do: [{tap: select_support}]
+    cooldown: 4
+
+  # --- Finding the next NEW stage ------------------------------------------------
+  - name: Open a NEW stage
+    when: {visible: [stage_list, new_mark]}
+    do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}]
+    cooldown: 4
+
+  - name: Pick Normal
+    when: {visible: difficulty_normal}
+    do: [{tap: difficulty_normal}]
+    cooldown: 4
+
+  # The NEW label shimmers: one frame without it is no reason to scroll. Look three
+  # times first (misses), and only then swipe.
+  - name: No NEW mark on screen, look again
+    when:
+      visible: stage_list
+      not_visible: new_mark
+      counter_below: {misses: 3}
+    do: [{count: misses}]
+    cooldown: 1
+
+  # Swiping up scrolls the list down. At the end of the list a swipe changes
+  # nothing: after a few of those the engine pauses this rule, and the next one
+  # looks the other way.
+  - name: Look further down for a NEW stage
+    when:
+      visible: stage_list
+      not_visible: new_mark
+      counter_at_least: {misses: 3}
+      counter_below: {scrolls_down: $max_scrolls}
+    do:
+      - swipe: {from: [0.5, 0.75], to: [0.5, 0.4], ms: 500}
+      - count: scrolls_down
+      - reset: misses
+    cooldown: 2
+
+  - name: Look further up for a NEW stage
+    when:
+      visible: stage_list
+      not_visible: new_mark
+      counter_at_least: {misses: 3}
+      counter_below: {scrolls_up: $max_scrolls}
+    do:
+      - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
+      - wait: 1
+      - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
+      - count: scrolls_up
+      - reset: misses
+    cooldown: 2
+
+  # --- On to the next saga ---------------------------------------------------------
+  - name: Series done → stop
+    when:
+      visible: stage_list
+      not_visible: new_mark
+      counter_at_least: {misses: 3, empty_sagas: $empty_sagas}
+    do:
+      - screenshot: story_done
+      - stop: >-
+          {empty_sagas} sagas in a row had no NEW stage: this series is done
+          ({stages_cleared} stages cleared). Open the next series and start again.
+
+  - name: Saga done → back to the saga wheel
+    when:
+      visible: [stage_list, back_button]
+      not_visible: new_mark
+      counter_at_least: {misses: 3}
+    do:
+      - count: empty_sagas
+      - count: turn_wheel
+      - reset: misses
+      - reset: scrolls_down
+      - reset: scrolls_up
+      - tap: back_button
+    cooldown: 3
+
+  # A short swipe down turns the wheel by one saga, towards the later ones.
+  - name: Saga wheel → next saga
+    when: {visible: saga_wheel, counter_at_least: {turn_wheel: 1}}
+    do:
+      - swipe: {from: [0.5, 0.6], to: [0.5, 0.7], ms: 400}
+      - reset: turn_wheel
+    cooldown: 2
+
+  - name: Saga wheel → open the saga
+    when: {visible: saga_wheel}
+    do: [{tap_xy: [0.5, 0.7]}]
+    cooldown: 4
+
+  # --- Dialogs and fallbacks -------------------------------------------------------
+  - name: Close popup
+    when: {visible: close_button}
+    do: [{tap: close_button}]
+    cooldown: 2
+
+  - name: Confirm (OK)
+    when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up]}
+    do: [{tap: ok_button}]
+    cooldown: 2
+
+  - name: Tap to continue
+    when:
+      static_for: $continue_after
+      not_visible: [act_empty_dialog, defeat_give_up, stage_list, saga_wheel]
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4

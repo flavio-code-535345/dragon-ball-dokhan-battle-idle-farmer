@@ -178,6 +178,7 @@ def test_routine_endpoints(client):
         "dokkan_auto_farm",
         "dokkan_clear_new_stages",
         "dokkan_collect_rewards",
+        "dokkan_story",
     ]
     detail = client.get("/api/routines/dokkan_auto_farm").json()
     assert detail["valid"] and detail["ready"] and detail["bundled"]

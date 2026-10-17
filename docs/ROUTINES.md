@@ -157,6 +157,20 @@ To set it up:
    *Touch control* on, the Screen tab shows the coordinates of the spot you tapped.
 4. Press Start and watch the first stage.
 
+## Playing the Dragon Ball Story
+
+**Dokkan Story** plays the Dragon Ball Story (home screen → START → Dragon Ball Story) saga by saga
+for the first-clear Dragon Stones. A series (Dragon Ball, Z, GT, Movies) is a wheel of sagas; a
+saga's stage list shows its cleared stages and the next one with a NEW mark. The routine plays that
+stage on Normal the way Dokkan Clear New Stages does, and when a saga has no NEW stage left it goes
+back to the wheel, turns it one saga further (a short swipe down) and opens that saga. When several
+sagas in a row had nothing to play (option *Stop after this many sagas*), the series is done.
+
+Start it on the saga wheel turned to the saga to begin with (the first saga is at the bottom), or
+in that saga's stage list. Besides the templates of Dokkan Clear New Stages it needs `saga_wheel`
+(the "TAP" marker above the selected saga), `back_button` (the "<<<" of the stage list) and
+`stage_result` (e.g. "Obtained Item" on the results screen at the end of a stage).
+
 ## Collecting mission rewards and presents
 
 **Dokkan Collect Rewards** claims what is waiting and stops: start it on the home screen. It opens

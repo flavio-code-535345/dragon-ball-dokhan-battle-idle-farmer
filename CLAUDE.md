@@ -12,8 +12,8 @@ vanilla JS. Users deploy it with Portainer from the prebuilt image `flavio11113/
   Fresh: `python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`. The pinned deps need
   Python 3.12+ (CI and the image use 3.13); syntax stays 3.11-safe (ruff `py311`). The package is never
   installed: pytest gets `pythonpath = src` from `pyproject.toml`, the app needs `PYTHONPATH=src`.
-- Tests: `.venv/bin/python -m pytest` (226 tests, about 3 min). Fast loop without the simulator end-to-end
-  files (184 tests, about 20 s): `.venv/bin/python -m pytest --ignore=tests/test_engine.py --ignore=tests/test_clear_new_stages.py`.
+- Tests: `.venv/bin/python -m pytest` (about 3 min). Fast loop without the simulator end-to-end
+  files (about 20 s): `.venv/bin/python -m pytest --ignore=tests/test_engine.py --ignore=tests/test_clear_new_stages.py --ignore=tests/test_story.py`.
   One test: `.venv/bin/python -m pytest tests/test_engine.py::test_device_disconnect_reconnects` or
   `.venv/bin/python -m pytest tests/test_web.py -k health` (an engine test alone takes about 10 s).
 - Lint, as CI runs it: `.venv/bin/ruff check src tests && .venv/bin/ruff format --check src tests && node --check src/dokkan_farmer/web/static/app.js`
@@ -106,7 +106,8 @@ protocol or download-source regressions.
   `tests/test_docs.py` parses the YAML blocks of `docs/ROUTINES.md` that start with `name:`.
 - The simulator (`sim.py`) only plays `dokkan_auto_farm` (its templates come from `install_sim_templates`).
   `dokkan_clear_new_stages` is tested against `QuestGame` in `tests/test_clear_new_stages.py` (and
-  `dokkan_collect_rewards` against `RewardsGame` in `tests/test_collect_rewards.py`), which reuse
+  `dokkan_collect_rewards` against `RewardsGame` in `tests/test_collect_rewards.py`, `dokkan_story`
+  against its saga wheel `StoryGame` in `tests/test_story.py`), which reuse
   sim.py's private drawing helpers (`_button`, `_canvas`, `_text`, `Box`).
 - Other fakes: a generated fake `adb` script (`tests/test_adb.py`), a real-socket console and a real
   `grpc.server` emulator (`tests/test_emulator_console.py`, `tests/test_emulator_grpc.py`), an injected HTTP
