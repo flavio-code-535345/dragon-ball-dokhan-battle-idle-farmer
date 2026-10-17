@@ -197,7 +197,19 @@ templates:
     description: The title of the "send a friend request?" popup after a stage.
   path_arrow:
     level: optional
-    description: The arrow you tap where the path on the map splits.
+    description: >-
+      An arrow you tap where the path on the map splits (crop only the arrow,
+      search the whole screen). Arrows point in different directions: capture
+      the others as path_arrow_2, path_arrow_3 and path_arrow_4.
+  path_arrow_2:
+    level: optional
+    description: A path arrow pointing another way (see path_arrow).
+  path_arrow_3:
+    level: optional
+    description: A path arrow pointing a third way (see path_arrow).
+  path_arrow_4:
+    level: optional
+    description: A path arrow pointing a fourth way (see path_arrow).
   close_button:
     level: optional
     description: The "Close" / "X" of popups (rewards, news).
@@ -281,9 +293,26 @@ rules:
   # The map's bottom bar (HP, Dokkan meter, NEXT UP) is also there in battles: a
   # map_screen cropped from it matches in battle too, where the move spot would hit a
   # character. Hence not_visible: battle_screen (the battle rule waits between taps).
+  # Path arrows only appear on the map, so they need no map_screen (the arrows may cover
+  # it). One rule per direction: whichever arrow is on screen gets tapped.
   - name: Map → choose a path
-    when: {visible: [map_screen, path_arrow], not_visible: battle_screen}
+    when: {visible: path_arrow, not_visible: battle_screen}
     do: [{tap: path_arrow}]
+    cooldown: 3
+
+  - name: Map → choose a path (2)
+    when: {visible: path_arrow_2, not_visible: battle_screen}
+    do: [{tap: path_arrow_2}]
+    cooldown: 3
+
+  - name: Map → choose a path (3)
+    when: {visible: path_arrow_3, not_visible: battle_screen}
+    do: [{tap: path_arrow_3}]
+    cooldown: 3
+
+  - name: Map → choose a path (4)
+    when: {visible: path_arrow_4, not_visible: battle_screen}
+    do: [{tap: path_arrow_4}]
     cooldown: 3
 
   - name: Map → move
