@@ -59,6 +59,7 @@ class QuestGame:
         self.paid = False
         self.team_tapped = False
         self.forked = False  # the path fork of the current map was taken
+        self.difficulties = DIFFICULTIES  # Quest stages start at HARD, without NORMAL
 
     def new(self, stage: int) -> bool:
         return not self.cleared[stage]  # one cleared difficulty: CLEARED!, no NEW mark
@@ -78,7 +79,7 @@ class QuestGame:
                     _button(img, new_badge(top), "NEW", "danger")
         elif screen == "difficulty":
             _button(img, TITLE, f"STAGE {self.stage + 1}", "retry")
-            for row, name in enumerate(DIFFICULTIES):
+            for row, name in enumerate(self.difficulties):
                 _button(img, difficulty_bar(row), name, "nav" if row == 0 else "danger")
                 top = ROW_TOP + row * ROW_HEIGHT
                 _text(img, "CLEAR REWARD", (220, top + 140), 0.8)
@@ -112,8 +113,8 @@ class QuestGame:
         row = int((y - ROW_TOP) // ROW_HEIGHT) if y >= ROW_TOP else -1
         if screen == "list" and 0 <= row < ROWS:
             self.stage, self.screen = self.offset + row, "difficulty"
-        elif screen == "difficulty" and 0 <= row < len(DIFFICULTIES):
-            self.difficulty, self.screen = DIFFICULTIES[row], "support"
+        elif screen == "difficulty" and 0 <= row < len(self.difficulties):
+            self.difficulty, self.screen = self.difficulties[row], "support"
         elif screen == "support" and SUPPORT.contains(x, y):
             self.screen = "team"
         elif screen == "team" and START.contains(x, y):

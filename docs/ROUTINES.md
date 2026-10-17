@@ -190,6 +190,11 @@ Quest: Dokkan Story (START → Quest) works too: a chapter is a list of areas, a
 uncleared stages has a NEW mark. When an area has no NEW stage left, the routine goes back to the
 area list and opens the next NEW area.
 
+Quest stages have no NORMAL: their easiest difficulty is HARD, which both story routines play
+when NORMAL is not on the screen (template `difficulty_hard`). Because a Quest area's stage list
+has no MISSION button, Dokkan Story presses Back when no NEW mark is left, and stops after four
+Backs in a row without a stage, a battle or a map move in between.
+
 Start it on the saga wheel turned to the saga to begin with (the first saga is at the bottom), or
 in that saga's stage list. Besides the templates of Dokkan Clear New Stages it needs `saga_wheel`
 (the "TAP" marker above the selected saga), `back_button` (the "<<<" of the stage list) and

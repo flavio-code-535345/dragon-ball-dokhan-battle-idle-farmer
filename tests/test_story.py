@@ -100,6 +100,7 @@ class AreaGame(StoryGame):
         img = QuestGame.render(self)  # a blank canvas
         self.screen = "areas"
         _button(img, TITLE, "CHAPTER 5", "retry")
+        _button(img, BACK, "BACK", "no")  # Back on the area list leads out (not played here)
         for row, area in enumerate(self.sagas[:4]):
             top = LIST_TOP + row * 200
             _text(img, f"AREA {row + 31}", (220, top + 90), 1.2)
@@ -120,6 +121,14 @@ class AreaGame(StoryGame):
         super().tap(x, y)
 
 
+class HardAreaGame(AreaGame):
+    """Quest stages: HARD / Z-HARD / SUPER, no NORMAL."""
+
+    def __init__(self, areas: list[set[int]]) -> None:
+        super().__init__(areas)
+        self.difficulties = ("HARD", "Z-HARD")
+
+
 def capture_templates(store: TemplateStore) -> None:
     game = StoryGame([set()])
     game.cleared = game.sagas[0]
@@ -128,7 +137,7 @@ def capture_templates(store: TemplateStore) -> None:
         ("list", "stage_list", TITLE, False),
         ("list", "new_mark", new_badge(LIST_TOP), True),
         ("list", "back_button", BACK, False),
-        ("difficulty", "difficulty_normal", difficulty_bar(0), False),
+        ("difficulty", "difficulty_normal", difficulty_bar(0), True),
         ("team", "start_button", START, False),
         ("map", "map_screen", HUD, False),  # also in battles, as in the game
         ("battle", "battle_screen", PAUSE, False),
@@ -140,6 +149,15 @@ def capture_templates(store: TemplateStore) -> None:
         store.create_from_frame(
             name, game.render(), box.as_tuple(), threshold=0.9, search_full=search_full
         )
+    hard = HardAreaGame([set()])  # HARD is where NORMAL was
+    hard.screen, hard.stage = "difficulty", 0
+    store.create_from_frame(
+        "difficulty_hard",
+        hard.render(),
+        difficulty_bar(0).as_tuple(),
+        threshold=0.9,
+        search_full=True,
+    )
 
 
 @pytest.fixture
@@ -193,3 +211,12 @@ def test_quest_areas_are_opened_by_their_new_mark(play):
     play(game)
     assert sorted(game.story) == [(1, 3), (2, 2), (2, 3)]
     assert all(all(done for done in area.values()) for area in game.sagas)
+
+
+def test_quest_stages_without_normal_are_played_on_hard(play):
+    game = HardAreaGame([{0, 1}, {0, 1, 2, 3}])
+    summary = play(game)
+    assert sorted(game.story) == [(0, 2), (0, 3)]
+    assert {d for _, d in game.played} == {"HARD"}
+    # Nothing left: the routine goes back out of the lists and says so.
+    assert "No NEW stage or area left" in summary["reason"] and not summary["error"]
