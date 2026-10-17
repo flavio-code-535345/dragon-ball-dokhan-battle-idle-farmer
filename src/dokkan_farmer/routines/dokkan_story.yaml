@@ -627,3 +627,14 @@ rules:
       not_visible: [act_empty_dialog, defeat_give_up, stage_list, saga_wheel, chapter_wheel]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
+
+  # The results screen of a stage has a popup ("... were cleared at the same time") that
+  # hides its label, and the light behind it never stops moving, so the still-screen rule
+  # above never fires. After 10 quiet seconds on a screen none of the rules knows, a tap
+  # near the top (away from the buttons of dialogs) dismisses it.
+  - name: Nothing recognised → tap the top
+    when:
+      idle_for: 10
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, start_button, error_retry, saga_wheel, chapter_wheel, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4

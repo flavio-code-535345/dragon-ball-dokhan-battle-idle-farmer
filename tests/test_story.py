@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cv2
 import pytest
 
 from dokkan_farmer.device.sim import Box, _button, _text
@@ -225,6 +226,24 @@ def capture_navigation(store: TemplateStore) -> None:
         store.create_from_frame(name, game.render(), box.as_tuple(), threshold=0.9)
 
 
+class PopupAreaGame(AreaGame):
+    """After a stage a popup ("cleared at the same time") covers the results label and
+    the light behind it never stops moving; a tap anywhere dismisses it."""
+
+    def __init__(self, areas: list[set[int]]) -> None:
+        super().__init__(areas)
+        self.frames = 0
+
+    def render(self):
+        img = super().render()
+        if self.screen == "clear":
+            self.frames += 1
+            cv2.rectangle(img, (0, 300), (720, 900), (12, 12, 12), -1)
+            shade = 200 if self.frames % 2 else 40  # big moving light: the screen is never still
+            cv2.rectangle(img, (0, 900), (720, 1280), (shade, shade, 60), -1)
+        return img
+
+
 def capture_difficulties(store: TemplateStore) -> None:
     """The HARD / Z-HARD / SUPER labels of a Quest stage's difficulty list."""
     game = SuperAreaGame([set()])
@@ -371,3 +390,10 @@ def test_the_home_screen_is_left_alone_when_starting_here(play):
     game = ChapterGame([[{0, 1, 2}]])
     play(game, navigation=True)  # start_in = here (the default): nothing taps START
     assert game.screen == "home" and game.opened == []
+
+
+def test_an_unknown_popup_with_moving_light_is_tapped_away(play):
+    game = PopupAreaGame([{0, 1}, set(range(STAGES))])  # two NEW stages in area 0
+    summary = play(game)
+    assert sorted(game.story) == [(0, 2), (0, 3)]
+    assert "No NEW stage or area left" in summary["reason"] and not summary["error"]
