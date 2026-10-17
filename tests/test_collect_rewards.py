@@ -157,6 +157,13 @@ def test_claims_every_tab_then_the_present_box_and_stops(play, back_button):
     assert "Rewards collected (3 claims)" in summary["reason"] and not summary["error"]
 
 
+def test_started_in_the_present_box_still_does_the_missions_first(play):
+    game = RewardsGame({1}, presents=1)
+    game.screen = "presents"
+    summary = play(game)
+    assert game.claimed == ["PRESENTS", "MAIN", "PRESENTS"] and "(3 claims)" in summary["reason"]
+
+
 def test_nothing_to_collect_stops_quickly(play):
     game = RewardsGame(set())
     summary = play(game)

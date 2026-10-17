@@ -212,6 +212,17 @@ rules:
     do: [{count: misses}]
     cooldown: 1
 
+  # Started here? Missions first: their rewards may land here (when the box is full).
+  - name: Present Box before the missions → back
+    when: {visible: [present_screen, back_button], counter_below: {missions_done: 1}}
+    do: [{reset: misses}, {tap: back_button}]
+    cooldown: 3
+
+  - name: Present Box before the missions → Back key
+    when: {visible: present_screen, counter_below: {missions_done: 1}}
+    do: [{reset: misses}, {key: BACK}]
+    cooldown: 3
+
   - name: Present Box done → back
     when: {visible: [present_screen, back_button]}
     do: [{count: presents_done}, {reset: misses}, {tap: back_button}]
@@ -229,11 +240,14 @@ rules:
     cooldown: 4
 
   - name: Home → Present Box
-    when: {visible: [home_screen, home_presents], counter_below: {presents_done: 1}}
+    when:
+      visible: [home_screen, home_presents]
+      counter_at_least: {missions_done: 1}
+      counter_below: {presents_done: 1}
     do: [{tap: home_presents}]
     cooldown: 4
 
   - name: All collected → stop
-    when: {visible: home_screen, counter_at_least: {presents_done: 1}}
+    when: {visible: home_screen, counter_at_least: {missions_done: 1, presents_done: 1}}
     do:
       - stop: "Rewards collected ({runs} claims)"
