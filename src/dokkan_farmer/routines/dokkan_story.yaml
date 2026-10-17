@@ -180,8 +180,11 @@ templates:
   map_screen:
     level: recommended
     description: >-
-      Something that is always on the map (the board you move on) and not in
-      battles, e.g. the small difficulty label (NORMAL) next to MENU at the top.
+      Something only the map (the board you move on) shows while it waits for
+      your move: the top edge of the middle orange move card, without its
+      number and without the map behind it (colour mode). Not the MENU button
+      (battles have it too: the move tap would open a character's details) and
+      not the NORMAL label (it is see-through, so every map looks different).
       While it is visible the routine taps "Map: where to tap to move".
   ok_button:
     level: recommended

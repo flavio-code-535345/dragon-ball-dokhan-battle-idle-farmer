@@ -149,7 +149,8 @@ To set it up:
    `difficulty_normal` (the NORMAL bar of a stage's difficulty screen), `start_button`,
    `battle_screen` (e.g. the BATTLE DETAILS button of a battle) and `stage_result` (e.g. "Obtained
    Item" on the results screen at the end of a stage). Capture the others when you meet those
-   screens: `stage_clear` (the "Battle Results" title after each battle), `map_screen`,
+   screens: `stage_clear` (the "Battle Results" title after each battle), `map_screen` (the top
+   edge of the middle orange move card, in colour mode; not the MENU button, which battles have too),
    `ok_button`, `close_button` (e.g. the "Dragon Stone(s) acquired" popup), `cancel_button`,
    `act_empty_dialog`, `defeat_give_up`, ... The checklist on the Templates tab lists them all.
    With the game's *Scenario OFF* there are no story scenes to skip.
