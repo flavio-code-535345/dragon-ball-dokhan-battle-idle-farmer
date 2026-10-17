@@ -129,9 +129,11 @@ can use `{placeholders}`: option names, counter names, `{runs}`, `{elapsed}` and
 ## Clearing new stages for Dragon Stones
 
 Each stage gives Dragon Stones the first time you clear a difficulty. **Dokkan Clear New Stages**
-collects them: it opens the first stage with a "NEW" mark in the stage list, picks a NEW difficulty,
-plays it, and continues with the next one. When the list has no NEW mark left (it swipes down and
-up to look), it stops and tells you to open the next area.
+collects them: it opens the first stage with a "NEW" mark in the stage list, picks **Normal**, plays
+it, and continues with the next one. When the list has no NEW mark left (it swipes down and up to
+look), it stops and tells you to open the next area. A NEW stage was never cleared, so its Normal
+always has a Dragon Stone. The harder difficulties' stones stay for you: such a stage shows
+*CLEARED!* with a clear reward of e.g. *1/2*.
 
 Dokkan's Auto Mode only works on stages you already cleared, so this routine plays them itself, the
 simple way: on the map it taps where you move, in battle it keeps tapping one spot of the ki sphere
@@ -142,17 +144,18 @@ and then stops (option *Tries again after a defeat*).
 To set it up:
 
 1. In Dokkan, open the stage list of one Quest area.
-2. In the **Templates** tab capture the five required templates: `new_mark` (the "NEW" mark of a
-   stage, tick *search the whole screen*), `stage_list` (e.g. the title bar of the stage list),
-   `start_button`, `battle_screen` (e.g. the pause button of a battle) and `stage_clear` (the
-   "Stage Clear" banner). Capture the others when you meet those screens: `map_screen`,
-   `ok_button`, `select_support`, `skip_button` (story scenes), `cancel_button`,
+2. In the **Templates** tab capture the six required templates: `new_mark` (the "NEW" mark of a
+   stage, tick *search the whole screen*), `stage_list` (something only on stage lists),
+   `difficulty_normal` (the NORMAL bar of a stage's difficulty screen), `start_button`,
+   `battle_screen` (e.g. the pause button of a battle) and `stage_clear` (e.g. the "Battle Results"
+   title after a won stage). Capture the others when you meet those screens: `map_screen`,
+   `ok_button`, `close_button` (e.g. the "Dragon Stone(s) acquired" popup), `cancel_button`,
    `act_empty_dialog`, `defeat_give_up`, ... The checklist on the Templates tab lists them all.
+   With the game's *Scenario OFF* there are no story scenes to skip.
 3. On the **Farm** tab pick *Dokkan Clear New Stages*. Check the tap points: *Battle: where to tap a
    ki sphere* (a spot in the middle of the sphere board) and *Map: where to tap to move*. With
    *Touch control* on, the Screen tab shows the coordinates of the spot you tapped.
-4. Press Start and watch the first stage. If a difficulty opens on a screen of its own, capture
-   `difficulty_screen` too.
+4. Press Start and watch the first stage.
 
 ## The safety net
 

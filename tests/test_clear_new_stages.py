@@ -22,7 +22,7 @@ PACKAGE = "com.bandainamcogames.dbzdokkanww"
 TITLE = Box(0, 0, WIDTH, 120)
 ROWS = 4  # stage rows on screen at once
 ROW_TOP, ROW_HEIGHT = 200, 200
-DIFFICULTIES = ("NORMAL", "HARD")
+DIFFICULTIES = ("NORMAL", "Z-HARD")
 SUPPORT = Box(40, 300, 640, 140)
 START = Box(420, 1120, 260, 100)
 PAUSE = Box(560, 30, 140, 70)
@@ -35,8 +35,13 @@ def new_badge(row_top: int) -> Box:
     return Box(520, row_top + 50, 140, 80)
 
 
+def difficulty_bar(row: int) -> Box:
+    return Box(20, ROW_TOP + row * ROW_HEIGHT, 680, 90)
+
+
 class QuestGame:
-    """A stage list with NEW marks, difficulties, support, team, map, battle and results."""
+    """Like Dokkan: a stage list where only never-cleared stages are NEW, a difficulty screen
+    without NEW marks, then support, team, map, battle and results."""
 
     def __init__(self, cleared: dict[int, set[str]], stages: int = 8, losing: set = ()) -> None:
         self.stages = stages
@@ -50,7 +55,7 @@ class QuestGame:
         self.paid = False
 
     def new(self, stage: int) -> bool:
-        return set(DIFFICULTIES) - self.cleared[stage] != set()
+        return not self.cleared[stage]  # one cleared difficulty: CLEARED!, no NEW mark
 
     # ------------------------------------------------------------------ drawing
     def render(self) -> np.ndarray:
@@ -66,13 +71,11 @@ class QuestGame:
                 if self.new(stage):
                     _button(img, new_badge(top), "NEW", "danger")
         elif screen == "difficulty":
-            _button(img, TITLE, f"STAGE {self.stage + 1} DIFFICULTY", "retry")
+            _button(img, TITLE, f"STAGE {self.stage + 1}", "retry")
             for row, name in enumerate(DIFFICULTIES):
+                _button(img, difficulty_bar(row), name, "nav" if row == 0 else "danger")
                 top = ROW_TOP + row * ROW_HEIGHT
-                cv2.rectangle(img, (20, top), (700, top + 180), (60, 90, 60), -1)
-                _text(img, name, (220, top + 90), 1.2)
-                if name not in self.cleared[self.stage]:
-                    _button(img, new_badge(top), "NEW", "danger")
+                _text(img, "CLEAR REWARD", (220, top + 140), 0.8)
         elif screen == "support":
             _button(img, SUPPORT, "SUPPORT GOKU", "nav")
         elif screen == "team":
@@ -175,11 +178,11 @@ class QuestDevice(Device):
 
 def capture_templates(store: TemplateStore) -> None:
     """The templates a user would capture, cropped from the fake game's screens."""
-    game = QuestGame({0: {"NORMAL"}})
+    game = QuestGame({})  # every stage NEW
     shots = [
         ("list", "stage_list", TITLE, False),
         ("list", "new_mark", new_badge(ROW_TOP), True),
-        ("difficulty", "difficulty_screen", Box(0, 0, 720, 120), False),
+        ("difficulty", "difficulty_normal", difficulty_bar(0), False),
         ("support", "select_support", SUPPORT, False),
         ("team", "start_button", START, False),
         ("map", "map_screen", TITLE, False),
@@ -236,42 +239,53 @@ def test_the_routine_documents_its_templates():
     routine = parse_routine((BUNDLED_DIR / f"{ROUTINE}.yaml").read_text(encoding="utf-8"))
     assert routine.referenced_templates() <= set(routine.templates)
     required = {name for name, doc in routine.templates.items() if doc.level == "required"}
-    assert required == {"new_mark", "stage_list", "start_button", "battle_screen", "stage_clear"}
+    assert required == {
+        "new_mark",
+        "stage_list",
+        "difficulty_normal",
+        "start_button",
+        "battle_screen",
+        "stage_clear",
+    }
     assert routine.settings.run_counter == "stages_cleared"
 
 
-def test_clears_every_new_stage_and_stops(play):
-    # Stages 5 (Hard left) and 6 (nothing cleared) are below the first screen.
+def test_clears_every_new_stage_on_normal_and_stops(play):
+    # Stages 6 and 7 are NEW, below the first screen. Stage 5 is CLEARED! on Normal: its
+    # Z-Hard stays for the player.
     cleared = {s: set(DIFFICULTIES) for s in range(8)}
-    cleared[5], cleared[6] = {"NORMAL"}, set()
+    cleared[5], cleared[6], cleared[7] = {"NORMAL"}, set(), set()
     game = QuestGame(cleared)
     summary = play(game)
-    assert sorted(game.played) == [(5, "HARD"), (6, "HARD"), (6, "NORMAL")]
+    assert sorted(game.played) == [(6, "NORMAL"), (7, "NORMAL")]
     assert all(not game.new(s) for s in range(game.stages))
-    assert summary["counters"]["stages_cleared"] == 3 and summary["runs"] == 3
+    assert game.cleared[5] == {"NORMAL"}
+    assert summary["counters"]["stages_cleared"] == 2 and summary["runs"] == 2
     assert "No uncleared stage left" in summary["reason"] and not summary["error"]
 
 
 def test_a_new_stage_above_the_screen_is_found(play):
     cleared = {s: set(DIFFICULTIES) for s in range(8)}
-    cleared[0] = {"NORMAL"}
+    cleared[0] = set()
     game = QuestGame(cleared)
     game.offset = 4  # the list shows its end; the NEW stage is at the top
     summary = play(game)
-    assert game.played == [(0, "HARD")] and summary["runs"] == 1
+    assert game.played == [(0, "NORMAL")] and summary["runs"] == 1
 
 
 def test_stops_after_max_stages(play):
     game = QuestGame({})
     summary = play(game, {"max_stages": 2})
-    assert len(game.played) == 2 and summary["runs"] == 2
+    # (Several NEW marks on screen: it opens whichever matches best, not the topmost.)
+    assert len(game.played) == 2 and {d for _, d in game.played} == {"NORMAL"}
+    assert summary["runs"] == 2
 
 
 def test_a_defeat_gives_up_without_paying(play):
     cleared = {s: set(DIFFICULTIES) for s in range(8)}
-    cleared[1] = {"NORMAL"}
-    game = QuestGame(cleared, losing={(1, "HARD")})
+    cleared[1] = set()
+    game = QuestGame(cleared, losing={(1, "NORMAL")})
     summary = play(game, {"retries": 1})
-    assert game.played == [(1, "HARD"), (1, "HARD")]  # one more try, then stop
+    assert game.played == [(1, "NORMAL"), (1, "NORMAL")]  # one more try, then stop
     assert "defeated" in summary["reason"] and summary["runs"] == 0
     assert not game.paid

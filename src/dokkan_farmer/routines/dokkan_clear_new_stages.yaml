@@ -10,9 +10,11 @@
 # How to use it: open the stage list of one Quest area in Dokkan (the list
 # where uncleared stages carry a "NEW" mark), capture the templates below,
 # then select this routine on the Farm tab and press Start. The routine opens
-# the first NEW stage it sees, picks the NEW difficulty, plays it, and
-# continues with the next one. When the list has no NEW mark left (it scrolls
-# down and up to look), it stops.
+# the first NEW stage it sees, picks NORMAL, plays it, and continues with the
+# next one. When the list has no NEW mark left (it scrolls down and up to
+# look), it stops. A NEW stage was never cleared, so its Normal always has a
+# Dragon Stone; the harder difficulties (the "1/2" on a CLEARED! stage) stay
+# for you.
 #
 # Templates are shared with the other routines: buttons you captured for Dokkan
 # Auto Farm (OK, Start!, Cancel, ...) work here too.
@@ -21,7 +23,7 @@
 name: Dokkan Clear New Stages
 description: >-
   Plays the stages of one Quest area you have not cleared yet (the "NEW" ones)
-  for their first-clear Dragon Stones: opens each NEW stage and difficulty, taps
+  for their first-clear Dragon Stones: opens each NEW stage on Normal, taps
   through the map and the battles, and stops when none is left.
 version: 1
 
@@ -133,19 +135,18 @@ templates:
     level: required
     description: >-
       The "NEW" mark of an uncleared stage in the stage list. Tick "search the
-      whole screen" so it is found on any row (and on a NEW difficulty). Crop
-      only the letters. If the stage does not open when the mark is tapped,
+      whole screen" so it is found on any row. Crop only the letters. If the stage does not open when the mark is tapped,
       set a tap point on the stage's row.
   stage_list:
     level: required
     description: >-
       Something that is only on the stage list of an area, e.g. its title bar.
       The routine only looks for NEW marks while this is on screen.
-  difficulty_screen:
-    level: optional
+  difficulty_normal:
+    level: required
     description: >-
-      Only if a stage's difficulties open on a screen of their own (without the
-      stage list's title): something that is only on that screen.
+      The NORMAL bar on a stage's difficulty screen (the first row, with the
+      word NORMAL). The routine plays NEW stages on Normal.
   start_button:
     level: required
     description: The "Start!" button on the team screen before a quest.
@@ -306,9 +307,9 @@ rules:
     do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}]
     cooldown: 4
 
-  - name: Pick a NEW difficulty
-    when: {visible: [difficulty_screen, new_mark]}
-    do: [{tap: new_mark}]
+  - name: Pick Normal
+    when: {visible: difficulty_normal}
+    do: [{tap: difficulty_normal}]
     cooldown: 4
 
   # Swiping up scrolls the list down. At the end of the list a swipe changes
