@@ -12,8 +12,8 @@ vanilla JS. Users deploy it with Portainer from the prebuilt image `flavio11113/
   Fresh: `python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`. The pinned deps need
   Python 3.12+ (CI and the image use 3.13); syntax stays 3.11-safe (ruff `py311`). The package is never
   installed: pytest gets `pythonpath = src` from `pyproject.toml`, the app needs `PYTHONPATH=src`.
-- Tests: `.venv/bin/python -m pytest` (222 tests, about 3 min). Fast loop without the simulator end-to-end
-  files (180 tests, about 20 s): `.venv/bin/python -m pytest --ignore=tests/test_engine.py --ignore=tests/test_clear_new_stages.py`.
+- Tests: `.venv/bin/python -m pytest` (226 tests, about 3 min). Fast loop without the simulator end-to-end
+  files (184 tests, about 20 s): `.venv/bin/python -m pytest --ignore=tests/test_engine.py --ignore=tests/test_clear_new_stages.py`.
   One test: `.venv/bin/python -m pytest tests/test_engine.py::test_device_disconnect_reconnects` or
   `.venv/bin/python -m pytest tests/test_web.py -k health` (an engine test alone takes about 10 s).
 - Lint, as CI runs it: `.venv/bin/ruff check src tests && .venv/bin/ruff format --check src tests && node --check src/dokkan_farmer/web/static/app.js`
@@ -80,7 +80,9 @@ one MJPEG stream (`live.py`: the emulator's gRPC frame stream, else screenshots)
 polling `/api/screen/live.jpg` after 8 s. API coordinates are 0..1 fractions; in routines a point is
 fractional only if both values are ≤ 1. `static/app.js` is one IIFE bound to `index.html` ids (renaming an
 id breaks it silently; `node --check` only checks syntax); all device input goes through one FIFO queue
-(taps wait 250 ms to detect a double tap).
+(taps wait 250 ms to detect a double tap). With `MCP_TOKEN`, `web/mcp.py` serves MCP (JSON-RPC over POST, no SSE) at
+`/mcp/<token>`; its tools in `create_app` call the route functions (named `mcp_*` so they don't shadow
+them) and it skips Basic auth.
 
 **Deployment and CI.** The image (`Dockerfile`) holds only `requirements.txt`, `src/` and `docker/*.sh`;
 runtime files must live under `src/dokkan_farmer/`. Stacks: `docker-compose.yml` (phone over adb),

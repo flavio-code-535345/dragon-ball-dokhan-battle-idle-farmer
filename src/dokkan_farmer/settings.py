@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -76,6 +77,8 @@ class Settings:
     web_port: int = 8080
     web_username: str = "admin"
     web_password: str = ""
+    #: secret of the MCP endpoint /mcp/<token> for AI assistants; empty = no MCP endpoint
+    mcp_token: str = ""
     notify_urls: str = ""
     notify_every_runs: int = 0
     match_scale: float = 0.5
@@ -105,6 +108,9 @@ class Settings:
         if autostart not in AUTOSTART_MODES:
             raise ValueError(f"AUTOSTART must be one of {', '.join(AUTOSTART_MODES)}")
         power_save = _text(env, "POWER_SAVE", "auto").lower()
+        mcp_token = (env.get("MCP_TOKEN", "") or "").strip()
+        if mcp_token and not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", mcp_token):
+            raise ValueError("MCP_TOKEN must be 16-128 letters, digits, '-' or '_'")
         return cls(
             data_dir=Path(_text(env, "DATA_DIR", "/data")),
             device_backend=backend,
@@ -121,6 +127,7 @@ class Settings:
             web_port=_int(env, "WEB_PORT", 8080),
             web_username=_text(env, "WEB_USERNAME", "admin"),
             web_password=env.get("WEB_PASSWORD", "") or "",
+            mcp_token=mcp_token,
             notify_urls=_text(env, "NOTIFY_URLS", ""),
             notify_every_runs=max(0, _int(env, "NOTIFY_EVERY_RUNS", 0)),
             match_scale=min(1.0, max(0.2, _float(env, "MATCH_SCALE", 0.5))),
@@ -172,5 +179,6 @@ class Settings:
             "power_save": "auto" if self.power_save is None else self.power_save,
             "screen_off_minutes": self.screen_off_minutes,
             "auth_enabled": bool(self.web_password),
+            "mcp_enabled": bool(self.mcp_token),
             "data_dir": str(self.data_dir),
         }

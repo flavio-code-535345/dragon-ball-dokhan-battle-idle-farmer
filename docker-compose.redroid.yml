@@ -69,6 +69,7 @@ services:
       TZ: ${TZ:-UTC}
       WEB_USERNAME: ${WEB_USERNAME:-admin}
       WEB_PASSWORD: ${WEB_PASSWORD:-}
+      MCP_TOKEN: ${MCP_TOKEN:-}
       NOTIFY_URLS: ${NOTIFY_URLS:-}
       NOTIFY_EVERY_RUNS: ${NOTIFY_EVERY_RUNS:-0}
       # redroid's screen never sleeps; no need to touch its power settings.

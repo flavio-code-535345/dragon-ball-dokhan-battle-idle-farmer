@@ -37,11 +37,15 @@ from ..live import BOUNDARY, mjpeg_part, open_feed
 from ..logging_setup import LOG_BUFFER, ensure_log_buffer
 from ..routine import Routine, RoutineError, parse_routine
 from ..vision import encode_png
+from .mcp import McpServer
+from .mcp import image as mcp_image
+from .mcp import text as mcp_text
 
 log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
-PUBLIC_PATHS = ("/api/health", "/manifest.webmanifest", "/static/icon")
+#: /mcp/<token> checks its own secret: MCP clients cannot do Basic auth.
+PUBLIC_PATHS = ("/api/health", "/manifest.webmanifest", "/static/icon", "/mcp/")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -879,6 +883,220 @@ def create_app(ctx: AppContext) -> FastAPI:
             },
             media_type="application/manifest+json",
         )
+
+    # -------------------------------------------------------------------- MCP
+    if ctx.settings.mcp_token:
+        server = McpServer()
+
+        def shot(args: dict[str, Any]) -> list[dict[str, Any]]:
+            if ctx.farmer.note_use(touch=False):
+                time.sleep(WAKE_SETTLE_UI)
+            frame_id = ctx.farmer.capture()
+            ctx.farmer.frames.pin(frame_id)  # kept for create_template
+            width = int(min(1080, max(240, args.get("width") or 540)))
+            _, frame = _frame_or_404(ctx, frame_id)
+            _, data = ctx.farmer.frames.jpeg(frame_id, max_width=width)
+            height, full_width = frame.shape[:2]
+            info = f"frame_id {frame_id}, device screen {full_width}x{height} px"
+            return [mcp_text(info), mcp_image(base64.b64encode(data).decode())]
+
+        def then_shot(args: dict[str, Any], done: str) -> list[dict[str, Any]]:
+            if not args.get("screenshot", True):
+                return [mcp_text(done)]
+            time.sleep(min(10.0, max(0.0, float(args.get("wait", 1.5)))))
+            return [mcp_text(done), *shot(args)]
+
+        after = {
+            "screenshot": {"type": "boolean", "description": "Return the screen afterwards"},
+            "wait": {"type": "number", "description": "Seconds before that screenshot (1.5)"},
+            "width": {"type": "integer", "description": "Screenshot width in px (540)"},
+        }
+        frac = {"type": "number", "minimum": 0, "maximum": 1}
+
+        @server.tool(
+            "Take a fresh screenshot of the device. Returns its frame_id (for create_template).",
+            {"width": after["width"]},
+        )
+        def mcp_screenshot(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return shot(args)
+
+        @server.tool(
+            "Tap the screen at x, y (0..1 fractions of width and height).",
+            {"x": frac, "y": frac, "double": {"type": "boolean"}, **after},
+            ("x", "y"),
+        )
+        def mcp_tap(args: dict[str, Any]) -> list[dict[str, Any]]:
+            body = TapRequest(x=args["x"], y=args["y"], count=2 if args.get("double") else 1)
+            point = device_tap(body)
+            done = f"Tapped {body.x:.3f}, {body.y:.3f} = pixel {point['x']}, {point['y']}"
+            return then_shot(args, done)
+
+        @server.tool(
+            "Swipe from x1, y1 to x2, y2 (fractions). Swiping up (y1 > y2) scrolls down a list.",
+            {"x1": frac, "y1": frac, "x2": frac, "y2": frac, "ms": {"type": "integer"}, **after},
+            ("x1", "y1", "x2", "y2"),
+        )
+        def mcp_swipe(args: dict[str, Any]) -> list[dict[str, Any]]:
+            fields = ("x1", "y1", "x2", "y2", "ms")
+            device_swipe(SwipeRequest(**{k: args[k] for k in fields if k in args}))
+            return then_shot(args, "Swiped")
+
+        @server.tool(
+            "Press an Android key: BACK, HOME, ENTER, APP_SWITCH, ...",
+            {"key": {"type": "string"}, **after},
+            ("key",),
+        )
+        def mcp_key(args: dict[str, Any]) -> list[dict[str, Any]]:
+            device_key(KeyRequest(key=args["key"]))
+            return then_shot(args, f"Pressed {args['key']}")
+
+        @server.tool(
+            "Launch, stop or restart the game app.",
+            {"action": {"type": "string", "enum": ["launch", "stop", "restart"]}, **after},
+            ("action",),
+        )
+        def mcp_game(args: dict[str, Any]) -> list[dict[str, Any]]:
+            device_app(AppRequest(action=args["action"]))
+            return then_shot({"wait": 5, **args}, f"Game: {args['action']}")
+
+        @server.tool(
+            "Which templates the current screen shows: name, found, score, box [x, y, w, h].",
+        )
+        def mcp_find_templates(args: dict[str, Any]) -> list[dict[str, Any]]:
+            frame_id = ctx.farmer.capture()
+            results = screen_analyze(frame_id)["results"]
+            results.sort(key=lambda r: -r["score"])
+            rows = [
+                {k: r[k] for k in ("name", "found", "score")}
+                | {"box": [round(v, 3) for v in r["box"]]}
+                for r in results
+            ]
+            return [mcp_text({"frame_id": frame_id, "templates": rows})]
+
+        @server.tool("All templates with their settings.")
+        def mcp_list_templates(args: dict[str, Any]) -> list[dict[str, Any]]:
+            keep = ("name", "threshold", "mode", "region", "tap", "description")
+            return [mcp_text([{k: t[k] for k in keep} for t in list_templates()])]
+
+        @server.tool("Look at one template's image.", {"name": {"type": "string"}}, ("name",))
+        def mcp_template_image(args: dict[str, Any]) -> list[dict[str, Any]]:
+            data = template_png(args["name"]).body
+            return [mcp_image(base64.b64encode(data).decode(), "image/png")]
+
+        @server.tool(
+            "Crop a template from a screenshot (frame_id from `screenshot`). x, y, w, h: the box "
+            "as fractions; crop something only that screen or button shows (its text). "
+            "search_full: look for it anywhere (else only near where it was cropped). "
+            "tap_x/tap_y: where `tap: name` taps (default: the box centre).",
+            {
+                "name": {"type": "string", "description": "a-z, 0-9, _ and -"},
+                "frame_id": {"type": "integer"},
+                "x": frac,
+                "y": frac,
+                "w": frac,
+                "h": frac,
+                "threshold": {"type": "number", "description": "0.5-0.99 (0.85)"},
+                "search_full": {"type": "boolean"},
+                "tap_x": frac,
+                "tap_y": frac,
+                "description": {"type": "string"},
+                "overwrite": {"type": "boolean"},
+            },
+            ("name", "frame_id", "x", "y", "w", "h"),
+        )
+        def mcp_create_template(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return [mcp_text(create_template(TemplateCreate(**args)))]
+
+        @server.tool(
+            "Change a template's threshold, search area, description, or forget its tap point.",
+            {
+                "name": {"type": "string"},
+                "threshold": {"type": "number"},
+                "search_full": {"type": "boolean"},
+                "description": {"type": "string"},
+                "reset_tap": {"type": "boolean"},
+            },
+            ("name",),
+        )
+        def mcp_update_template(args: dict[str, Any]) -> list[dict[str, Any]]:
+            name = args.pop("name")
+            return [mcp_text(update_template(name, TemplateUpdate(**args)))]
+
+        @server.tool("Delete a template.", {"name": {"type": "string"}}, ("name",))
+        def mcp_delete_template(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return [mcp_text(delete_template(args["name"]))]
+
+        @server.tool("The farm's state, the device and the settings.")
+        def mcp_farm_status(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return [mcp_text(status())]
+
+        @server.tool("The routines: id, name, bundled, valid.")
+        def mcp_list_routines(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return [mcp_text(list_routines())]
+
+        @server.tool(
+            "A routine's YAML and which of its templates are captured.",
+            {"id": {"type": "string"}},
+            ("id",),
+        )
+        def mcp_get_routine(args: dict[str, Any]) -> list[dict[str, Any]]:
+            detail = get_routine(args["id"])
+            yaml = detail.pop("yaml", "")
+            return [mcp_text(yaml), mcp_text(detail)]
+
+        @server.tool(
+            "Save a routine's YAML (validated; a bundled one can be restored later).",
+            {"id": {"type": "string"}, "yaml": {"type": "string"}},
+            ("id", "yaml"),
+        )
+        def mcp_save_routine(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return [mcp_text(save_routine(args["id"], RoutineText(yaml=args["yaml"])))]
+
+        @server.tool(
+            "Start farming with a routine and options (see get_routine for them).",
+            {"routine": {"type": "string"}, "options": {"type": "object"}},
+            ("routine",),
+        )
+        def mcp_start_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
+            body = StartRequest(routine=args["routine"], options=args.get("options") or {})
+            return [mcp_text(farm_start(body))]
+
+        @server.tool("Stop farming.")
+        def mcp_stop_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
+            return [mcp_text(farm_stop())]
+
+        @server.tool(
+            "The newest log lines (what the farm did and why).",
+            {"lines": {"type": "integer", "description": "How many (60)"}},
+        )
+        def mcp_logs(args: dict[str, Any]) -> list[dict[str, Any]]:
+            limit = int(min(500, max(1, args.get("lines") or 60)))
+            lines = LOG_BUFFER.since(0, limit)
+            out = [
+                f"{time.strftime('%H:%M:%S', time.localtime(r['ts']))} {r['level']} {r['msg']}"
+                for r in lines
+            ]
+            return [mcp_text("\n".join(out) or "(empty)")]
+
+        @app.post("/mcp/{token}", include_in_schema=False)
+        async def mcp_endpoint(token: str, request: Request) -> Response:
+            if not hmac.compare_digest(token.encode(), ctx.settings.mcp_token.encode()):
+                raise HTTPException(404, "Not Found")
+            try:
+                message = await request.json()
+            except ValueError:
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": "Parse error"},
+                    },
+                    status_code=400,
+                )
+            answer = await anyio.to_thread.run_sync(server.handle, message)
+            if answer is None:
+                return Response(status_code=202)
+            return JSONResponse(answer)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

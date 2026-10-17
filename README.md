@@ -147,6 +147,7 @@ All settings are environment variables:
 | `ACTIVE_HOURS` | *(always)* | Daily windows, e.g. `23:00-07:00, 13:00-14:00` (uses `TZ`). |
 | `TZ` | `UTC` | Time zone, e.g. `Europe/Berlin`. |
 | `WEB_USERNAME` / `WEB_PASSWORD` | `admin` / *(empty)* | HTTP basic auth for the web UI. **Set a password.** |
+| `MCP_TOKEN` | *(empty = off)* | Turns on the MCP endpoint `/mcp/<MCP_TOKEN>` for AI assistants such as Claude (screenshots, taps, templates, routines, the farm). 16+ random characters, e.g. `openssl rand -hex 24`. See [docs/MCP.md](docs/MCP.md). |
 | `HOST_PORT` | `8080` | Port on your server (compose files only). |
 | `IMAGE` / `IMAGE_TAG` | `flavio11113/dokkan-idle-farmer` / `latest` | Image to run (compose files only): a version like `0.1.0` or a commit SHA pins it. |
 | `NOTIFY_URLS` | *(empty)* | [Apprise URLs](https://github.com/caronc/apprise/wiki), space or comma separated. |
