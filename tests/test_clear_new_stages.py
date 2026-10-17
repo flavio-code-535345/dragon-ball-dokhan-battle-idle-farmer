@@ -194,7 +194,7 @@ def capture_templates(store: TemplateStore) -> None:
         ("team", "start_button", START, False),
         ("map", "map_screen", HUD, False),  # also in battles, as in the game
         ("battle", "battle_screen", PAUSE, False),
-        ("clear", "stage_clear", CLEAR, False),
+        ("clear", "stage_result", CLEAR, False),
         ("results", "ok_button", OK, True),
         ("defeat", "defeat_give_up", GIVE_UP, False),
     ]
@@ -252,7 +252,7 @@ def test_the_routine_documents_its_templates():
         "difficulty_normal",
         "start_button",
         "battle_screen",
-        "stage_clear",
+        "stage_result",
     }
     assert routine.settings.run_counter == "stages_cleared"
 

@@ -147,8 +147,9 @@ To set it up:
 2. In the **Templates** tab capture the six required templates: `new_mark` (the "NEW" mark of a
    stage, tick *search the whole screen*), `stage_list` (something only on stage lists),
    `difficulty_normal` (the NORMAL bar of a stage's difficulty screen), `start_button`,
-   `battle_screen` (e.g. the pause button of a battle) and `stage_clear` (e.g. the "Battle Results"
-   title after a won stage). Capture the others when you meet those screens: `map_screen`,
+   `battle_screen` (e.g. the BATTLE DETAILS button of a battle) and `stage_result` (e.g. "Obtained
+   Item" on the results screen at the end of a stage). Capture the others when you meet those
+   screens: `stage_clear` (the "Battle Results" title after each battle), `map_screen`,
    `ok_button`, `close_button` (e.g. the "Dragon Stone(s) acquired" popup), `cancel_button`,
    `act_empty_dialog`, `defeat_give_up`, ... The checklist on the Templates tab lists them all.
    With the game's *Scenario OFF* there are no story scenes to skip.

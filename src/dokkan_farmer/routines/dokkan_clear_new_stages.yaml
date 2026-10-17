@@ -127,7 +127,7 @@ settings:
 counters:
   stages_cleared:
     label: Stages cleared
-    appears: stage_clear
+    appears: stage_result
     rearm: start_button
 
 templates:
@@ -156,9 +156,15 @@ templates:
     description: >-
       Something that is always on screen during a battle and nowhere else, e.g.
       the pause / menu button of the battle screen.
-  stage_clear:
+  stage_result:
     level: required
-    description: The "Stage Clear" banner after a won stage (counts the cleared stages).
+    description: >-
+      Something on the results screen at the end of a stage, e.g. "Obtained
+      Item" (counts the cleared stages). Its light rays never stop moving, so
+      "tap to continue" would wait forever: the routine taps it away at once.
+  stage_clear:
+    level: recommended
+    description: The "Battle Results" title after each won battle of a stage.
   map_screen:
     level: recommended
     description: >-
@@ -279,9 +285,14 @@ rules:
       - wait_minutes: $act_wait_minutes
 
   # --- Playing a stage -----------------------------------------------------------
-  - name: Stage cleared
+  - name: Stage cleared → results
+    when: {visible: stage_result}
+    do: [{reset: defeats}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Battle won → results
     when: {visible: stage_clear}
-    do: [{reset: defeats}, {tap_xy: [0.5, 0.15]}]
+    do: [{tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle → tap a ki sphere
