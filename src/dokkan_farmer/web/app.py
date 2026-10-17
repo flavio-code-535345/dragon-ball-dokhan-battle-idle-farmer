@@ -44,8 +44,9 @@ from .mcp import text as mcp_text
 log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
-#: /mcp/<token> checks its own secret: MCP clients cannot do Basic auth.
-PUBLIC_PATHS = ("/api/health", "/manifest.webmanifest", "/static/icon", "/mcp/")
+#: /mcp/<token> checks its own secret: MCP clients cannot do Basic auth. They also probe
+#: /.well-known/ for OAuth: a plain 404 there, not a Basic auth 401, says "no login needed".
+PUBLIC_PATHS = ("/api/health", "/manifest.webmanifest", "/static/icon", "/mcp/", "/.well-known/")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 

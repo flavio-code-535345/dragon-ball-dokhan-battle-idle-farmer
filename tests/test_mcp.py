@@ -57,6 +57,7 @@ def test_handshake_and_tool_list(client):
     # Basic auth does not apply, the token does.
     assert client.post("/mcp/wrong-token-0123456789", json={}).status_code == 404
     assert client.get("/api/status").status_code == 401
+    assert client.get("/.well-known/oauth-protected-resource").status_code == 404
 
 
 def test_look_tap_and_crop_a_template(client):
