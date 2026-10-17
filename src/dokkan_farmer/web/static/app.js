@@ -707,6 +707,67 @@
     e.target.blur(); // so the keys typed next go to Android, not to this switch
   });
   $("#toggle-boxes").addEventListener("change", () => refreshScreen(false));
+  // The game's sound: raw 16-bit stereo PCM from /api/audio.pcm, played with Web Audio.
+  let sound = null;
+
+  function stopSound() {
+    if (!sound) return;
+    sound.ctrl.abort();
+    sound.ctx.close().catch(() => {});
+    sound = null;
+    $("#btn-sound").textContent = "🔇 Sound off";
+  }
+
+  async function startSound() {
+    const ctrl = new AbortController();
+    const res = await fetch("/api/audio.pcm", { signal: ctrl.signal, cache: "no-store" });
+    if (!res.ok) throw new Error(await errorText(res));
+    const rate = Number(res.headers.get("X-Sample-Rate")) || 44100;
+    const ctx = new AudioContext({ sampleRate: rate });
+    const me = { ctrl, ctx, at: 0 };
+    sound = me;
+    $("#btn-sound").textContent = "🔊 Sound on";
+    const reader = res.body.getReader();
+    let rest = new Uint8Array(0);
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done || sound !== me) break;
+        const data = new Uint8Array(rest.length + value.length);
+        data.set(rest);
+        data.set(value, rest.length);
+        const usable = data.length - (data.length % 4); // whole stereo frames
+        rest = data.slice(usable);
+        if (!usable) continue;
+        const samples = new Int16Array(data.buffer, 0, usable / 2);
+        const frames = samples.length / 2;
+        const buffer = ctx.createBuffer(2, frames, rate);
+        const left = buffer.getChannelData(0);
+        const right = buffer.getChannelData(1);
+        for (let i = 0; i < frames; i++) {
+          left[i] = samples[2 * i] / 32768;
+          right[i] = samples[2 * i + 1] / 32768;
+        }
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        // A small buffer against network jitter; start over if it ran dry or lags behind.
+        const now = ctx.currentTime;
+        if (me.at < now + 0.02 || me.at > now + 1) me.at = now + 0.15;
+        source.start(me.at);
+        me.at += buffer.duration;
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") toast(`Sound stopped: ${err.message || err}`, "error");
+    }
+    if (sound === me) stopSound();
+  }
+
+  $("#btn-sound").addEventListener("click", () => {
+    if (sound) stopSound();
+    else startSound().catch((err) => { stopSound(); toast(err.message || String(err), "error"); });
+  });
+
   $("#btn-screen-power").addEventListener("click", () => run(async () => {
     const on = screenIsOff();
     const res = await api("/api/device/screen", { method: "POST", body: { on } });

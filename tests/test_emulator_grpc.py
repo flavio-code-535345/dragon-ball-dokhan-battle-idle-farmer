@@ -302,3 +302,41 @@ def test_only_the_emulator_counts_as_emulator():
     console = EmulatorConsole("android:5554", "/screens")
     assert AdbDevice("android:5555", adb_path="adb", console=console).is_emulator
     assert not AdbDevice("android:5555", adb_path="adb").is_emulator
+
+
+# --------------------------------------------------------------------- sound
+def test_sound_from_the_emulator(tmp_path):
+    requests = []
+
+    def stream_audio(request, context):
+        requests.append(request)
+        for chunk in (b"\x01\x00\x02\x00", b"\x03\x00\x04\x00"):
+            yield field(1, request) + int_field(2, 7) + field(3, chunk)
+
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+    handlers = {"streamAudio": grpc.unary_stream_rpc_method_handler(stream_audio)}
+    server.add_generic_rpc_handlers(
+        (
+            grpc.method_handlers_generic_handler(
+                "android.emulation.control.EmulatorController", handlers
+            ),
+        )
+    )
+    port = server.add_insecure_port("127.0.0.1:0")
+    server.start()
+    try:
+        ctx = AppContext(Settings(data_dir=tmp_path / "data"), device=StreamingAdb(port))
+        with TestClient(create_app(ctx)) as client:
+            res = client.get("/api/audio.pcm")
+            assert res.status_code == 200 and res.headers["x-sample-rate"] == "44100"
+            assert res.content == b"\x01\x00\x02\x00\x03\x00\x04\x00"
+        assert requests[0] == eg.encode_fields((1, 44100), (2, 1), (3, 1), (4, 1))
+    finally:
+        server.stop(None)
+
+
+def test_no_sound_without_the_emulator(tmp_path):
+    settings = Settings(data_dir=tmp_path / "data", device_backend="sim")
+    device = SimDevice(SimGame(SimConfig()), package=settings.game_package)
+    with TestClient(create_app(AppContext(settings, device=device))) as client:
+        assert client.get("/api/audio.pcm").status_code == 404

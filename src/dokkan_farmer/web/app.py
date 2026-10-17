@@ -459,6 +459,36 @@ def create_app(ctx: AppContext) -> FastAPI:
             headers={"Cache-Control": "no-store", "X-Frame-Id": str(frame_id)},
         )
 
+    @app.get("/api/audio.pcm")
+    def audio_stream() -> StreamingResponse:
+        """The emulator's sound while the browser listens: raw 16-bit little-endian stereo
+        PCM (rate in X-Sample-Rate). 404 for devices without it (phones, redroid)."""
+        from ..device.emulator_grpc import AUDIO_CHANNELS, AUDIO_RATE
+
+        source = ctx.device.audio_stream()
+        if source is None:
+            raise HTTPException(404, "Sound needs the emulator stack (EMULATOR_GRPC)")
+        ctx.farmer.mark_watched()
+
+        def chunks():
+            try:
+                yield from source
+            except DeviceError as exc:
+                log.info("Sound stream ended: %s", exc)
+            finally:
+                source.close()
+
+        return StreamingResponse(
+            chunks(),
+            media_type="application/octet-stream",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Accel-Buffering": "no",
+                "X-Sample-Rate": str(AUDIO_RATE),
+                "X-Channels": str(AUDIO_CHANNELS),
+            },
+        )
+
     @app.get("/api/screen/stream.mjpg")
     async def screen_stream(
         w: int = Query(540, ge=120, le=1080),

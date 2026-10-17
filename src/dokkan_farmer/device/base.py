@@ -140,6 +140,10 @@ class Device(abc.ABC):
         """
         return None
 
+    def audio_stream(self) -> Any | None:
+        """The game's sound (the emulator's gRPC audio: 16-bit stereo PCM), or ``None``."""
+        return None
+
     def android_log(self, package: str) -> str:
         """What Android logged about an app: its crash reports and the lines naming it."""
         raise DeviceError("This device has no Android log")

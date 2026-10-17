@@ -32,6 +32,9 @@ RGB888 = 2
 MAX_MESSAGE = 64 << 20
 #: A stream nobody read from for this long stops (a browser tab closed without notice).
 IDLE_SECONDS = 30.0
+#: The game's sound: 16-bit stereo PCM at this rate (AudioFormat of the proto).
+AUDIO_RATE = 44100
+AUDIO_CHANNELS = 2
 
 
 # ------------------------------------------------------------------ protobuf
@@ -83,6 +86,11 @@ def _fields(data: memoryview) -> Iterator[tuple[int, int | memoryview]]:
         else:
             raise ValueError(f"unsupported wire type {wire}")
         yield number, value
+
+
+def encode_fields(*pairs: tuple[int, int]) -> bytes:
+    """A message of integer fields ``(number, value)`` (zeros left out, as in proto3)."""
+    return b"".join(_varint(n << 3) + _varint(v) for n, v in pairs if v)
 
 
 def encode_image_format(width: int = 0, height: int = 0, fmt: int = RGB888) -> bytes:
@@ -194,6 +202,26 @@ class EmulatorGrpc:
         if frame is None:
             raise DeviceError("The emulator sent an empty screenshot (is its display on?)")
         return frame.to_bgr()
+
+    def audio(self) -> Iterator[bytes]:
+        """The game's sound as it plays: 16-bit little-endian stereo PCM at AUDIO_RATE.
+
+        ``streamAudio`` with an ``AudioFormat``: samplingRate = 1, channels = 2 (Stereo),
+        format = 3 (S16), mode = 4 (real time); each ``AudioPacket`` has its samples in 3.
+        Closing the iterator cancels the call.
+        """
+        request = encode_fields((1, AUDIO_RATE), (2, 1), (3, 1), (4, 1))
+        call = self._rpc_channel().unary_stream(_SERVICE + "streamAudio")(request)
+        try:
+            for data in call:
+                for number, value in _fields(memoryview(data)):
+                    if number == 3 and isinstance(value, memoryview) and len(value):
+                        yield bytes(value)
+        except grpc.RpcError as exc:
+            if exc.code() != grpc.StatusCode.CANCELLED:
+                raise self._error(exc) from exc
+        finally:
+            call.cancel()
 
     def stream(self, width: int) -> FrameStream:
         """Frames at most ``width`` pixels wide (the emulator keeps the proportions), each

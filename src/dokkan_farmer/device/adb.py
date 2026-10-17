@@ -8,7 +8,7 @@ import shlex
 import struct
 import subprocess
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -270,6 +270,11 @@ class AdbDevice(Device):
             and self._adb_ok
             and self._screen_rotation() == 0
         )
+
+    def audio_stream(self) -> Iterator[bytes] | None:
+        if self.grpc is None or not self._is_emulator_host(self.grpc.host):
+            return None
+        return self.grpc.audio()
 
     def live_stream(self, width: int) -> FrameStream | None:
         if not self._use_grpc():
