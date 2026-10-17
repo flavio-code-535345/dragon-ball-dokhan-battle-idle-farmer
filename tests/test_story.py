@@ -171,7 +171,8 @@ def play(tmp_path: Path):
 def test_the_routine_documents_its_templates():
     routine = parse_routine((BUNDLED_DIR / f"{ROUTINE}.yaml").read_text(encoding="utf-8"))
     assert routine.referenced_templates() <= set(routine.templates)
-    assert {"saga_wheel", "back_button", "stage_result"} <= {
+    assert routine.templates["saga_wheel"].level == "recommended"  # Quest areas need no wheel
+    assert {"back_button", "stage_result"} <= {
         name for name, doc in routine.templates.items() if doc.level == "required"
     }
 

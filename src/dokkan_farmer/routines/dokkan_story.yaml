@@ -16,7 +16,8 @@
 #
 # How to use it: open the saga wheel of a series in Dokkan and turn it to the
 # saga to start with (the first one: the bottom of the wheel), or open that
-# saga's stage list, or a Quest chapter's area list. Then start this routine. Templates are shared with
+# saga's stage list, or a Quest chapter's area list. Then start this routine
+# (saga_wheel is only needed for the Dragon Ball Story's saga wheel). Templates are shared with
 # Dokkan Clear New Stages; this one also needs saga_wheel and back_button.
 #
 # Full reference: docs/ROUTINES.md
@@ -184,7 +185,7 @@ templates:
     level: recommended
     description: The "Battle Results" title after each won battle of a stage.
   saga_wheel:
-    level: required
+    level: recommended
     description: >-
       The "TAP" marker above the selected saga of a series' saga wheel (crop
       only "TAP" and its arrows, not the saga). Not "search the whole screen":
