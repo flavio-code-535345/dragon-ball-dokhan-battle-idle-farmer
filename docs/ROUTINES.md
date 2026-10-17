@@ -223,6 +223,18 @@ button was missing for three looks in a row. Capture `claim_all` and `accept_all
 pressed (not greyed out), `ok_button` with *search the whole screen* for the confirm and reward
 dialogs, and `back_button` (else Android's Back key is sent).
 
+## Extreme Z-Battles
+
+**Dokkan Extreme Z-Battle** plays an Extreme Z-Battle event level after level (Awakening Medals, a
+Dragon Stone for the first clear of a level): start it on the event's stage page. It presses Fight
+(`xb_fight`, tap point in the middle of the round button), Start! on the team page (`xb_start`, the
+team of the previous clear is used as it is), taps a ki sphere while `xb_battle` is on screen (e.g.
+the ITEM button), clears the results (`xb_congrats`, then `ok_button` for the OK and friend-request
+popups) and the game moves on to the next level. These battles cost no stamina and allow no
+continues, so a lost battle spends nothing; after `tries` battles in a row that did not reach the
+results the routine stops with "Use a stronger team for this level". `max_battles` stops after that
+many won battles (0 = no limit).
+
 ## The safety net
 
 On top of your rules the engine:

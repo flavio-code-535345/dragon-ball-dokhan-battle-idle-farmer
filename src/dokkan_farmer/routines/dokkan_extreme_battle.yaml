@@ -1,0 +1,190 @@
+# Dokkan Extreme Z-Battle: plays an Extreme Z-Battle event again and again
+# (Awakening Medals, Dragon Stones for first clears, training items), one level
+# after the other, and stops when a level is too hard for the team.
+#
+# How it works: open the event's stage page (the one with the big "Fight" button
+# and the enemy level) and start this routine. It presses Fight, then Start! on
+# the team page (the team of the previous clear is used as it is), taps a ki
+# sphere in the battle, clicks through the results and the friend popup, and
+# the game moves on to the next level by itself. Extreme Z-Battles cost no
+# stamina and do not allow continues, so a lost battle spends nothing: after
+# `tries` lost battles in a row the routine stops.
+#
+# Templates are shared with the other routines: OK, Close and Retry you
+# captured for them work here too.
+#
+# Full reference: docs/ROUTINES.md
+name: Dokkan Extreme Z-Battle
+description: >-
+  Plays an Extreme Z-Battle level after level (Fight, Start!, battle, results)
+  until the team loses `tries` times in a row or the limit is reached. Start it
+  on the event's stage page.
+version: 1
+
+options:
+  max_battles:
+    label: Stop after this many won battles (0 = no limit)
+    type: number
+    default: 3
+    min: 0
+  tries:
+    label: Lost battles in a row before it gives up
+    type: number
+    default: 2
+    min: 1
+    max: 10
+    help: >-
+      A level the team cannot beat shows up as battles that never end in the
+      results screen. Raise it if a level is only sometimes beaten.
+  max_minutes:
+    label: Give up after (minutes)
+    type: number
+    default: 60
+    min: 5
+    max: 600
+  sphere_x:
+    label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
+    type: number
+    default: 0.47
+    min: 0
+    max: 1
+  sphere_y:
+    label: "Battle: where to tap a ki sphere, y (0 = top, 1 = bottom)"
+    type: number
+    default: 0.47
+    min: 0
+    max: 1
+    help: A spot on the ki spheres, between the enemy and your team.
+  tap_every:
+    label: "Battle: seconds between taps"
+    type: number
+    default: 1.5
+    min: 0.5
+    max: 10
+  continue_after:
+    label: Tap the screen after this many still seconds
+    type: number
+    default: 6
+    min: 2
+    max: 60
+
+settings:
+  tick_interval: 1.0
+  action_delay: 1.5
+  stop_after_runs: $max_battles
+  stop_after_minutes: $max_minutes
+  run_counter: wins
+  ensure_foreground: true
+  stuck:
+    static_seconds: 180
+    # A battle with long animations is silent for a while.
+    idle_seconds: 300
+    recovery:
+      - key: BACK
+      - wait: 3
+    restart_after: 2
+    max_restarts: 3
+
+counters:
+  wins:
+    label: Battles won
+    appears: xb_congrats
+    rearm: xb_fight
+
+templates:
+  xb_fight:
+    level: required
+    description: >-
+      The "Fight" and "STA" text of the event's stage page (not the enemy level
+      above it: it changes). Give it a tap point in the middle of the round
+      button.
+  xb_start:
+    level: required
+    description: The "Start!" button of the team page.
+  xb_battle:
+    level: required
+    description: >-
+      Something only the battle shows that the animations do not cover, e.g. the
+      ITEM button at the bottom right.
+  xb_congrats:
+    level: required
+    description: The "CONGRATULATIONS!!" title of the results after a won battle.
+  ok_button:
+    level: recommended
+    description: >-
+      An "OK" button of the results and the friend popup. Tick "search the whole
+      screen".
+  close_button:
+    level: optional
+    description: The "Close" / "X" of news and login-bonus popups.
+  error_retry:
+    level: optional
+    description: The "Retry" button of connection error dialogs.
+
+rules:
+  # --- Errors and popups --------------------------------------------------------
+  - name: Connection error → Retry
+    when: {visible: error_retry}
+    do: [{tap: error_retry}]
+    cooldown: 3
+
+  # --- Give up when the team keeps losing -------------------------------------------
+  - name: Too hard → stop
+    when:
+      any_visible: [xb_fight, xb_start]
+      counter_at_least: {starts: $tries}
+    do:
+      - stop: "Lost {starts} battles in a row after {wins} won. Use a stronger team for this level."
+
+  # --- Battle --------------------------------------------------------------------------
+  - name: Battle → tap a ki sphere
+    when: {visible: xb_battle}
+    do: [{tap_xy: [$sphere_x, $sphere_y]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  # --- Results -------------------------------------------------------------------------
+  # The first results screen has an animation over it: a tap clears it, then the
+  # screen with the OK button shows.
+  - name: Battle won → results
+    when: {visible: xb_congrats}
+    do: [{reset: starts}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Confirm (OK)
+    when: {visible: ok_button, not_visible: [xb_fight, xb_start, xb_battle]}
+    do: [{tap: ok_button}]
+    cooldown: 2
+
+  - name: Close popup
+    when: {visible: close_button, not_visible: [xb_fight, xb_start, xb_battle]}
+    do: [{tap: close_button}]
+    cooldown: 2
+
+  # --- Stage page and team page --------------------------------------------------------
+  - name: Team → Start!
+    when: {visible: xb_start}
+    do: [{tap: xb_start}, {count: starts}]
+    cooldown: 5
+
+  - name: Stage → Fight
+    when: {visible: xb_fight, not_visible: xb_start}
+    do: [{tap: xb_fight}]
+    cooldown: 4
+
+  # --- Anything else -------------------------------------------------------------------
+  - name: Tap to continue
+    when:
+      static_for: $continue_after
+      not_visible: [xb_fight, xb_start, xb_battle]
+    do: [{tap_xy: [0.5, 0.3]}]
+    cooldown: 4
+
+  # Between battles ("GO TO THE NEXT LEVEL", the cinematics) nothing is recognised:
+  # a tap near the top, away from the buttons, skips what can be skipped.
+  - name: Nothing recognised → tap the top
+    when:
+      idle_for: 10
+      not_visible: [xb_fight, xb_start, xb_battle, error_retry]
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4

@@ -194,7 +194,8 @@ screenshot), when the device is unreachable and, with `NOTIFY_EVERY_RUNS`, every
   (`when` this is on screen, `do` these actions). The first matching rule wins. The bundled
   [`dokkan_auto_farm.yaml`](src/dokkan_farmer/routines/dokkan_auto_farm.yaml),
   [`dokkan_clear_new_stages.yaml`](src/dokkan_farmer/routines/dokkan_clear_new_stages.yaml),
-  [`dokkan_collect_rewards.yaml`](src/dokkan_farmer/routines/dokkan_collect_rewards.yaml) and
+  [`dokkan_collect_rewards.yaml`](src/dokkan_farmer/routines/dokkan_collect_rewards.yaml),
+  [`dokkan_extreme_battle.yaml`](src/dokkan_farmer/routines/dokkan_extreme_battle.yaml) and
   [`dokkan_story.yaml`](src/dokkan_farmer/routines/dokkan_story.yaml) are
   commented examples. See [docs/ROUTINES.md](docs/ROUTINES.md).
 

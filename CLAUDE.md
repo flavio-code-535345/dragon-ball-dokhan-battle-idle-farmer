@@ -107,7 +107,8 @@ protocol or download-source regressions.
 - The simulator (`sim.py`) only plays `dokkan_auto_farm` (its templates come from `install_sim_templates`).
   `dokkan_clear_new_stages` is tested against `QuestGame` in `tests/test_clear_new_stages.py` (and
   `dokkan_collect_rewards` against `RewardsGame` in `tests/test_collect_rewards.py`, `dokkan_story`
-  against its saga wheel `StoryGame` in `tests/test_story.py`), which reuse
+  against its saga wheel `StoryGame` in `tests/test_story.py`, `dokkan_extreme_battle` against
+  `ExtremeGame` in `tests/test_extreme_battle.py`), which reuse
   sim.py's private drawing helpers (`_button`, `_canvas`, `_text`, `Box`).
 - Other fakes: a generated fake `adb` script (`tests/test_adb.py`), a real-socket console and a real
   `grpc.server` emulator (`tests/test_emulator_console.py`, `tests/test_emulator_grpc.py`), an injected HTTP
