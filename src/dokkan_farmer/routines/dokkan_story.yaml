@@ -477,7 +477,7 @@ rules:
   - name: Nothing left → stop
     when:
       visible: back_button
-      not_visible: [stage_list, start_button, saga_wheel]
+      not_visible: [stage_list, start_button, saga_wheel, difficulty_normal, difficulty_hard]
       counter_at_least: {backs: 4}
     do:
       - screenshot: story_done
@@ -486,11 +486,14 @@ rules:
           next chapter or series and start again.
 
   # A tap that lands on a character (in battle, or while a battle starts) opens its
-  # details, a page with only a "<<<" button: Back closes it.
+  # details, a page with only a "<<<" button: Back closes it. Only on a screen that has
+  # been still for a few seconds and is no difficulty list: while a screen is loading,
+  # its "<<<" is all there is to see, and Back would close the stage just opened.
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_list, start_button, saga_wheel]
+      not_visible: [stage_list, start_button, saga_wheel, difficulty_normal, difficulty_hard]
+      static_for: 4
     do: [{count: backs}, {key: BACK}]
     cooldown: 3
 

@@ -414,11 +414,13 @@ rules:
     cooldown: 2
 
   # A tap that lands on a character (in battle, or while a battle starts) opens its
-  # details, a page with only a "<<<" button: Back closes it.
+  # details, a page with only a "<<<" button: Back closes it (only on a still screen that
+  # is no difficulty list: while a screen loads, its "<<<" is all there is to see).
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_list, start_button]
+      not_visible: [stage_list, start_button, difficulty_normal, difficulty_hard]
+      static_for: 4
     do: [{key: BACK}]
     cooldown: 3
 

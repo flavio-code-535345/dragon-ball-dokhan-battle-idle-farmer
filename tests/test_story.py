@@ -47,6 +47,7 @@ class StoryGame(QuestGame):
         self.saga = self.wheel = 0
         self.screen = "wheel"
         self.story: list[tuple[int, int]] = []  # (saga, stage) played
+        self.loading = 0  # renders left of the moment between a stage tap and its difficulties
 
     def render(self):
         if self.screen == "wheel":
@@ -55,8 +56,14 @@ class StoryGame(QuestGame):
             _text(img, "TAP", TAP_MARK.center, 1.2)
             _button(img, SAGA, f"SAGA {self.wheel + 1}", "nav")
             return img
+        if self.loading > 0 and self.screen == "difficulty":
+            self.loading -= 1  # still loading: only the back button is drawn
+            img = QuestGame({}).render()
+            img[:] = (40, 30, 30)
+            _button(img, BACK, "BACK", "no")
+            return img
         img = super().render()
-        if self.screen == "list":
+        if self.screen in ("list", "difficulty"):
             _button(img, BACK, "BACK", "no")
         return img
 
@@ -69,8 +76,14 @@ class StoryGame(QuestGame):
         if self.screen == "list" and BACK.contains(x, y):
             self.screen = "wheel"
             return
+        if self.screen == "difficulty" and BACK.contains(x, y):
+            self.screen = "list"  # Back from the difficulties: the stage list again
+            return
         before = len(self.played)
+        was = self.screen
         super().tap(x, y)
+        if was == "list" and self.screen == "difficulty":
+            self.loading = 2
         if self.screen == "support":  # like Dragon Ball Story: straight to the team
             self.screen = "team"
         if len(self.played) > before:
