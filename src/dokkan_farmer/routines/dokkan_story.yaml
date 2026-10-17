@@ -43,6 +43,26 @@ options:
     help: >-
       The farmer always taps "Give up", never a paid revive. The count starts
       again after each cleared stage.
+  start_in:
+    label: Where to start
+    type: choice
+    choices: [here, quest]
+    default: here
+    help: >-
+      here = you opened a stage list, area list or saga wheel yourself.
+      quest = from the home screen: START, Quest Dokkan Story, the chapter wheel
+      (turned "Quest: wheel turns" times), the chapter. Also brings the farm back
+      after a restart of the game.
+  chapter_turns:
+    label: "Quest: wheel turns before opening the chapter"
+    type: number
+    default: 0
+    min: 0
+    max: 20
+    help: >-
+      Short swipes of the chapter wheel towards later chapters before its
+      selected chapter is opened (0 = the chapter that is selected when the wheel
+      opens; one turn from Chapter 6 gives Chapter 7).
   difficulty:
     label: Difficulty to play
     type: choice
@@ -212,6 +232,22 @@ templates:
   stage_clear:
     level: recommended
     description: The "Battle Results" title after each won battle of a stage.
+  home_screen:
+    level: optional
+    description: >-
+      The big START button of the home screen (only for "Where to start" =
+      quest; the same template as in Dokkan Collect Rewards).
+  menu_quest:
+    level: optional
+    description: >-
+      "Quest Dokkan Story" in the menu behind START (only for "Where to start" =
+      quest).
+  chapter_wheel:
+    level: optional
+    description: >-
+      The "TAP" marker with its two arrows above the selected chapter of the
+      Quest chapter wheel (only for "Where to start" = quest). Not the saga
+      wheel's: capture it on the chapter wheel, near-region.
   saga_wheel:
     level: recommended
     description: >-
@@ -542,6 +578,37 @@ rules:
           No NEW stage or area left here ({stages_cleared} stages cleared). Open the
           next chapter or series and start again.
 
+  # --- Quest: from the home screen to a chapter's areas ------------------------------
+  - name: Home → START
+    when: {visible: home_screen, option: {start_in: quest}}
+    do: [{tap: home_screen}]
+    cooldown: 6
+
+  - name: Menu → Quest Dokkan Story
+    when: {visible: menu_quest, option: {start_in: quest}}
+    do: [{tap: menu_quest}]
+    cooldown: 5
+
+  - name: Chapter wheel → turn it
+    when:
+      visible: chapter_wheel
+      option: {start_in: quest}
+      counter_below: {turns: $chapter_turns}
+    do:
+      - swipe: {from: [0.5, 0.6], to: [0.5, 0.7], ms: 400}
+      - count: turns
+    cooldown: 3
+
+  # Opening counts like a Back: when its chapter has nothing left, the routine returns
+  # here and the "Nothing left" rule above ends the run after a few rounds.
+  - name: Chapter wheel → open the chapter
+    when:
+      visible: chapter_wheel
+      option: {start_in: quest}
+      counter_at_least: {turns: $chapter_turns}
+    do: [{count: backs}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 5
+
   # A tap that lands on a character (in battle, or while a battle starts) opens its
   # details, a page with only a "<<<" button: Back closes it. Only on a screen that has
   # been still for a few seconds and is no difficulty list: while a screen is loading,
@@ -549,7 +616,7 @@ rules:
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_list, start_button, saga_wheel, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      not_visible: [stage_list, start_button, saga_wheel, chapter_wheel, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
       static_for: 4
     do: [{count: backs}, {key: BACK}]
     cooldown: 3
@@ -557,6 +624,6 @@ rules:
   - name: Tap to continue
     when:
       static_for: $continue_after
-      not_visible: [act_empty_dialog, defeat_give_up, stage_list, saga_wheel]
+      not_visible: [act_empty_dialog, defeat_give_up, stage_list, saga_wheel, chapter_wheel]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4

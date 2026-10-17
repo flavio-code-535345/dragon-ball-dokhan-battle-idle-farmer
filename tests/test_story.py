@@ -150,6 +150,81 @@ class SuperAreaGame(AreaGame):
         self.difficulties = ("HARD", "Z-HARD", "SUPER")
 
 
+HOME_START = Box(220, 700, 280, 90)
+MENU_QUEST = Box(80, 500, 320, 100)
+CHAPTER_TAP = Box(280, 120, 160, 45)  # the "TAP" marker above the selected chapter
+CHAPTER_CARD = Box(40, 200, 640, 500)
+
+
+class ChapterGame(AreaGame):
+    """Home → START → menu (Quest) → chapter wheel → a chapter's area list; a swipe down
+    turns the wheel to the later chapters, Back on the area list returns to the wheel."""
+
+    def __init__(self, chapters: list[list[set[int]]], turns_to_first: int = 0) -> None:
+        super().__init__(chapters[0])
+        # chapters[c][a] = the stages of area a already cleared; kept like StoryGame's sagas
+        self.chapters = [
+            [{s: ({"NORMAL"} if s in done else set()) for s in range(STAGES)} for done in areas]
+            for areas in chapters
+        ]
+        self.chapter = 0
+        self.wheel = 0
+        self.opened: list[int] = []
+        self.screen = "home"
+
+    def render(self):
+        if self.screen in ("home", "menu", "chapters"):
+            img = QuestGame({}).render()  # a blank canvas
+            img[:] = (40, 30, 30)
+            if self.screen == "home":
+                _button(img, TITLE, "HOME", "retry")
+                _button(img, HOME_START, "START", "start")
+            elif self.screen == "menu":
+                _button(img, MENU_QUEST, "QUEST DOKKAN STORY", "nav")
+            else:
+                _text(img, "TAP", CHAPTER_TAP.center, 1.2)
+                _button(img, CHAPTER_CARD, f"CHAPTER {self.wheel + 5}", "auto_on")
+                _button(img, BACK, "BACK", "no")
+            return img
+        return super().render()
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "home":
+            if HOME_START.contains(x, y):
+                self.screen = "menu"
+        elif self.screen == "menu":
+            if MENU_QUEST.contains(x, y):
+                self.screen = "chapters"
+        elif self.screen == "chapters":
+            if CHAPTER_CARD.contains(x, y):
+                self.chapter = self.wheel
+                self.opened.append(self.chapter)
+                self.sagas = self.chapters[self.chapter]
+                self.screen, self.offset = "areas", 0
+        elif self.screen == "areas" and BACK.contains(x, y):
+            self.screen = "chapters"
+        else:
+            super().tap(x, y)
+
+    def swipe(self, y1: float, y2: float) -> None:
+        if self.screen == "chapters":
+            step = 1 if y2 > y1 else -1
+            self.wheel = min(max(self.wheel + step, 0), len(self.chapters) - 1)
+        else:
+            super().swipe(y1, y2)
+
+
+def capture_navigation(store: TemplateStore) -> None:
+    game = ChapterGame([[set()]])
+    for screen, name, box in (
+        ("home", "home_screen", HOME_START),
+        ("menu", "menu_quest", MENU_QUEST),
+        ("chapters", "chapter_wheel", CHAPTER_TAP),
+    ):
+        game.screen = screen
+        store.create_from_frame(name, game.render(), box.as_tuple(), threshold=0.9)
+
+
 def capture_difficulties(store: TemplateStore) -> None:
     """The HARD / Z-HARD / SUPER labels of a Quest stage's difficulty list."""
     game = SuperAreaGame([set()])
@@ -197,12 +272,19 @@ def capture_templates(store: TemplateStore) -> None:
 
 @pytest.fixture
 def play(tmp_path: Path):
-    def run(game: StoryGame, options: dict | None = None, difficulties: bool = False) -> dict:
+    def run(
+        game: StoryGame,
+        options: dict | None = None,
+        difficulties: bool = False,
+        navigation: bool = False,
+    ) -> dict:
         settings = Settings(data_dir=tmp_path / "data", device_backend="sim")
         store = TemplateStore(settings.templates_dir)
         capture_templates(store)
         if difficulties:
             capture_difficulties(store)
+        if navigation:
+            capture_navigation(store)
         library = RoutineLibrary(settings.routines_dir)
         library.install_defaults()
         routine = library.load(ROUTINE)
@@ -271,3 +353,21 @@ def test_the_easiest_difficulty_can_be_chosen(play):
     game = SuperAreaGame([{0, 1, 2}, set(range(STAGES))])  # one NEW stage left
     play(game, {"difficulty": "easiest"}, difficulties=True)
     assert {d for _, d in game.played} == {"HARD"}
+
+
+def test_quest_chapters_are_reached_from_the_home_screen(play):
+    # Chapter 5 is done; chapter 6 has two areas with one NEW stage each.
+    done = [set(range(STAGES))]
+    chapters = [done, [{0, 1, 2}, {0, 1, 2}]]
+    game = ChapterGame(chapters)
+    summary = play(game, {"start_in": "quest", "chapter_turns": 1}, navigation=True)
+    assert game.opened[0] == 1  # one wheel turn: the second chapter
+    assert sorted(game.story) == [(0, 3), (1, 3)]
+    assert "No NEW stage or area left" in summary["reason"] and not summary["error"]
+    assert all(all(done for done in area.values()) for area in game.chapters[1])
+
+
+def test_the_home_screen_is_left_alone_when_starting_here(play):
+    game = ChapterGame([[{0, 1, 2}]])
+    play(game, navigation=True)  # start_in = here (the default): nothing taps START
+    assert game.screen == "home" and game.opened == []

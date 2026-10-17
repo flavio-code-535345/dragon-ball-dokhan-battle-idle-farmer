@@ -200,6 +200,14 @@ stages have no NORMAL: their lowest is HARD. Because a Quest area's stage list
 has no MISSION button, Dokkan Story presses Back when no NEW mark is left, and stops after four
 Backs in a row without a stage, a battle or a map move in between.
 
+With **Where to start = quest** the routine finds its own way from the home screen: START, then
+"Quest Dokkan Story", then the chapter wheel, which it turns *Quest: wheel turns before opening
+the chapter* times (short swipes towards later chapters; 0 = the selected chapter, one turn from
+Chapter 6 gives Chapter 7) before opening the chapter. That also brings the farm back after the game
+was restarted. It needs the templates `home_screen` (the START button, as in Dokkan Collect
+Rewards), `menu_quest` ("Quest Dokkan Story" in the menu) and `chapter_wheel` (the "TAP" marker above
+the selected chapter of the wheel). With *here* (the default) it starts from the list you opened.
+
 Start it on the saga wheel turned to the saga to begin with (the first saga is at the bottom), or
 in that saga's stage list. Besides the templates of Dokkan Clear New Stages it needs `saga_wheel`
 (the "TAP" marker above the selected saga), `back_button` (the "<<<" of the stage list) and
