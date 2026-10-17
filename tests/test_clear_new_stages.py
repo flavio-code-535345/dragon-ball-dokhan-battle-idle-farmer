@@ -29,6 +29,8 @@ PAUSE = Box(560, 30, 140, 70)
 CLEAR = Box(60, 500, 600, 160)
 OK = Box(240, 780, 240, 90)
 GIVE_UP = Box(240, 740, 240, 90)
+#: Like Dokkan's bottom bar (HP, Dokkan meter, NEXT UP): on the map and in battles.
+HUD = Box(0, 1180, 720, 100)
 
 
 def new_badge(row_top: int) -> Box:
@@ -53,6 +55,7 @@ class QuestGame:
         self.steps = self.hp = 0
         self.played: list[tuple[int, str]] = []
         self.paid = False
+        self.team_tapped = False
 
     def new(self, stage: int) -> bool:
         return not self.cleared[stage]  # one cleared difficulty: CLEARED!, no NEW mark
@@ -82,9 +85,11 @@ class QuestGame:
             _button(img, START, "START!", "start")
         elif screen == "map":
             _button(img, TITLE, "MAP", "auto_on")
+            _button(img, HUD, "NEXT UP", "auto_on")
             _text(img, f"step {self.steps}", (360, 600), 2.0)
         elif screen == "battle":
             _button(img, PAUSE, "II", "auto_off")
+            _button(img, HUD, "NEXT UP", "auto_on")
             _text(img, f"enemy HP {self.hp}", (360, 300), 1.5)
         elif screen == "clear":
             _button(img, CLEAR, "STAGE CLEAR", "ok")
@@ -109,11 +114,13 @@ class QuestGame:
         elif screen == "team" and START.contains(x, y):
             self.screen, self.steps = "map", 0
             self.played.append((self.stage, self.difficulty))
-        elif screen == "map" and y > 1000:
+        elif screen == "map" and 1000 < y < HUD.y:
             self.steps += 1
             if self.steps == 3:
                 self.screen, self.hp = "battle", 4
-        elif screen == "battle" and 800 <= y <= 1100:
+        elif screen == "battle" and 1000 < y < HUD.y:
+            self.team_tapped = True  # the move spot: a character, not a ki sphere
+        elif screen == "battle" and 450 <= y <= 700:
             self.hp -= 1
             if self.hp == 0:
                 lost = (self.stage, self.difficulty) in self.losing
@@ -185,7 +192,7 @@ def capture_templates(store: TemplateStore) -> None:
         ("difficulty", "difficulty_normal", difficulty_bar(0), False),
         ("support", "select_support", SUPPORT, False),
         ("team", "start_button", START, False),
-        ("map", "map_screen", TITLE, False),
+        ("map", "map_screen", HUD, False),  # also in battles, as in the game
         ("battle", "battle_screen", PAUSE, False),
         ("clear", "stage_clear", CLEAR, False),
         ("results", "ok_button", OK, True),
@@ -262,6 +269,7 @@ def test_clears_every_new_stage_on_normal_and_stops(play):
     assert game.cleared[5] == {"NORMAL"}
     assert summary["counters"]["stages_cleared"] == 2 and summary["runs"] == 2
     assert "No uncleared stage left" in summary["reason"] and not summary["error"]
+    assert not game.team_tapped  # the map's move spot is never tapped in battle
 
 
 def test_a_new_stage_above_the_screen_is_found(play):

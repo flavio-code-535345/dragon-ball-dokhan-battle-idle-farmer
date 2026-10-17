@@ -51,10 +51,10 @@ options:
   sphere_y:
     label: "Battle: where to tap a ki sphere, y (0 = top, 1 = bottom)"
     type: number
-    default: 0.72
+    default: 0.45
     min: 0
     max: 1
-    help: A spot in the middle of the ki sphere board, below your team's cards.
+    help: A spot in the middle of the ki spheres, between the enemy and your team.
   tap_every:
     label: "Battle: seconds between taps"
     type: number
@@ -161,8 +161,9 @@ templates:
   map_screen:
     level: recommended
     description: >-
-      Something that is always on the map (the board you move on) and nowhere
-      else. While it is visible the routine taps "Map: where to tap to move".
+      Something that is always on the map (the board you move on) and not in
+      battles, e.g. the small difficulty label (NORMAL) next to MENU at the top.
+      While it is visible the routine taps "Map: where to tap to move".
   ok_button:
     level: recommended
     description: An "OK" button. Search the whole screen, so it is found in any dialog.
@@ -276,13 +277,16 @@ rules:
     do: [{tap: skip_button}]
     cooldown: 3
 
+  # The map's bottom bar (HP, Dokkan meter, NEXT UP) is also there in battles: a
+  # map_screen cropped from it matches in battle too, where the move spot would hit a
+  # character. Hence not_visible: battle_screen (the battle rule waits between taps).
   - name: Map → choose a path
-    when: {visible: [map_screen, path_arrow]}
+    when: {visible: [map_screen, path_arrow], not_visible: battle_screen}
     do: [{tap: path_arrow}]
     cooldown: 3
 
   - name: Map → move
-    when: {visible: map_screen}
+    when: {visible: map_screen, not_visible: battle_screen}
     do: [{tap_xy: [$move_x, $move_y]}]
     cooldown: 2
 
