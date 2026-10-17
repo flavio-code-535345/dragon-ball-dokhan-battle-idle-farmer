@@ -53,7 +53,7 @@ class Tool:
 
 def text(value: Any) -> dict[str, Any]:
     if not isinstance(value, str):
-        value = json.dumps(value, indent=1, default=str)
+        value = json.dumps(value, separators=(",", ":"), default=str, ensure_ascii=False)
     return {"type": "text", "text": value}
 
 

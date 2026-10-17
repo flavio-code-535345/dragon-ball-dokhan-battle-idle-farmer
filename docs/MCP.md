@@ -8,12 +8,17 @@ fractions, like everywhere in the farmer.
 
 | Tool | Does |
 |---|---|
-| `screenshot` | A fresh screenshot (with its `frame_id`) |
-| `tap`, `swipe`, `key`, `game` | Input and launch/stop/restart the game; they return the screen afterwards |
-| `find_templates` | Which templates the current screen shows, with scores and boxes |
-| `list_templates`, `template_image`, `create_template`, `update_template`, `delete_template` | Templates (`create_template` crops from a screenshot's `frame_id`) |
-| `list_routines`, `get_routine`, `save_routine` | Routines and their YAML |
-| `farm_status`, `start_farm`, `stop_farm`, `logs` | The farm |
+| `screenshot` | A fresh screenshot (360 px wide unless `width` says otherwise) with its `frame_id` |
+| `tap`, `swipe`, `key`, `game` | Input and launch/stop/restart the game; they return the screen afterwards (360 px; `screenshot: false` for none) |
+| `find_templates` | Which templates a fresh screenshot shows: the found ones and at most 3 near misses (score ≥ 0.5), or only `names`; pins the frame for `create_template` |
+| `list_templates`, `template_image`, `create_template`, `update_template`, `delete_template` | Templates, one line each (`create_template` crops from a `frame_id`) |
+| `list_routines`, `get_routine`, `save_routine` | Routines: `get_routine` gives options, captured and missing templates (the YAML only with `yaml: true`); `save_routine` takes the whole `yaml` or `edits` (`{old, new}` replacements, each `old` exactly once) and answers in one line |
+| `farm_status`, `start_farm`, `stop_farm` | The farm in a line or a short summary (state, routine, counters, last rule, device) |
+| `logs` | Log lines, 20 by default; pass the returned `last_id` as `after` to get only new lines |
+
+Answers are short on purpose: everything an assistant reads costs it tokens. To learn which screen
+is up, `find_templates` is much cheaper than a screenshot; to follow a farm, call `logs` with
+`after` every minute or so rather than over and over.
 
 ## Setting it up
 

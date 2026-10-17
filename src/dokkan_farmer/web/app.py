@@ -37,7 +37,7 @@ from ..live import BOUNDARY, mjpeg_part, open_feed
 from ..logging_setup import LOG_BUFFER, ensure_log_buffer
 from ..routine import Routine, RoutineError, parse_routine
 from ..vision import encode_png
-from .mcp import McpServer
+from .mcp import McpServer, ToolError
 from .mcp import image as mcp_image
 from .mcp import text as mcp_text
 
@@ -886,6 +886,7 @@ def create_app(ctx: AppContext) -> FastAPI:
         )
 
     # -------------------------------------------------------------------- MCP
+    # Answers are kept short: every word an assistant reads costs it tokens.
     if ctx.settings.mcp_token:
         server = McpServer()
 
@@ -894,7 +895,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 time.sleep(WAKE_SETTLE_UI)
             frame_id = ctx.farmer.capture()
             ctx.farmer.frames.pin(frame_id)  # kept for create_template
-            width = int(min(1080, max(240, args.get("width") or 540)))
+            width = int(min(1080, max(240, args.get("width") or 360)))
             _, frame = _frame_or_404(ctx, frame_id)
             _, data = ctx.farmer.frames.jpeg(frame_id, max_width=width)
             height, full_width = frame.shape[:2]
@@ -907,15 +908,31 @@ def create_app(ctx: AppContext) -> FastAPI:
             time.sleep(min(10.0, max(0.0, float(args.get("wait", 1.5)))))
             return [mcp_text(done), *shot(args)]
 
+        def box(values: list[float]) -> list[float]:
+            return [round(v, 3) for v in values]
+
+        def farm_line() -> str:
+            farm = ctx.farmer.snapshot()
+            line = f"{farm['state']}: {farm.get('routine_name') or '-'}"
+            if farm.get("routine_id"):
+                line += f" ({farm['routine_id']})"
+            if farm.get("message"):
+                line += f" - {farm['message']}"
+            disabled = [r["name"] for r in farm.get("disabled_rules") or []]
+            if disabled:
+                line += f"; disabled rules: {', '.join(disabled)}"
+            return line
+
         after = {
             "screenshot": {"type": "boolean", "description": "Return the screen afterwards"},
             "wait": {"type": "number", "description": "Seconds before that screenshot (1.5)"},
-            "width": {"type": "integer", "description": "Screenshot width in px (540)"},
+            "width": {"type": "integer", "description": "Screenshot width in px (360)"},
         }
         frac = {"type": "number", "minimum": 0, "maximum": 1}
 
         @server.tool(
-            "Take a fresh screenshot of the device. Returns its frame_id (for create_template).",
+            "Take a fresh screenshot of the device. Returns its frame_id (for create_template). "
+            "To learn only which screen is up, find_templates is cheaper.",
             {"width": after["width"]},
         )
         def mcp_screenshot(args: dict[str, Any]) -> list[dict[str, Any]]:
@@ -961,25 +978,47 @@ def create_app(ctx: AppContext) -> FastAPI:
             return then_shot({"wait": 5, **args}, f"Game: {args['action']}")
 
         @server.tool(
-            "Which templates a fresh screenshot shows: name, found, score, box [x, y, w, h]; "
-            "its frame_id works for create_template. Templates have a mode (gray/color).",
+            "Which templates a fresh screenshot shows: the found ones and at most 3 near misses "
+            "(score >= 0.5), as [name, score, box x/y/w/h]. names: only these, found or not. "
+            "Its frame_id works for create_template. Templates have a mode (gray/color).",
+            {"names": {"type": "array", "items": {"type": "string"}}},
         )
         def mcp_find_templates(args: dict[str, Any]) -> list[dict[str, Any]]:
             frame_id = ctx.farmer.capture()
             ctx.farmer.frames.pin(frame_id)  # kept for create_template
-            results = screen_analyze(frame_id)["results"]
-            results.sort(key=lambda r: -r["score"])
-            rows = [
-                {k: r[k] for k in ("name", "found", "score")}
-                | {"box": [round(v, 3) for v in r["box"]]}
-                for r in results
-            ]
-            return [mcp_text({"frame_id": frame_id, "templates": rows})]
+            results = sorted(screen_analyze(frame_id)["results"], key=lambda r: -r["score"])
+            out: dict[str, Any] = {"frame_id": frame_id}
+            if args.get("names"):
+                wanted = set(args["names"])
+                out["templates"] = [
+                    [r["name"], r["score"], r["found"], box(r["box"])]
+                    for r in results
+                    if r["name"] in wanted
+                ]
+                out["unknown"] = sorted(wanted - {r["name"] for r in results}) or None
+            else:
+                out["found"] = [
+                    [r["name"], r["score"], box(r["box"])] for r in results if r["found"]
+                ]
+                near = [r for r in results if not r["found"] and r["score"] >= 0.5][:3]
+                out["near"] = [[r["name"], r["score"], box(r["box"])] for r in near]
+            return [mcp_text({k: v for k, v in out.items() if v is not None})]
 
-        @server.tool("All templates with their settings.")
+        @server.tool(
+            "All templates, one per line: name, threshold, mode, search area (near = where it "
+            "was cropped, full = whole screen), tap point if any, description."
+        )
         def mcp_list_templates(args: dict[str, Any]) -> list[dict[str, Any]]:
-            keep = ("name", "threshold", "mode", "region", "tap", "description")
-            return [mcp_text([{k: t[k] for k in keep} for t in list_templates()])]
+            lines = []
+            for t in list_templates():
+                area = "full" if t["region"] is None else "near"
+                line = f"{t['name']} {t['threshold']} {t['mode']} {area}"
+                if t.get("tap"):
+                    line += f" tap={t['tap']}"
+                if t.get("description"):
+                    line += f": {t['description']}"
+                lines.append(line)
+            return [mcp_text("\n".join(lines) or "(no templates)")]
 
         @server.tool("Look at one template's image.", {"name": {"type": "string"}}, ("name",))
         def mcp_template_image(args: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1009,7 +1048,13 @@ def create_app(ctx: AppContext) -> FastAPI:
             ("name", "frame_id", "x", "y", "w", "h"),
         )
         def mcp_create_template(args: dict[str, Any]) -> list[dict[str, Any]]:
-            return [mcp_text(create_template(TemplateCreate(**args)))]
+            result = create_template(TemplateCreate(**args))
+            meta = result["template"]
+            line = f"Saved {meta['name']}: score {result['score']} on its screenshot"
+            line += f" (threshold {meta['threshold']}), bbox {meta['bbox']}"
+            if meta.get("tap"):
+                line += f", tap {meta['tap']}"
+            return [mcp_text(" ".join([line, *result["warnings"]]))]
 
         @server.tool(
             "Change a template's threshold, mode (color tells an orange button from a "
@@ -1026,37 +1071,115 @@ def create_app(ctx: AppContext) -> FastAPI:
         )
         def mcp_update_template(args: dict[str, Any]) -> list[dict[str, Any]]:
             name = args.pop("name")
-            return [mcp_text(update_template(name, TemplateUpdate(**args)))]
+            t = update_template(name, TemplateUpdate(**args))
+            area = "full" if t["region"] is None else "near"
+            return [mcp_text(f"{name}: {t['threshold']} {t['mode']} {area} tap={t['tap']}")]
 
         @server.tool("Delete a template.", {"name": {"type": "string"}}, ("name",))
         def mcp_delete_template(args: dict[str, Any]) -> list[dict[str, Any]]:
-            return [mcp_text(delete_template(args["name"]))]
-
-        @server.tool("The farm's state, the device and the settings.")
-        def mcp_farm_status(args: dict[str, Any]) -> list[dict[str, Any]]:
-            return [mcp_text(status())]
-
-        @server.tool("The routines: id, name, bundled, valid.")
-        def mcp_list_routines(args: dict[str, Any]) -> list[dict[str, Any]]:
-            return [mcp_text(list_routines())]
+            delete_template(args["name"])
+            return [mcp_text(f"Deleted {args['name']}")]
 
         @server.tool(
-            "A routine's YAML and which of its templates are captured.",
-            {"id": {"type": "string"}},
+            "The farm in short: state, routine, counters, runs, last rule, device connected."
+        )
+        def mcp_farm_status(args: dict[str, Any]) -> list[dict[str, Any]]:
+            farm = ctx.farmer.snapshot()
+            device = ctx.device_status
+            out = {
+                "farm": farm_line(),
+                "counters": farm.get("counters") or {},
+                "runs": farm.get("runs"),
+                "elapsed_s": round(farm["elapsed"]) if farm.get("elapsed") else None,
+                "last_rule": farm.get("last_rule"),
+                "screen_off": farm.get("screen_off"),
+                "device": "connected" if device.get("connected") else device.get("error"),
+                "selected_routine": ctx.selected_routine(),
+            }
+            if farm["state"] == "stopped" and farm.get("last_session"):
+                last = farm["last_session"]
+                out["last_session"] = {k: last.get(k) for k in ("routine", "reason", "runs")}
+            return [mcp_text({k: v for k, v in out.items() if v is not None})]
+
+        @server.tool("The routines, one per line: id, name, bundled / modified, invalid.")
+        def mcp_list_routines(args: dict[str, Any]) -> list[dict[str, Any]]:
+            rows = []
+            for r in list_routines():
+                flags = [f for f in ("bundled", "modified") if r.get(f)]
+                row = f"{r['id']}: {r['name']}" + (f" ({', '.join(flags)})" if flags else "")
+                rows.append(row if r.get("valid") else f"{row} INVALID: {r.get('error')}")
+            return [mcp_text("\n".join(rows))]
+
+        def routine_brief(detail: dict[str, Any]) -> str:
+            rules = detail.get("rules") or []
+            head = f"{detail.get('name')} ({detail['id']}): "
+            if not detail.get("valid", True):
+                return head + f"INVALID: {detail.get('error')}"
+            head += f"valid, {len(rules)} rules, " + (
+                "ready" if detail.get("ready") else "not ready"
+            )
+            lines = [head]
+            options = ", ".join(f"{o['key']}={o['value']}" for o in detail.get("options") or [])
+            if options:
+                lines.append(f"options: {options}")
+            missing = [t for t in detail.get("templates") or [] if not t["captured"]]
+            captured = [t["name"] for t in detail.get("templates") or [] if t["captured"]]
+            if captured:
+                lines.append(f"captured: {', '.join(captured)}")
+            for t in missing:
+                lines.append(f"missing {t['level']} {t['name']}: {t['description']}")
+            return "\n".join(lines)
+
+        @server.tool(
+            "A routine in short: options and their values, captured templates, the missing ones "
+            "with what to capture. yaml: true also returns its YAML.",
+            {"id": {"type": "string"}, "yaml": {"type": "boolean"}},
             ("id",),
         )
         def mcp_get_routine(args: dict[str, Any]) -> list[dict[str, Any]]:
             detail = get_routine(args["id"])
-            yaml = detail.pop("yaml", "")
-            return [mcp_text(yaml), mcp_text(detail)]
+            out = [mcp_text(routine_brief(detail))]
+            if args.get("yaml"):
+                out.append(mcp_text(detail.get("yaml", "")))
+            return out
 
         @server.tool(
-            "Save a routine's YAML (validated; a bundled one can be restored later).",
-            {"id": {"type": "string"}, "yaml": {"type": "string"}},
-            ("id", "yaml"),
+            "Save a routine (validated; a bundled one can be restored later): the whole yaml, or "
+            "edits to the saved one, each {old, new} where old occurs exactly once.",
+            {
+                "id": {"type": "string"},
+                "yaml": {"type": "string"},
+                "edits": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"old": {"type": "string"}, "new": {"type": "string"}},
+                        "required": ["old", "new"],
+                    },
+                },
+            },
+            ("id",),
         )
         def mcp_save_routine(args: dict[str, Any]) -> list[dict[str, Any]]:
-            return [mcp_text(save_routine(args["id"], RoutineText(yaml=args["yaml"])))]
+            routine_id = validate_routine_id(args["id"])
+            text = args.get("yaml")
+            if text is None:
+                if not args.get("edits"):
+                    raise ToolError("Give yaml or edits")
+                try:
+                    text = ctx.library.read_text(routine_id)
+                except KeyError:
+                    raise ToolError(f"No routine called {routine_id}") from None
+            for i, edit in enumerate(args.get("edits") or [], 1):
+                found = text.count(edit["old"])
+                if found != 1:
+                    raise ToolError(f"Edit {i}: old text found {found} times (needs exactly 1)")
+                text = text.replace(edit["old"], edit["new"])
+            detail = save_routine(routine_id, RoutineText(yaml=text))
+            missing = detail.get("required_missing") or []
+            line = f"Saved {routine_id}: valid, {len(detail.get('rules') or [])} rules"
+            line += f"; missing required templates: {', '.join(missing)}" if missing else ""
+            return [mcp_text(line)]
 
         @server.tool(
             "Start farming with a routine and options (see get_routine for them).",
@@ -1064,25 +1187,30 @@ def create_app(ctx: AppContext) -> FastAPI:
             ("routine",),
         )
         def mcp_start_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
-            body = StartRequest(routine=args["routine"], options=args.get("options") or {})
-            return [mcp_text(farm_start(body))]
+            farm_start(StartRequest(routine=args["routine"], options=args.get("options") or {}))
+            return [mcp_text(farm_line())]
 
         @server.tool("Stop farming.")
         def mcp_stop_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
-            return [mcp_text(farm_stop())]
+            farm_stop()
+            return [mcp_text(farm_line())]
 
         @server.tool(
-            "The newest log lines (what the farm did and why).",
-            {"lines": {"type": "integer", "description": "How many (60)"}},
+            "Log lines (what the farm did and why), oldest first. after: the last_id of the "
+            "previous call, to get only newer lines. lines: how many at most (20, the newest).",
+            {"after": {"type": "integer"}, "lines": {"type": "integer"}},
         )
         def mcp_logs(args: dict[str, Any]) -> list[dict[str, Any]]:
-            limit = int(min(500, max(1, args.get("lines") or 60)))
-            lines = LOG_BUFFER.since(0, limit)
+            limit = int(min(500, max(1, args.get("lines") or 20)))
+            after_id = int(args.get("after") or 0)
+            records = LOG_BUFFER.since(after_id, limit)
             out = [
                 f"{time.strftime('%H:%M:%S', time.localtime(r['ts']))} {r['level']} {r['msg']}"
-                for r in lines
+                for r in records
             ]
-            return [mcp_text("\n".join(out) or "(empty)")]
+            last_id = records[-1]["id"] if records else after_id
+            out.append(f"(last_id {last_id})" if out else f"(no new lines, last_id {last_id})")
+            return [mcp_text("\n".join(out))]
 
         @app.post("/mcp/{token}", include_in_schema=False)
         async def mcp_endpoint(token: str, request: Request) -> Response:
