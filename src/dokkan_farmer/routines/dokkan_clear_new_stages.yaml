@@ -210,6 +210,11 @@ templates:
   path_arrow_4:
     level: optional
     description: A path arrow pointing a fourth way (see path_arrow).
+  back_button:
+    level: optional
+    description: >-
+      The "<<<" back button at the bottom left. A tap on a character opens its
+      details with only this button: the routine then presses Back.
   close_button:
     level: optional
     description: The "Close" / "X" of popups (rewards, news).
@@ -401,6 +406,15 @@ rules:
     when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up]}
     do: [{tap: ok_button}]
     cooldown: 2
+
+  # A tap that lands on a character (in battle, or while a battle starts) opens its
+  # details, a page with only a "<<<" button: Back closes it.
+  - name: Close a details page
+    when:
+      visible: back_button
+      not_visible: [stage_list, start_button]
+    do: [{key: BACK}]
+    cooldown: 3
 
   - name: Tap to continue
     when:
