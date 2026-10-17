@@ -133,7 +133,9 @@ templates:
     level: required
     description: >-
       The "NEW" mark of an uncleared stage in the stage list. Tick "search the
-      whole screen" so it is found on any row (and on a NEW difficulty).
+      whole screen" so it is found on any row (and on a NEW difficulty). Crop
+      only the letters. If the stage does not open when the mark is tapped,
+      set a tap point on the stage's row.
   stage_list:
     level: required
     description: >-

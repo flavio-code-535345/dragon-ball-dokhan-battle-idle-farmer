@@ -286,6 +286,8 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .tpl .buttons { gap: 6px; }
 .tpl-edit { display: grid; gap: 8px; }
 .capture-form { display: grid; gap: 12px; }
+.tap-point { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tap-point .btn.active { outline: 2px solid var(--accent); }
 .crop-preview {
   justify-self: center;
   max-width: 100%;

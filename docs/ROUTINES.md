@@ -108,8 +108,8 @@ All listed conditions must hold.
 
 | Action | Meaning |
 |---|---|
-| `tap: name` | tap the template where it was found (random offset within the button, see `TAP_JITTER`) |
-| `tap: {template: name, offset: [0.0, 0.8]}` | tap relative to the template: offset in template widths/heights from its centre |
+| `tap: name` | tap the template where it was found: its middle, or the tap point set when capturing it (random offset, see `TAP_JITTER`) |
+| `tap: {template: name, offset: [0.0, 0.8]}` | tap relative to the template: offset in template widths/heights from its centre (instead of its tap point) |
 | `tap_xy: [0.5, 0.15]` | tap a point: values ≤ 1 are fractions of the screen, larger values are pixels |
 | `swipe: {from: [0.5, 0.8], to: [0.5, 0.3], ms: 400}` | swipe (also `[x1, y1, x2, y2, ms]`) |
 | `key: BACK` | press a key: `BACK`, `HOME`, `ENTER`, `ESCAPE`, `MENU`, `APP_SWITCH`, `WAKEUP`, `POWER` |

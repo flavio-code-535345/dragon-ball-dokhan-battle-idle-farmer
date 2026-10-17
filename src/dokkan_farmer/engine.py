@@ -826,7 +826,10 @@ class Farmer:
                 log.info("Tap on %s skipped: it is not on screen", args["template"])
                 return
             x, y, w, h = match.box
-            dx, dy = args.get("offset", [0.0, 0.0])
+            # The routine's offset; without one, the template's own tap point (or its centre).
+            dx, dy = args.get("offset") or [0.0, 0.0]
+            if not (dx or dy) and match.tap:
+                dx, dy = match.tap
             jitter = self.settings.tap_jitter
             cx = x + w * (0.5 + dx + self.rng.uniform(-jitter, jitter))
             cy = y + h * (0.5 + dy + self.rng.uniform(-jitter, jitter))

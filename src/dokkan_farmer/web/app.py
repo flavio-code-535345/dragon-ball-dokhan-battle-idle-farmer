@@ -180,6 +180,10 @@ class TemplateCreate(BaseModel):
     search_full: bool = False
     description: str = ""
     overwrite: bool = False
+    #: Where to tap when a routine taps this template (screen fractions, like x/y); empty =
+    #: the middle of the box. Stored relative to the box, so it moves with the template.
+    tap_x: float | None = Field(None, ge=0, le=1)
+    tap_y: float | None = Field(None, ge=0, le=1)
 
 
 class TemplateUpdate(BaseModel):
@@ -187,6 +191,8 @@ class TemplateUpdate(BaseModel):
     mode: Literal["gray", "color"] | None = None
     search_full: bool | None = None
     description: str | None = None
+    #: True: tap the template's centre again (forget its tap point)
+    reset_tap: bool = False
 
 
 class RoutineText(BaseModel):
@@ -706,6 +712,9 @@ def create_app(ctx: AppContext) -> FastAPI:
             if ctx.store.has(name) and not body.overwrite:
                 raise HTTPException(409, f"A template called {name} already exists")
             box = (body.x * width, body.y * height, body.w * width, body.h * height)
+            tap = None
+            if body.tap_x is not None and body.tap_y is not None:
+                tap = [(body.tap_x - body.x) / body.w - 0.5, (body.tap_y - body.y) / body.h - 0.5]
             meta = ctx.store.create_from_frame(
                 name,
                 frame,
@@ -714,6 +723,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 mode=body.mode,
                 search_full=body.search_full,
                 description=body.description,
+                tap=tap,
             )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
@@ -744,6 +754,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 mode=body.mode,
                 search_full=body.search_full,
                 description=body.description,
+                reset_tap=body.reset_tap,
             )
         except KeyError:
             raise HTTPException(404, f"No template called {name}") from None

@@ -127,6 +127,15 @@ def test_template_lifecycle(client):
         "/api/templates/results_header", json={"threshold": 0.7, "search_full": True}
     )
     assert patched.json()["threshold"] == 0.7 and patched.json()["region"] is None
+    # A tap point (screen fractions) is stored relative to the box: here its right edge.
+    pointed = {**body, "name": "pointed", "tap_x": 1.0, "tap_y": 0.045}
+    template = client.post("/api/templates", json=pointed).json()["template"]
+    assert template["tap"] == [0.5, 0.0]
+    results = client.get("/api/screen/analyze").json()["results"]
+    hit = next(r for r in results if r["name"] == "pointed")
+    assert hit["tap"][0] == pytest.approx(1.0, abs=0.01)
+    reset = client.patch("/api/templates/pointed", json={"reset_tap": True})
+    assert reset.json()["tap"] is None
     assert client.delete("/api/templates/results_header").json()["ok"]
     assert client.delete("/api/templates/results_header").status_code == 404
     assert client.get("/api/templates/nope.png").status_code == 404

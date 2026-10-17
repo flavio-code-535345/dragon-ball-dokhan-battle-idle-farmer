@@ -88,6 +88,22 @@ def _fit_span(start: int, end: int, need: int, limit: int) -> tuple[int, int]:
     return start, end
 
 
+#: How far a template's tap point may lie from it, in template sizes.
+MAX_TAP_OFFSET = 3.0
+
+
+def _tap_offset(value: Any) -> list[float] | None:
+    """A valid ``[dx, dy]`` tap offset (clamped), or ``None`` for the template's centre."""
+    try:
+        dx, dy = (float(v) for v in value)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(dx) and math.isfinite(dy)):
+        return None
+    limit = MAX_TAP_OFFSET
+    return [round(min(limit, max(-limit, dx)), 4), round(min(limit, max(-limit, dy)), 4)]
+
+
 @dataclass
 class TemplateMeta:
     name: str
@@ -101,6 +117,9 @@ class TemplateMeta:
     bbox: list[int] = field(default_factory=lambda: [0, 0, 0, 0])
     description: str = ""
     created_at: float = 0.0
+    #: Where ``tap: name`` taps: ``[dx, dy]`` from the template's centre in template widths
+    #: and heights (it may lie outside the template). ``None`` = the centre.
+    tap: list[float] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TemplateMeta:
@@ -110,6 +129,7 @@ class TemplateMeta:
         meta.threshold = float(min(0.99, max(0.5, meta.threshold)))
         if meta.mode not in MODES:
             meta.mode = "gray"
+        meta.tap = _tap_offset(meta.tap)
         return meta
 
     def to_dict(self) -> dict[str, Any]:
@@ -123,6 +143,14 @@ class Match:
     found: bool
     #: Best candidate ``(x, y, w, h)`` in screen pixels (valid even when not found).
     box: tuple[int, int, int, int]
+    #: The template's tap point as ``[dx, dy]`` from the box's centre (box sizes), or None.
+    tap: tuple[float, float] | None = None
+
+    def tap_point(self) -> tuple[float, float]:
+        """Where ``tap: name`` taps, in screen pixels (before any jitter)."""
+        x, y, w, h = self.box
+        dx, dy = self.tap or (0.0, 0.0)
+        return x + w * (0.5 + dx), y + h * (0.5 + dy)
 
     @property
     def center(self) -> tuple[int, int]:
@@ -131,12 +159,16 @@ class Match:
 
     def to_dict(self, width: int, height: int) -> dict[str, Any]:
         x, y, w, h = self.box
-        return {
+        data: dict[str, Any] = {
             "name": self.name,
             "score": round(float(self.score), 3),
             "found": self.found,
             "box": [x / width, y / height, w / width, h / height],
         }
+        if self.tap:  # its own tap point, in screen fractions (else: the box's centre)
+            tx, ty = self.tap_point()
+            data["tap"] = [round(tx / width, 4), round(ty / height, 4)]
+        return data
 
 
 class TemplateStore:
@@ -243,7 +275,9 @@ class TemplateStore:
         search_full: bool = False,
         margin: float = 0.06,
         description: str = "",
+        tap: Any = None,
     ) -> TemplateMeta:
+        """``tap``: ``[dx, dy]`` from the crop's centre in crop sizes (None = the centre)."""
         name = validate_name(name)
         if mode not in MODES:
             raise ValueError(f"mode must be one of {MODES}")
@@ -269,6 +303,7 @@ class TemplateStore:
             bbox=[x, y, w, h],
             description=description.strip(),
             created_at=time.time(),
+            tap=_tap_offset(tap),
         )
         return self.save(meta, crop)
 
@@ -280,6 +315,7 @@ class TemplateStore:
         mode: str | None = None,
         search_full: bool | None = None,
         description: str | None = None,
+        reset_tap: bool = False,
     ) -> TemplateMeta:
         with self._lock:
             meta = self._meta.get(name)
@@ -299,6 +335,8 @@ class TemplateStore:
                     meta.region = _near_region(tuple(meta.bbox), (fw, fh), 0.06)
             if description is not None:
                 meta.description = description.strip()
+            if reset_tap:
+                meta.tap = None
             self._write_meta()
             self.version += 1
             return meta
@@ -426,8 +464,9 @@ class FrameAnalysis:
 
     def _match(self, meta: TemplateMeta, image: np.ndarray) -> Match:
         search = self._search(meta, image)
+        tap = tuple(meta.tap) if meta.tap else None
         if search is None:
-            return Match(meta.name, 0.0, False, (0, 0, 0, 0))
+            return Match(meta.name, 0.0, False, (0, 0, 0, 0), tap)
         result = search.result
         ph, pw = search.template.shape[:2]
         template_mean = float(search.template.mean())
@@ -441,12 +480,12 @@ class FrameAnalysis:
             x, y = loc
             patch = search.window[y : y + ph, x : x + pw]
             if _brightness_ok(float(patch.mean()), template_mean):
-                return Match(meta.name, float(score), True, self._to_box(search, loc))
+                return Match(meta.name, float(score), True, self._to_box(search, loc), tap)
             # Dimmed copy (e.g. behind a popup): suppress this peak and look further.
             y0, x0 = max(0, y - ph // 2), max(0, x - pw // 2)
             result[y0 : y + ph // 2 + 1, x0 : x + pw // 2 + 1] = -1
         assert first is not None
-        return Match(meta.name, first[0], False, self._to_box(search, first[1]))
+        return Match(meta.name, first[0], False, self._to_box(search, first[1]), tap)
 
     def candidates(
         self, name: str, limit: int = 3

@@ -35,6 +35,18 @@ def test_taps_land_inside_the_buttons(make_sim):
     assert all(button.contains(x, y) for x, y in attempt_taps)
 
 
+def test_taps_go_to_the_templates_own_tap_point(make_sim):
+    env = make_sim()
+    meta = env.store.get("attempt_again")[0]
+    meta.tap = [0.0, 1.0]  # one button height below the button's centre
+    env.store.version += 1
+    env.run(minutes=1)
+    button = B["attempt_again"]
+    below = [t for t in env.device.taps if button.contains(t[0], t[1] - button.h)]
+    assert below, "a tap one button height below Attempt Again"
+    # (A tap in the button itself would also be the home screen's Events button.)
+
+
 def test_stop_after_runs(make_sim):
     env = make_sim()
     summary = env.run(minutes=30, options={"max_runs": 3})

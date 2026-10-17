@@ -147,3 +147,27 @@ def test_invalid_names(name):
 
 def test_valid_name_is_lowercased():
     assert validate_name("Attempt_Again") == "attempt_again"
+
+
+def test_a_tap_point_moves_with_the_template(store):
+    frame = background()
+    draw_button(frame, 250, 900, "AGAIN")
+    # Tap one button height below the label's centre (e.g. the row the label sits on).
+    store.create_from_frame("again", frame, (250, 900, 221, 81), search_full=True, tap=[0, 1.0])
+    assert store.get("again")[0].tap == [0.0, 1.0]
+    moved = background()
+    draw_button(moved, 100, 300, "AGAIN")
+    match = Matcher(store).analyze(moved).find("again")
+    assert match.found and match.tap == (0.0, 1.0)
+    tx, ty = match.tap_point()
+    assert abs(tx - (100 + 221 / 2)) <= 5 and abs(ty - (300 + 81 * 1.5)) <= 5
+    data = match.to_dict(720, 1280)
+    assert data["tap"] == [pytest.approx(tx / 720, abs=1e-3), pytest.approx(ty / 1280, abs=1e-3)]
+    # Reloaded from templates.json; an absurd value is clamped, a broken one means the centre.
+    assert TemplateStore(store.directory).get("again")[0].tap == [0.0, 1.0]
+    store.create_from_frame("far", frame, (250, 900, 221, 81), tap=[9, -9])
+    assert store.get("far")[0].tap == [3.0, -3.0]
+    store.create_from_frame("plain", frame, (250, 900, 221, 81), tap="nonsense")
+    plain = Matcher(store).analyze(frame).find("plain")
+    assert plain.tap is None and "tap" not in plain.to_dict(720, 1280)
+    assert store.update("again", reset_tap=True).tap is None

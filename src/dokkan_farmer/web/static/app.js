@@ -611,6 +611,7 @@
         ctx.fillRect(x * width, Math.max(0, y * height - 16), tw, 16);
         ctx.fillStyle = "#3ecf8e";
         ctx.fillText(label, x * width + 4, Math.max(11, y * height - 4));
+        if (det.tap) drawTapMark(ctx, det.tap[0] * width, det.tap[1] * height, 7);
       }
     }
     if (ui.lastTap && Date.now() - ui.lastTap.t < 900) {
@@ -840,7 +841,7 @@
       <div class="tpl" data-name="${esc(t.name)}">
         <img src="/api/templates/${encodeURIComponent(t.name)}.png?v=${t.created_at}" alt="${esc(t.name)}" loading="lazy">
         <span class="tpl-name">${esc(t.name)}</span>
-        <span class="tpl-meta">≥ ${t.threshold.toFixed(2)} · ${t.mode} · ${t.region ? "near" : "whole screen"}</span>
+        <span class="tpl-meta">≥ ${t.threshold.toFixed(2)} · ${t.mode} · ${t.region ? "near" : "whole screen"}${t.tap ? " · own tap point" : ""}</span>
         ${scoreBadge(t.name)}
         <div class="buttons">
           <button class="btn small" data-act="edit" type="button">Edit</button>
@@ -855,6 +856,7 @@
           <div class="buttons">
             <button class="btn small primary" data-act="save" type="button">Save</button>
             <button class="btn small" data-act="recapture" type="button">Recapture</button>
+            ${t.tap ? `<button class="btn small" data-act="reset-tap" type="button" title="Tap the middle of the template again">Reset tap point</button>` : ""}
           </div>
         </div>
       </div>`).join("");
@@ -892,6 +894,11 @@
         });
         await afterTemplatesChanged();
       }, "Template updated");
+    } else if (act === "reset-tap") {
+      run(async () => {
+        await api(`/api/templates/${encodeURIComponent(name)}`, { method: "PATCH", body: { reset_tap: true } });
+        await afterTemplatesChanged();
+      }, "Tap point reset");
     } else if (act === "recapture") {
       const doc = ui.routineDetail && ui.routineDetail.templates.find((t) => t.name === name);
       startCapture(name, doc ? doc.description : "");
@@ -945,7 +952,11 @@
   async function startCapture(name = "", description = "") {
     await run(async () => {
       const cap = await api("/api/screen/capture?pin=true", { method: "POST" });
-      ui.capture = { frameId: cap.frame_id, width: cap.width, height: cap.height, rect: null };
+      ui.capture = {
+        frameId: cap.frame_id, width: cap.width, height: cap.height, rect: null,
+        tap: null, tapMode: false,
+      };
+      updateTapPoint();
       const card = $("#capture-card");
       card.classList.remove("hidden");
       $("#tpl-name").value = name;
@@ -976,13 +987,41 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     const r = ui.capture.rect;
-    if (!r || r.w <= 0 || r.h <= 0) return;
-    ctx.fillStyle = "rgba(0,0,0,.5)";
-    ctx.fillRect(0, 0, width, height);
-    ctx.clearRect(r.x * width, r.y * height, r.w * width, r.h * height);
-    ctx.strokeStyle = "#ff9d2e";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(r.x * width, r.y * height, r.w * width, r.h * height);
+    if (r && r.w > 0 && r.h > 0) {
+      ctx.fillStyle = "rgba(0,0,0,.5)";
+      ctx.fillRect(0, 0, width, height);
+      ctx.clearRect(r.x * width, r.y * height, r.w * width, r.h * height);
+      ctx.strokeStyle = "#ff9d2e";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(r.x * width, r.y * height, r.w * width, r.h * height);
+    }
+    if (ui.capture.tap) drawTapMark(ctx, ui.capture.tap.x * width, ui.capture.tap.y * height, 9);
+  }
+
+  // Where a routine's "tap: <template>" taps: a crosshair.
+  function drawTapMark(ctx, x, y, size) {
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,.7)";
+    for (const pass of [0, 1]) {
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.6, 0, Math.PI * 2);
+      ctx.moveTo(x - size, y); ctx.lineTo(x + size, y);
+      ctx.moveTo(x, y - size); ctx.lineTo(x, y + size);
+      ctx.stroke();
+      if (!pass) { ctx.lineWidth = 1.5; ctx.strokeStyle = "#ff4d6d"; }
+    }
+    ctx.restore();
+  }
+
+  function updateTapPoint() {
+    const cap = ui.capture;
+    const active = Boolean(cap && cap.tapMode);
+    $("#btn-tap-point").classList.toggle("active", active);
+    $("#btn-tap-reset").classList.toggle("hidden", !(cap && cap.tap));
+    $("#tap-point-info").textContent = active
+      ? "Now tap the picture where a routine should tap (inside or outside the box)."
+      : cap && cap.tap ? "Taps the marked point (it moves along with the template)." : "Taps the middle of the box.";
   }
 
   function updateCropPreview() {
@@ -1009,6 +1048,13 @@
     canvas.addEventListener("pointerdown", (e) => {
       if (!ui.capture) return;
       e.preventDefault();
+      if (ui.capture.tapMode) {  // marking the tap point, not drawing a box
+        ui.capture.tap = relPos(e, canvas);
+        ui.capture.tapMode = false;
+        updateTapPoint();
+        drawCapture();
+        return;
+      }
       canvas.setPointerCapture(e.pointerId);
       anchor = relPos(e, canvas);
       ui.capture.rect = { x: anchor.x, y: anchor.y, w: 0, h: 0 };
@@ -1041,6 +1087,18 @@
     $("#capture-card").classList.add("hidden");
   });
   $("#btn-recapture").addEventListener("click", () => startCapture($("#tpl-name").value));
+  $("#btn-tap-point").addEventListener("click", () => {
+    if (!ui.capture) return;
+    ui.capture.tapMode = !ui.capture.tapMode;
+    updateTapPoint();
+  });
+  $("#btn-tap-reset").addEventListener("click", () => {
+    if (!ui.capture) return;
+    ui.capture.tap = null;
+    ui.capture.tapMode = false;
+    updateTapPoint();
+    drawCapture();
+  });
   $("#btn-capture-new").addEventListener("click", () => startCapture(""));
 
   $("#btn-save-template").addEventListener("click", () => run(async () => {
@@ -1059,6 +1117,7 @@
         mode: $("#tpl-color").checked ? "color" : "gray",
         search_full: $("#tpl-full").checked,
         overwrite: exists,
+        ...(cap.tap ? { tap_x: cap.tap.x, tap_y: cap.tap.y } : {}),
       },
     });
     const box = $("#capture-result");

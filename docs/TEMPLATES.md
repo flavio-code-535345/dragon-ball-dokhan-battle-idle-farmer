@@ -12,6 +12,10 @@ in your language and at your device's resolution.
 2. **Templates** tab → press **Capture** next to the name in the checklist (or **+ Capture** for a
    new one). This freezes the current screenshot.
 3. Drag a box around the element, check the name, and press **Save template**.
+   Optional: **⌖ Set tap point**, then tap the picture where a routine should tap when it taps this
+   template, inside or outside the box. Example: the `new_mark` label of a stage, with the tap point
+   on the stage's row. The point moves with the template wherever it is found; the Screen tab's
+   boxes show it as a red crosshair. *Reset tap point* (Edit) goes back to the middle of the box.
 4. The result shows the match score on that screenshot and warns you if the crop also matches
    somewhere else.
 
@@ -41,8 +45,8 @@ Things the farmer handles for you:
 - **Different resolutions.** Templates are rescaled when the screenshot width differs from the
   one they were captured at. Recapture after changing the resolution, language or a big game
   update anyway.
-- **Taps land inside the button**, with a small random offset (`TAP_JITTER`) instead of always the
-  exact centre.
+- **Taps land inside the button** (or around its tap point), with a small random offset
+  (`TAP_JITTER`) instead of always the exact spot.
 
 ## Templates of the default routine
 
