@@ -138,6 +138,8 @@ class QuestGame:
             self.screen = "results"
         elif screen == "results" and OK.contains(x, y):
             self.cleared[self.stage].add(self.difficulty)
+            if self.difficulty == self.difficulties[-1]:  # the highest pays the lower ones too
+                self.cleared[self.stage].update(self.difficulties)
             self.screen = "list"
         elif screen == "defeat":
             if GIVE_UP.contains(x, y):

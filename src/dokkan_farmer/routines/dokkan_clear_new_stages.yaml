@@ -42,6 +42,18 @@ options:
     help: >-
       The farmer always taps "Give up", never a paid revive. The count starts
       again after each cleared stage.
+  difficulty:
+    label: Difficulty to play
+    type: choice
+    choices: [highest, easiest]
+    default: highest
+    help: >-
+      Clearing a stage's highest difficulty for the first time also pays the
+      first-clear Dragon Stones of the lower ones (checked in the game: a stage
+      went from 0/3 to 3/3 with SUPER alone). "highest" plays SUPER, else Z-HARD,
+      else HARD, else NORMAL: all stones of a stage in one clear, for more STA
+      and harder battles. "easiest" plays the lowest listed difficulty: one
+      stone per stage.
   sphere_x:
     label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
     type: number
@@ -164,6 +176,16 @@ templates:
       The HARD label of a stage's difficulty list. Quest stages have no NORMAL:
       their easiest difficulty is HARD, which the routine plays when NORMAL is
       not on the screen.
+  difficulty_zhard:
+    level: optional
+    description: >-
+      The Z-HARD label of a stage's difficulty list (red bar). With difficulty =
+      highest it is played when there is no SUPER.
+  difficulty_super:
+    level: optional
+    description: >-
+      The SUPER label of a stage's difficulty list (purple bar). With difficulty =
+      highest it is played first: it also pays the stones of the lower ones.
   start_button:
     level: required
     description: The "Start!" button on the team screen before a quest.
@@ -347,13 +369,48 @@ rules:
     do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}]
     cooldown: 4
 
+  # Clearing the highest difficulty of a stage also pays the lower ones' first-clear
+  # stones, so by default the highest listed difficulty is played (SUPER, else Z-HARD,
+  # else HARD, else NORMAL); "easiest" plays the lowest one.
+  - name: Pick Super
+    when: {visible: difficulty_super, option: {difficulty: highest}}
+    do: [{tap: difficulty_super}]
+    cooldown: 4
+
+  - name: Pick Z-Hard
+    when:
+      visible: difficulty_zhard
+      not_visible: difficulty_super
+      option: {difficulty: highest}
+    do: [{tap: difficulty_zhard}]
+    cooldown: 4
+
+  - name: Pick Hard
+    when:
+      visible: difficulty_hard
+      not_visible: [difficulty_super, difficulty_zhard]
+      option: {difficulty: highest}
+    do: [{tap: difficulty_hard}]
+    cooldown: 4
+
   - name: Pick Normal
-    when: {visible: difficulty_normal}
+    when:
+      visible: difficulty_normal
+      not_visible: [difficulty_super, difficulty_zhard, difficulty_hard]
+      option: {difficulty: highest}
     do: [{tap: difficulty_normal}]
     cooldown: 4
 
-  - name: Pick Hard (Quest stages have no Normal)
-    when: {visible: difficulty_hard, not_visible: difficulty_normal}
+  - name: Pick Normal (easiest)
+    when: {visible: difficulty_normal, option: {difficulty: easiest}}
+    do: [{tap: difficulty_normal}]
+    cooldown: 4
+
+  - name: Pick Hard (easiest; Quest stages have no Normal)
+    when:
+      visible: difficulty_hard
+      not_visible: difficulty_normal
+      option: {difficulty: easiest}
     do: [{tap: difficulty_hard}]
     cooldown: 4
 
@@ -419,7 +476,7 @@ rules:
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_list, start_button, difficulty_normal, difficulty_hard]
+      not_visible: [stage_list, start_button, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
       static_for: 4
     do: [{key: BACK}]
     cooldown: 3

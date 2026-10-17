@@ -190,8 +190,13 @@ Quest: Dokkan Story (START → Quest) works too: a chapter is a list of areas, a
 uncleared stages has a NEW mark. When an area has no NEW stage left, the routine goes back to the
 area list and opens the next NEW area.
 
-Quest stages have no NORMAL: their easiest difficulty is HARD, which both story routines play
-when NORMAL is not on the screen (template `difficulty_hard`). Because a Quest area's stage list
+Both story routines have an option **Difficulty to play**. Clearing a stage's highest difficulty
+for the first time also pays the first-clear Dragon Stones of the lower ones (checked in the game:
+a Quest stage went from 0/3 to 3/3 with SUPER alone). So by default (*highest*) they play SUPER,
+else Z-HARD, else HARD, else NORMAL (templates `difficulty_super`, `difficulty_zhard`,
+`difficulty_hard`, `difficulty_normal`): all stones of a stage in one clear, for more STA (about
+27 instead of 17) and harder battles. *easiest* plays only the lowest listed difficulty. Quest
+stages have no NORMAL: their lowest is HARD. Because a Quest area's stage list
 has no MISSION button, Dokkan Story presses Back when no NEW mark is left, and stops after four
 Backs in a row without a stage, a battle or a map move in between.
 

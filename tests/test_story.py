@@ -142,6 +142,28 @@ class HardAreaGame(AreaGame):
         self.difficulties = ("HARD", "Z-HARD")
 
 
+class SuperAreaGame(AreaGame):
+    """Quest stages: HARD / Z-HARD / SUPER; SUPER pays the stones of the lower ones too."""
+
+    def __init__(self, areas: list[set[int]]) -> None:
+        super().__init__(areas)
+        self.difficulties = ("HARD", "Z-HARD", "SUPER")
+
+
+def capture_difficulties(store: TemplateStore) -> None:
+    """The HARD / Z-HARD / SUPER labels of a Quest stage's difficulty list."""
+    game = SuperAreaGame([set()])
+    game.screen, game.stage = "difficulty", 0
+    for row, name in enumerate(("difficulty_hard", "difficulty_zhard", "difficulty_super")):
+        store.create_from_frame(
+            name,
+            game.render(),
+            difficulty_bar(row).as_tuple(),
+            threshold=0.9,
+            search_full=True,
+        )
+
+
 def capture_templates(store: TemplateStore) -> None:
     game = StoryGame([set()])
     game.cleared = game.sagas[0]
@@ -175,10 +197,12 @@ def capture_templates(store: TemplateStore) -> None:
 
 @pytest.fixture
 def play(tmp_path: Path):
-    def run(game: StoryGame, options: dict | None = None) -> dict:
+    def run(game: StoryGame, options: dict | None = None, difficulties: bool = False) -> dict:
         settings = Settings(data_dir=tmp_path / "data", device_backend="sim")
         store = TemplateStore(settings.templates_dir)
         capture_templates(store)
+        if difficulties:
+            capture_difficulties(store)
         library = RoutineLibrary(settings.routines_dir)
         library.install_defaults()
         routine = library.load(ROUTINE)
@@ -233,3 +257,17 @@ def test_quest_stages_without_normal_are_played_on_hard(play):
     assert {d for _, d in game.played} == {"HARD"}
     # Nothing left: the routine goes back out of the lists and says so.
     assert "No NEW stage or area left" in summary["reason"] and not summary["error"]
+
+
+def test_the_highest_difficulty_is_played_and_pays_the_lower_ones(play):
+    game = SuperAreaGame([{0}, set(range(STAGES))])  # stages 1-3 of area 0 are NEW
+    play(game, difficulties=True)
+    assert {d for _, d in game.played} == {"SUPER"}
+    assert len(game.played) == 3  # one clear per stage, none for HARD / Z-HARD
+    assert all(game.cleared[s] == {"HARD", "Z-HARD", "SUPER"} for s in range(1, STAGES))
+
+
+def test_the_easiest_difficulty_can_be_chosen(play):
+    game = SuperAreaGame([{0, 1, 2}, set(range(STAGES))])  # one NEW stage left
+    play(game, {"difficulty": "easiest"}, difficulties=True)
+    assert {d for _, d in game.played} == {"HARD"}
