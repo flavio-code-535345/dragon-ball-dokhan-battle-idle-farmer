@@ -151,6 +151,9 @@ class Match:
     box: tuple[int, int, int, int]
     #: The template's tap point as ``[dx, dy]`` from the box's centre (box sizes), or None.
     tap: tuple[float, float] | None = None
+    #: Set when a peak scored above the threshold but was skipped for its brightness:
+    #: patch / template brightness (e.g. 0.5 = a copy behind a dimming popup).
+    brightness: float | None = None
 
     def tap_point(self) -> tuple[float, float]:
         """Where ``tap: name`` taps, in screen pixels (before any jitter)."""
@@ -174,6 +177,8 @@ class Match:
         if self.tap:  # its own tap point, in screen fractions (else: the box's centre)
             tx, ty = self.tap_point()
             data["tap"] = [round(tx / width, 4), round(ty / height, 4)]
+        if self.brightness is not None:
+            data["brightness"] = round(self.brightness, 2)
         return data
 
 
@@ -527,6 +532,7 @@ class FrameAnalysis:
         ph, pw = search.template.shape[:2]
         template_mean = float(search.template.mean())
         first: tuple[float, tuple[int, int]] | None = None
+        skipped: float | None = None  # brightness ratio of the best peak skipped for it
         for _ in range(MAX_PEAKS):
             _, score, _, loc = cv2.minMaxLoc(result)
             if first is None:
@@ -535,13 +541,17 @@ class FrameAnalysis:
                 break
             x, y = loc
             patch = search.window[y : y + ph, x : x + pw]
-            if _brightness_ok(float(patch.mean()), template_mean):
+            patch_mean = float(patch.mean())
+            if _brightness_ok(patch_mean, template_mean):
                 return Match(meta.name, float(score), True, self._to_box(search, loc), tap)
+            if skipped is None:
+                skipped = (patch_mean + 8.0) / (template_mean + 8.0)
             # Dimmed copy (e.g. behind a popup): suppress this peak and look further.
             y0, x0 = max(0, y - ph // 2), max(0, x - pw // 2)
             result[y0 : y + ph // 2 + 1, x0 : x + pw // 2 + 1] = -1
         assert first is not None
-        return Match(meta.name, first[0], False, self._to_box(search, first[1]), tap)
+        box = self._to_box(search, first[1])
+        return Match(meta.name, first[0], False, box, tap, brightness=skipped)
 
     def candidates(
         self, name: str, limit: int = 3

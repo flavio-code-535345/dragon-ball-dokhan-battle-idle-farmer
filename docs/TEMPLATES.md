@@ -35,13 +35,19 @@ around everything it recognises.
   matches. (By default the search area is the captured spot plus a margin.)
 - **Compare colours** when two states differ mainly by colour, such as Auto ON vs Auto OFF.
   Normally matching uses greyscale, which is more robust.
+- **Capture at normal brightness.** Never crop while a hint, tutorial overlay or popup dims the
+  screen, or while a button glows: the farmer compares brightness (see below), so a template from
+  a dimmed screenshot is rejected on the normal screen. If a button pulses, capture it in the state
+  the routine needs it in (e.g. a battle's button while the battle waits for a tap).
 - **Threshold**: 0.85 by default. Raise it (0.90+) if a template matches the wrong thing, lower it
   (0.80) if it misses a button that is clearly visible. Check with *Test on screen*.
 
 Things the farmer handles for you:
 
 - **Dimmed copies are ignored.** When a popup darkens the screen behind it, buttons under the popup
-  still look similar, so matches much darker than the template are rejected.
+  still look similar, so matches much darker (or brighter) than the template are rejected. *Test on
+  screen* (and the MCP tool `find_templates`) shows such a match with its brightness, e.g. 0.6x
+  the template's: recapture the template if that is the screen you want it to match.
 - **Different resolutions.** Templates are rescaled when the screenshot width differs from the
   one they were captured at. Recapture after changing the resolution, language or a big game
   update anyway.

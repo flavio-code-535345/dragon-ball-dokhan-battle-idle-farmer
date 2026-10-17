@@ -911,6 +911,12 @@ def create_app(ctx: AppContext) -> FastAPI:
         def box(values: list[float]) -> list[float]:
             return [round(v, 3) for v in values]
 
+        def why(result: dict[str, Any]) -> list[str]:
+            """Why a match above its threshold does not count: its brightness."""
+            if "brightness" not in result:
+                return []
+            return [f"skipped: {result['brightness']}x the template's brightness"]
+
         def farm_line() -> str:
             farm = ctx.farmer.snapshot()
             line = farm["state"]
@@ -979,7 +985,9 @@ def create_app(ctx: AppContext) -> FastAPI:
 
         @server.tool(
             "Which templates a fresh screenshot shows: the found ones and at most 3 near misses "
-            "(score >= 0.5), as [name, score, box x/y/w/h]. names: only these, found or not. "
+            "(score >= 0.5), as [name, score, box x/y/w/h]; a near miss above its threshold says "
+            "it was skipped for its brightness (dimmed or brightened against the template). "
+            "names: only these, found or not. "
             "Its frame_id works for create_template. Templates have a mode (gray/color).",
             {"names": {"type": "array", "items": {"type": "string"}}},
         )
@@ -991,7 +999,7 @@ def create_app(ctx: AppContext) -> FastAPI:
             if args.get("names"):
                 wanted = set(args["names"])
                 out["templates"] = [
-                    [r["name"], r["score"], r["found"], box(r["box"])]
+                    [r["name"], r["score"], r["found"], box(r["box"]), *why(r)]
                     for r in results
                     if r["name"] in wanted
                 ]
@@ -1001,7 +1009,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                     [r["name"], r["score"], box(r["box"])] for r in results if r["found"]
                 ]
                 near = [r for r in results if not r["found"] and r["score"] >= 0.5][:3]
-                out["near"] = [[r["name"], r["score"], box(r["box"])] for r in near]
+                out["near"] = [[r["name"], r["score"], box(r["box"]), *why(r)] for r in near]
             return [mcp_text({k: v for k, v in out.items() if v is not None})]
 
         @server.tool(

@@ -73,10 +73,13 @@ def test_dimmed_copy_behind_popup_is_ignored(store):
     draw_button(frame, 250, 900, "OK")
     store.create_from_frame("ok", frame, (250, 900, 221, 81), search_full=True)
     dimmed = (frame.astype(np.float32) * 0.35).astype(np.uint8)
-    assert not Matcher(store).analyze(dimmed).visible("ok")
+    skipped = Matcher(store).analyze(dimmed).find("ok")
+    assert not skipped.found and skipped.score > 0.9
+    assert 0.3 < skipped.brightness < 0.5  # why it does not count
+    assert skipped.to_dict(720, 1280)["brightness"] == round(skipped.brightness, 2)
     draw_button(dimmed, 250, 300, "OK")  # a real, bright OK in a dialog
     match = Matcher(store).analyze(dimmed).find("ok")
-    assert match.found
+    assert match.found and match.brightness is None
     assert abs(match.box[1] - 300) <= 4
 
 
