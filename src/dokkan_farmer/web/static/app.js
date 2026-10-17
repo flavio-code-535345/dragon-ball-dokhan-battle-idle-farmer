@@ -1053,6 +1053,40 @@
     toast(hits.length ? `On screen: ${hits.join(", ")}` : "No template matches the current screen");
   }));
 
+  function download(href, filename) {
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  $("#btn-download-screen").addEventListener("click", () => run(async () => {
+    const cap = await api("/api/screen/capture", { method: "POST" });
+    download(`/api/screen.png?frame=${cap.frame_id}`, `screen-${cap.frame_id}.png`);
+  }, "Screenshot saved"));
+
+  $("#btn-export-templates").addEventListener("click", () => {
+    download("/api/templates/export", "dokkan-templates.json");
+  });
+
+  $("#btn-import-templates").addEventListener("click", () => $("#import-templates-file").click());
+  $("#import-templates-file").addEventListener("change", (e) => run(async () => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    let bundle;
+    try {
+      bundle = JSON.parse(await file.text());
+    } catch {
+      throw new Error("That file is not JSON");
+    }
+    const res = await api("/api/templates/import", { method: "POST", body: bundle });
+    await afterTemplatesChanged();
+    toast(`Imported ${res.imported.length}: ${res.imported.join(", ")}`, "ok");
+  }));
+
   // ----------------------------------------------------------------- capture
   async function startCapture(name = "", description = "") {
     await run(async () => {

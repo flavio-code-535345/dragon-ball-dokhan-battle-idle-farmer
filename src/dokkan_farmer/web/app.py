@@ -36,6 +36,7 @@ from ..library import validate_routine_id
 from ..live import BOUNDARY, mjpeg_part, open_feed
 from ..logging_setup import LOG_BUFFER, ensure_log_buffer
 from ..routine import Routine, RoutineError, parse_routine
+from ..vision import encode_png
 
 log = logging.getLogger(__name__)
 
@@ -437,6 +438,21 @@ def create_app(ctx: AppContext) -> FastAPI:
             headers={"Cache-Control": "no-store", "X-Frame-Id": str(frame_id)},
         )
 
+    @app.get("/api/screen.png")
+    def screen_png(frame: int | None = None) -> Response:
+        entry = ctx.farmer.frames.get(frame)
+        if entry is None:
+            raise HTTPException(404, "No screenshot yet")
+        frame_id, image, _ = entry
+        return Response(
+            encode_png(image),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Disposition": f'attachment; filename="screen-{frame_id}.png"',
+            },
+        )
+
     @app.get("/api/screen/live.jpg")
     def screen_live(w: int = Query(720, ge=120, le=2160), after: int | None = None) -> Response:
         """A fresh screenshot as JPEG in one request (the farm loop's latest while farming).
@@ -739,6 +755,22 @@ def create_app(ctx: AppContext) -> FastAPI:
     @app.get("/api/templates")
     def list_templates() -> list[dict[str, Any]]:
         return [meta.to_dict() for meta in ctx.store.metas()]
+
+    @app.get("/api/templates/export")
+    def export_templates() -> JSONResponse:
+        return JSONResponse(
+            ctx.store.export_bundle(),
+            headers={"Content-Disposition": 'attachment; filename="dokkan-templates.json"'},
+        )
+
+    @app.post("/api/templates/import")
+    def import_templates(body: dict[str, Any]) -> dict[str, Any]:
+        try:
+            names = ctx.store.import_bundle(body)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        log.info("Imported templates: %s", ", ".join(names))
+        return {"imported": names}
 
     @app.get("/api/templates/{name}.png")
     def template_png(name: str) -> Response:

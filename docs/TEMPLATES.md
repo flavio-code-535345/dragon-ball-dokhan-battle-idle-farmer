@@ -74,5 +74,11 @@ skipped (the Farm tab lists them), so you can add them gradually.
 
 ## Backup and sharing
 
-Copy `/data/templates` (for example with `docker cp dokkan-farmer:/data/templates .`). Templates
-work across installs that use the same device resolution and game language.
+**Export** in the Templates tab downloads every template as one `.json` file (settings plus the PNG
+as base64); **Import** adds or replaces the templates of such a file, all or none. An entry without
+`region` is searched near its `bbox` like a fresh capture, `"region": null` searches the whole screen.
+**📷 Screenshot** saves the current screen as a full-size PNG: handy for cropping templates elsewhere
+(or letting someone else do it) and importing the result.
+
+Copying `/data/templates` works too (`docker cp dokkan-farmer:/data/templates .`). Templates work
+across installs that use the same device resolution and game language.

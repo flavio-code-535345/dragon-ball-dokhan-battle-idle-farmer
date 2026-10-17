@@ -9,6 +9,8 @@ elements dimmed behind a popup are not mistaken for clickable ones.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 import math
@@ -35,6 +37,10 @@ MIN_STD = 4.0
 BRIGHTNESS_RANGE = (0.72, 1.4)
 #: How many correlation peaks to try before giving up on the brightness check.
 MAX_PEAKS = 6
+
+
+#: ``version`` of the JSON from :meth:`TemplateStore.export_bundle`.
+BUNDLE_VERSION = 1
 
 
 def validate_name(name: str) -> str:
@@ -340,6 +346,56 @@ class TemplateStore:
             self._write_meta()
             self.version += 1
             return meta
+
+    # ---------------------------------------------------------- import/export
+    def export_bundle(self) -> dict[str, Any]:
+        """Every template with its PNG (base64) in one JSON-able dict."""
+        with self._lock:
+            entries = [
+                {**self._meta[name].to_dict(), "png": base64.b64encode(encode_png(image)).decode()}
+                for name, image in sorted(self._images.items())
+            ]
+        return {"version": BUNDLE_VERSION, "templates": entries}
+
+    def import_bundle(self, bundle: dict[str, Any]) -> list[str]:
+        """Adds or replaces the templates of an :meth:`export_bundle` dict; all or none.
+
+        An entry without ``region`` gets the usual search area around its ``bbox``
+        (``"region": null`` searches the whole screen)."""
+        entries = bundle.get("templates") if isinstance(bundle, dict) else None
+        if not isinstance(entries, list) or not entries:
+            raise ValueError("The file has no templates")
+        parsed: list[tuple[TemplateMeta, np.ndarray]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError("Each template must be an object")
+            label = entry.get("name", "?")
+            try:
+                data = base64.b64decode(entry.get("png") or "", validate=True)
+            except (binascii.Error, ValueError):
+                raise ValueError(f"Template {label}: png is not valid base64") from None
+            image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+            if image is None:
+                raise ValueError(f"Template {label}: png is not an image")
+            h, w = image.shape[:2]
+            if w < 8 or h < 8:
+                raise ValueError(f"Template {label}: the image is smaller than 8x8")
+            try:
+                meta = TemplateMeta.from_dict({k: v for k, v in entry.items() if k != "png"})
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Template {label}: {exc}") from None
+            if len(meta.bbox) != 4 or not meta.bbox[2]:
+                meta.bbox = [0, 0, w, h]
+            fw, fh = [*meta.source_size, 0, 0][:2]
+            meta.source_size = [int(fw), int(fh)]
+            if "region" not in entry:
+                meta.region = _near_region(tuple(meta.bbox), (fw, fh), 0.06) if fw and fh else None
+            meta.created_at = meta.created_at or time.time()
+            parsed.append((meta, image))
+        with self._lock:
+            for meta, image in parsed:
+                self.save(meta, image)
+        return [meta.name for meta, _ in parsed]
 
     def delete(self, name: str) -> None:
         with self._lock:

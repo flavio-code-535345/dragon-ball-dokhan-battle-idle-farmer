@@ -188,6 +188,12 @@
             <button class="btn small primary" id="btn-capture-new" type="button">+ Capture</button>
           </div>
         </div>
+        <div class="buttons">
+          <button class="btn small" id="btn-download-screen" type="button" title="Save the current screen as a full-size PNG">📷 Screenshot</button>
+          <button class="btn small" id="btn-export-templates" type="button" title="Download every template as one .json file">Export</button>
+          <button class="btn small" id="btn-import-templates" type="button" title="Add or replace templates from a .json file">Import</button>
+          <input id="import-templates-file" type="file" accept=".json,application/json" hidden>
+        </div>
         <div id="templates-grid" class="tpl-grid"></div>
         <p id="templates-empty" class="muted small hidden">No templates yet.</p>
       </div>

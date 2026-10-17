@@ -146,6 +146,32 @@ def test_template_lifecycle(client):
     assert client.post("/api/templates", json={**body, "frame_id": 99999}).status_code == 409
 
 
+def test_template_export_and_import(client):
+    frame_id = client.post("/api/screen/capture").json()["frame_id"]
+    shot = client.get(f"/api/screen.png?frame={frame_id}")
+    assert shot.content[:4] == b"\x89PNG" and "attachment" in shot.headers["content-disposition"]
+    assert client.get("/api/screen.png?frame=99999").status_code == 404
+    bundle = client.get("/api/templates/export").json()
+    assert bundle["version"] == 1
+    entry = next(t for t in bundle["templates"] if t["name"] == "attempt_again")
+    assert base64.b64decode(entry["png"])[:4] == b"\x89PNG"
+    # A hand-made entry: no region = searched near its bbox, region null = whole screen.
+    near = {**entry, "name": "copy_near", "tap": [0.4, 0]}
+    del near["region"]
+    anywhere = {**entry, "name": "copy_anywhere", "region": None}
+    imported = client.post("/api/templates/import", json={"templates": [near, anywhere]})
+    assert imported.json()["imported"] == ["copy_near", "copy_anywhere"]
+    metas = {t["name"]: t for t in client.get("/api/templates").json()}
+    assert metas["copy_near"]["region"] is not None and metas["copy_near"]["tap"] == [0.4, 0]
+    assert metas["copy_anywhere"]["region"] is None
+    assert metas["copy_near"]["bbox"] == entry["bbox"]
+    # All or nothing: one broken entry imports none.
+    broken = {"templates": [{**entry, "name": "fine"}, {**entry, "name": "bad", "png": "xx"}]}
+    assert client.post("/api/templates/import", json=broken).status_code == 400
+    assert client.post("/api/templates/import", json={"templates": []}).status_code == 400
+    assert "fine" not in {t["name"] for t in client.get("/api/templates").json()}
+
+
 def test_routine_endpoints(client):
     routines = client.get("/api/routines").json()
     assert [r["id"] for r in routines] == ["dokkan_auto_farm", "dokkan_clear_new_stages"]
