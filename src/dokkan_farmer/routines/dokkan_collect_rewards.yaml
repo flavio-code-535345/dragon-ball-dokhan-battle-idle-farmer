@@ -56,7 +56,7 @@ templates:
     level: required
     description: >-
       The "Claim all" / "Receive all" button of the Missions screen while it can
-      be pressed (not greyed out).
+      be pressed. Use colour mode: in grey a greyed-out button looks the same.
   home_presents:
     level: required
     description: The Present Box (gift) button on the home screen.
@@ -64,8 +64,10 @@ templates:
     level: required
     description: The title of the Present Box screen.
   accept_all:
-    level: required
-    description: The "Accept all" button of the Present Box while it can be pressed.
+    level: recommended
+    description: >-
+      The "Accept all" button of the Present Box while it can be pressed (only
+      shown when there are gifts). Until captured, claim_all is looked for there.
   ok_button:
     level: recommended
     description: >-
@@ -79,9 +81,9 @@ templates:
   mission_tab_1:
     level: optional
     description: >-
-      The first mission tab to claim (e.g. Daily). Capture the tabs in order:
-      tab 2 is only visited when tab 1 is captured, and so on. Without tabs the
-      routine claims only the tab that is open.
+      The label of the first mission tab (e.g. Daily) while that tab is NOT open
+      (an open tab's label looks different). Tabs are visited in order; a tab
+      that is not captured is skipped. Give it a tap point on the tab's icon.
   mission_tab_2:
     level: optional
     description: The second mission tab (e.g. Main).
@@ -127,11 +129,19 @@ rules:
     do: [{count: misses}]
     cooldown: 1
 
+  # Then the tabs in order. A tab's label looks different while that tab is open, so
+  # a tab whose label is not found (it is the open one, or not captured) is skipped.
   - name: Missions → tab 1
     when:
       visible: [missions_screen, mission_tab_1]
       counter_below: {tabs: 1}
     do: [{tap: mission_tab_1}, {count: tabs}, {reset: misses}]
+
+  - name: Missions → tab 1 is open (or not captured)
+    when:
+      visible: missions_screen
+      counter_below: {tabs: 1}
+    do: [{count: tabs}]
 
   - name: Missions → tab 2
     when:
@@ -140,6 +150,13 @@ rules:
       counter_below: {tabs: 2}
     do: [{tap: mission_tab_2}, {count: tabs}, {reset: misses}]
 
+  - name: Missions → tab 2 is open (or not captured)
+    when:
+      visible: missions_screen
+      counter_at_least: {tabs: 1}
+      counter_below: {tabs: 2}
+    do: [{count: tabs}]
+
   - name: Missions → tab 3
     when:
       visible: [missions_screen, mission_tab_3]
@@ -147,12 +164,26 @@ rules:
       counter_below: {tabs: 3}
     do: [{tap: mission_tab_3}, {count: tabs}, {reset: misses}]
 
+  - name: Missions → tab 3 is open (or not captured)
+    when:
+      visible: missions_screen
+      counter_at_least: {tabs: 2}
+      counter_below: {tabs: 3}
+    do: [{count: tabs}]
+
   - name: Missions → tab 4
     when:
       visible: [missions_screen, mission_tab_4]
       counter_at_least: {tabs: 3}
       counter_below: {tabs: 4}
     do: [{tap: mission_tab_4}, {count: tabs}, {reset: misses}]
+
+  - name: Missions → tab 4 is open (or not captured)
+    when:
+      visible: missions_screen
+      counter_at_least: {tabs: 3}
+      counter_below: {tabs: 4}
+    do: [{count: tabs}]
 
   - name: Missions done → back
     when: {visible: [missions_screen, back_button]}
@@ -168,6 +199,12 @@ rules:
   - name: Present Box → accept all
     when: {visible: [present_screen, accept_all]}
     do: [{tap: accept_all}, {count: claims}, {reset: misses}]
+    cooldown: 3
+
+  # Until accept_all is captured: the Missions screen's "Accept all" looks the same.
+  - name: Present Box → accept all (Missions button)
+    when: {visible: [present_screen, claim_all]}
+    do: [{tap: claim_all}, {count: claims}, {reset: misses}]
     cooldown: 3
 
   - name: Present Box → nothing left?

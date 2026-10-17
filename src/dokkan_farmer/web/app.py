@@ -961,10 +961,12 @@ def create_app(ctx: AppContext) -> FastAPI:
             return then_shot({"wait": 5, **args}, f"Game: {args['action']}")
 
         @server.tool(
-            "Which templates the current screen shows: name, found, score, box [x, y, w, h].",
+            "Which templates a fresh screenshot shows: name, found, score, box [x, y, w, h]; "
+            "its frame_id works for create_template. Templates have a mode (gray/color).",
         )
         def mcp_find_templates(args: dict[str, Any]) -> list[dict[str, Any]]:
             frame_id = ctx.farmer.capture()
+            ctx.farmer.frames.pin(frame_id)  # kept for create_template
             results = screen_analyze(frame_id)["results"]
             results.sort(key=lambda r: -r["score"])
             rows = [
@@ -997,6 +999,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 "w": frac,
                 "h": frac,
                 "threshold": {"type": "number", "description": "0.5-0.99 (0.85)"},
+                "mode": {"type": "string", "enum": ["gray", "color"]},
                 "search_full": {"type": "boolean"},
                 "tap_x": frac,
                 "tap_y": frac,
@@ -1009,9 +1012,11 @@ def create_app(ctx: AppContext) -> FastAPI:
             return [mcp_text(create_template(TemplateCreate(**args)))]
 
         @server.tool(
-            "Change a template's threshold, search area, description, or forget its tap point.",
+            "Change a template's threshold, mode (color tells an orange button from a "
+            "greyed-out one), search area, description, or forget its tap point.",
             {
                 "name": {"type": "string"},
+                "mode": {"type": "string", "enum": ["gray", "color"]},
                 "threshold": {"type": "number"},
                 "search_full": {"type": "boolean"},
                 "description": {"type": "string"},
