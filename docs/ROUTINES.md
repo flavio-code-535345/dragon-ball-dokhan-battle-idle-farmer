@@ -299,6 +299,16 @@ stones first, and tapping an entry opens that event's stage list. On an event's 
 no MISSION button, so capture `event_stage_row` (the "Clear Reward / Featured Reward" headings of a
 row, *search the whole screen*) and the routine finds the NEW stages there too.
 
+**Next event.** With `next_event` = yes, *Clear New Stages* does not stop when an event is finished
+(nothing NEW left, missions claimed or skipped): it taps the Dragon Stone Navigator button and opens
+the next entry (the navigator must be set to "Missions Included" OFF, so a finished event drops out
+of the list). An event that stays listed (the stones left need another team, or a stage is blocked
+by "Requirement Not Met") is skipped by position, up to three entries. It stops when the navigator
+shows nothing usable or after `max_events` events. Capture `navigator_open` (the stone button on the
+stage list / event screen, whole-screen search) and `navigator_title` ("Dragon Stone Navigator", the
+header of its list) first; without them the finish rules are disabled and the routine would wait on
+the finished list. Combine it with `claim_missions` = yes, `act_policy` = meat and `quick_finish` = yes.
+
 The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of the event
 screens) lists the events that still pay stones, with the stones for stage clears and for
 missions: a good list to pick the next event from.

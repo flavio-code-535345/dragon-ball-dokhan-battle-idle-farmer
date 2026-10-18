@@ -117,6 +117,24 @@ options:
       An event's newest stage is always at the top of its list, so if the list (as it opens)
       shows no NEW mark the event is done: no need to scroll up and down to be sure. Only for
       event lists (the event_stage_row template); no = always scroll to look.
+  next_event:
+    label: When an event is finished, go on with the next one of the Dragon Stone Navigator
+    type: choice
+    choices: ["no", "yes"]
+    default: "no"
+    help: >-
+      yes = after an event has no NEW stage left (or a stage of it needs a team you do not have)
+      and its missions are dealt with, open the Dragon Stone Navigator (the orange stone button
+      of the event screens, "Missions Included" OFF) and play the next event of its list; it
+      stops when the list has nothing usable left. Needs the templates navigator_open and
+      navigator_title (and event_stage_row, event_mission, mission_dialog,
+      mission_accept_all for the missions).
+  max_events:
+    label: Events to play with "next event" (a limit, not a goal)
+    type: number
+    default: 20
+    min: 1
+    max: 100
   claim_missions:
     label: Accept the event's mission rewards before stopping
     type: choice
@@ -287,6 +305,15 @@ templates:
     description: >-
       The orange "Accept all" button of the mission list (orange while something is ready, grey
       otherwise): colour mode, "search the whole screen" (only for the mission rewards).
+  navigator_open:
+    level: optional
+    description: >-
+      The orange Dragon Stone button at the bottom of the event screens and stage lists: it opens
+      the Dragon Stone Navigator (only for "next event").
+  navigator_title:
+    level: optional
+    description: >-
+      The title "Dragon Stone Navigator" of its dialog (only for "next event").
   restore_sta:
     level: optional
     description: >-
@@ -338,8 +365,21 @@ rules:
     do: [{tap: error_retry}]
     cooldown: 3
 
+  # A stage that needs a team you do not have: with "next event" the event is given up, and
+  # the routine backs out of the team page and goes on with the next event.
+  - name: Team not allowed → give up this event
+    when:
+      visible: [requirement_not_met, ok_button]
+      not_visible: [restore_sta, restore_items_to_use]
+      option: {next_event: "yes"}
+    do: [{tap: ok_button}, {count: blocked}]
+    cooldown: 3
+
   - name: Team not allowed → stop
-    when: {visible: [requirement_not_met, ok_button], not_visible: [restore_sta, restore_items_to_use]}
+    when:
+      visible: [requirement_not_met, ok_button]
+      not_visible: [restore_sta, restore_items_to_use]
+      option: {next_event: "no"}
     do:
       - tap: ok_button
       - screenshot: requirement_not_met
@@ -431,7 +471,7 @@ rules:
   # --- Playing a stage -----------------------------------------------------------
   - name: Stage cleared → results
     when: {visible: stage_result}
-    do: [{reset: defeats}, {tap_xy: [0.5, 0.5]}]
+    do: [{reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle won → results
@@ -472,18 +512,41 @@ rules:
     cooldown: 3
 
   - name: Start quest
-    when: {visible: start_button}
+    when: {visible: start_button, counter_below: {blocked: 1}}
     do: [{tap: start_button}]
     cooldown: 5
 
   - name: Pick the first support
-    when: {visible: select_support}
+    when: {visible: select_support, counter_below: {blocked: 1}}
     do: [{tap: select_support}]
     cooldown: 4
 
+  # After a blocked stage ("next event"): back out of the team / difficulty pages to the list.
+  - name: Blocked stage → back to the list
+    when:
+      visible: back_button
+      not_visible: [stage_list, event_stage_row, navigator_title, requirement_not_met]
+      counter_at_least: {blocked: 1}
+      option: {next_event: "yes"}
+    do: [{tap: back_button}]
+    cooldown: 3
+
+  # Enough events: stop before the next event's first stage starts.
+  - name: Next event → limit reached, stop
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: mission_dialog
+      counter_at_least: {events_done: $max_events}
+      option: {next_event: "yes"}
+    do:
+      - stop: "{events_done} events done ({stages_cleared} stages cleared)."
+
   # --- Finding the next NEW stage ------------------------------------------------
   - name: Open a NEW stage
-    when: {visible: new_mark, any_visible: [stage_list, event_stage_row]}
+    when:
+      visible: new_mark
+      any_visible: [stage_list, event_stage_row]
+      counter_below: {blocked: 1}
     do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
     cooldown: 4
 
@@ -491,7 +554,11 @@ rules:
   # stones, so by default the highest listed difficulty is played (SUPER, else Z-HARD,
   # else HARD, else NORMAL); "easiest" plays the lowest one.
   - name: Pick Super
-    when: {visible: difficulty_super, option: {difficulty: highest}}
+    when:
+      visible: difficulty_super
+      counter_below: {blocked: 1}
+      counter_below: {blocked: 1}
+      option: {difficulty: highest}
     do: [{tap: difficulty_super}]
     cooldown: 4
 
@@ -499,6 +566,7 @@ rules:
     when:
       visible: difficulty_zhard
       not_visible: difficulty_super
+      counter_below: {blocked: 1}
       option: {difficulty: highest}
     do: [{tap: difficulty_zhard}]
     cooldown: 4
@@ -507,6 +575,7 @@ rules:
     when:
       visible: difficulty_hard
       not_visible: [difficulty_super, difficulty_zhard]
+      counter_below: {blocked: 1}
       option: {difficulty: highest}
     do: [{tap: difficulty_hard}]
     cooldown: 4
@@ -515,12 +584,17 @@ rules:
     when:
       visible: difficulty_normal
       not_visible: [difficulty_super, difficulty_zhard, difficulty_hard]
+      counter_below: {blocked: 1}
       option: {difficulty: highest}
     do: [{tap: difficulty_normal}]
     cooldown: 4
 
   - name: Pick Normal (easiest)
-    when: {visible: difficulty_normal, option: {difficulty: easiest}}
+    when:
+      visible: difficulty_normal
+      counter_below: {blocked: 1}
+      counter_below: {blocked: 1}
+      option: {difficulty: easiest}
     do: [{tap: difficulty_normal}]
     cooldown: 4
 
@@ -528,6 +602,7 @@ rules:
     when:
       visible: difficulty_hard
       not_visible: difficulty_normal
+      counter_below: {blocked: 1}
       option: {difficulty: easiest}
     do: [{tap: difficulty_hard}]
     cooldown: 4
@@ -595,6 +670,37 @@ rules:
     do: [{count: mission_opens}, {tap: event_mission}]
     cooldown: 4
 
+  - name: Missions → open (event given up)
+    when:
+      visible: event_mission
+      any_visible: [stage_list, event_stage_row]
+      not_visible: mission_dialog
+      counter_at_least: {blocked: 1}
+      counter_below: {mission_opens: 1}
+      option: {claim_missions: "yes", next_event: "yes"}
+    do: [{count: mission_opens}, {tap: event_mission}]
+    cooldown: 4
+
+  - name: Missions → skipped (claiming is off)
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: [new_mark, mission_dialog]
+      counter_at_least: {misses: 3}
+      counter_below: {claimed: 1}
+      option: {claim_missions: "no", next_event: "yes"}
+    do: [{count: claimed}]
+    cooldown: 1
+
+  - name: Missions → skipped (event given up, claiming is off)
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: mission_dialog
+      counter_at_least: {blocked: 1}
+      counter_below: {claimed: 1}
+      option: {claim_missions: "no", next_event: "yes"}
+    do: [{count: claimed}]
+    cooldown: 1
+
   - name: Missions → accept all
     when:
       visible: [mission_dialog, mission_accept_all]
@@ -617,14 +723,119 @@ rules:
     when:
       visible: [mission_dialog, cancel_button]
       counter_at_least: {accepts: 1}
-    do: [{tap: cancel_button}]
+    do: [{count: claimed}, {tap: cancel_button}]
     cooldown: 4
+
+  # --- "Next event": the list is done, go on with the Dragon Stone Navigator --------------
+  - name: Event finished → next event
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: [new_mark, mission_dialog]
+      counter_at_least: {misses: 3, claimed: 1, ev_stages: 1}
+      counter_below: {blocked: 1, events_done: $max_events}
+      option: {next_event: "yes"}
+    do:
+      - count: events_done
+      - reset: ev_stages
+      - reset: claimed
+      - reset: accepts
+      - reset: mission_opens
+      - reset: misses
+      - reset: scrolls_down
+      - reset: scrolls_up
+      - reset: skip_scroll
+      - tap: navigator_open
+    cooldown: 4
+
+  # Nothing was cleared in it: the event stays in the navigator, so try the next entry.
+  - name: Event without progress → next entry
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: [new_mark, mission_dialog]
+      counter_at_least: {misses: 3, claimed: 1}
+      counter_below: {blocked: 1, ev_stages: 1, events_done: $max_events}
+      option: {next_event: "yes"}
+    do:
+      - count: events_done
+      - reset: ev_stages
+      - reset: claimed
+      - reset: accepts
+      - reset: mission_opens
+      - reset: misses
+      - reset: scrolls_down
+      - reset: scrolls_up
+      - reset: skip_scroll
+      - count: nav_index
+      - tap: navigator_open
+    cooldown: 4
+
+  - name: Event given up → next entry
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: mission_dialog
+      counter_at_least: {blocked: 1, claimed: 1}
+      counter_below: {events_done: $max_events}
+      option: {next_event: "yes"}
+    do:
+      - count: events_done
+      - reset: ev_stages
+      - reset: claimed
+      - reset: accepts
+      - reset: mission_opens
+      - reset: misses
+      - reset: scrolls_down
+      - reset: scrolls_up
+      - reset: skip_scroll
+      - reset: blocked
+      - count: nav_index
+      - tap: navigator_open
+    cooldown: 4
+
+  # The navigator lists the events with Dragon Stones left, most stones first. Entries that
+  # stay (a stage needs another team, ...) are skipped by index.
+  - name: Navigator → open entry 1
+    when:
+      visible: navigator_title
+      counter_below: {nav_index: 1}
+      option: {next_event: "yes"}
+    do: [{tap_xy: [0.5, 0.24]}]
+    cooldown: 3
+
+  - name: Navigator → open entry 2
+    when:
+      visible: navigator_title
+      counter_at_least: {nav_index: 1}
+      counter_below: {nav_index: 2}
+      option: {next_event: "yes"}
+    do: [{tap_xy: [0.5, 0.45]}]
+    cooldown: 3
+
+  - name: Navigator → open entry 3
+    when:
+      visible: navigator_title
+      counter_at_least: {nav_index: 2}
+      counter_below: {nav_index: 3}
+      option: {next_event: "yes"}
+    do: [{tap_xy: [0.5, 0.66]}]
+    cooldown: 3
+
+  # Tapping an entry changes the screen. If the navigator stays as it is, there is no entry
+  # there: nothing usable is left.
+  - name: Navigator → nothing usable left, stop
+    when:
+      visible: navigator_title
+      static_for: 8
+      option: {next_event: "yes"}
+    do:
+      - tap: ok_button
+      - stop: "The Dragon Stone Navigator has no more events to play ({events_done} events done, {stages_cleared} stages cleared)."
 
   - name: No NEW stage left → stop (missions accepted)
     when:
       any_visible: [stage_list, event_stage_row]
       not_visible: [new_mark, mission_dialog]
       counter_at_least: {misses: 3, accepts: 1}
+      option: {next_event: "no"}
     do:
       - stop: No uncleared stage left in this list ({stages_cleared} cleared), mission rewards accepted.
 
@@ -633,7 +844,7 @@ rules:
       any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_at_least: {misses: 3}
-      option: {claim_missions: "no"}
+      option: {claim_missions: "no", next_event: "no"}
     do:
       - screenshot: no_new_stage
       - stop: No uncleared stage left in this list ({stages_cleared} cleared). Open the next area and start again.
@@ -645,7 +856,7 @@ rules:
     cooldown: 2
 
   - name: Confirm (OK)
-    when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up, restore_with_item]}
+    when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up, restore_with_item, navigator_title]}
     do: [{tap: ok_button}]
     cooldown: 2
 
@@ -655,7 +866,7 @@ rules:
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_list, event_stage_row, start_button, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      not_visible: [stage_list, event_stage_row, navigator_title, start_button, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
       static_for: 4
     do: [{key: BACK}]
     cooldown: 3
@@ -663,7 +874,7 @@ rules:
   - name: Tap to continue
     when:
       static_for: $continue_after
-      not_visible: [act_empty_dialog, defeat_give_up, stage_list, event_stage_row, restore_sta]
+      not_visible: [act_empty_dialog, defeat_give_up, stage_list, event_stage_row, restore_sta, navigator_title]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
 
@@ -674,6 +885,6 @@ rules:
   - name: Nothing recognised → tap the top
     when:
       idle_for: 10
-      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4

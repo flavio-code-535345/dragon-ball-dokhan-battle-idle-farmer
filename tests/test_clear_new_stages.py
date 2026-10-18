@@ -193,6 +193,62 @@ class EventGame(QuestGame):
         super().swipe(y1, y2)
 
 
+NAV_BUTTON = Box(590, 130, 100, 60)
+NAV_TITLE = Box(60, 40, 600, 100)
+
+
+def nav_entry(index: int) -> Box:
+    """The navigator's rows, centred at 24 %, 45 % and 66 % of the screen height."""
+    return Box(40, int(1280 * (0.24 + 0.21 * index)) - 70, 640, 140)
+
+
+class NavGame(EventGame):
+    """Several events behind a Dragon Stone Navigator. A finished event leaves the navigator,
+    except the ``sticky`` ones (their remaining stones need another team)."""
+
+    def __init__(self, events: list[dict[int, set[str]]], sticky: set[int] = frozenset()) -> None:
+        super().__init__(events[0])
+        self.events = [{s: set(c.get(s, ())) for s in range(self.stages)} for c in events]
+        self.cleared = self.events[0]
+        self.sticky = set(sticky)
+        self.current = 0
+        self.opened: list[int] = []  # the events opened from the navigator
+
+    def entries(self) -> list[int]:
+        return [
+            i
+            for i, cleared in enumerate(self.events)
+            if i in self.sticky or any(not cleared[s] for s in range(self.stages))
+        ]
+
+    def render(self) -> np.ndarray:
+        if self.screen == "navigator":
+            img = _canvas((30, 40, 60))
+            _button(img, NAV_TITLE, "DRAGON STONE NAVIGATOR", "nav")
+            for row, _ in enumerate(self.entries()[:3]):
+                _button(img, nav_entry(row), f"EVENT {row + 1}", "retry")
+            return img
+        img = super().render()
+        if self.screen == "list":
+            _button(img, NAV_BUTTON, "STONE", "danger")
+        return img
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "navigator":
+            entries = self.entries()
+            for row, event in enumerate(entries[:3]):
+                if nav_entry(row).contains(x, y):
+                    self.current = event
+                    self.cleared = self.events[event]
+                    self.opened.append(event)
+                    self.offset, self.screen = 0, "list"
+            return
+        if self.screen == "list" and NAV_BUTTON.contains(x, y):
+            self.screen = "navigator"
+            return
+        super().tap(x, y)
+
+
 class QuestDevice(Device):
     backend = "test"
 
@@ -256,6 +312,14 @@ def capture_templates(store: TemplateStore) -> None:
         Box(40, ROW_TOP + 135, 320, 30).as_tuple(),
         threshold=0.8,
         search_full=True,
+    )
+    nav = NavGame([{}])
+    store.create_from_frame(
+        "navigator_open", nav.render(), NAV_BUTTON.as_tuple(), threshold=0.9, search_full=True
+    )
+    nav.screen = "navigator"
+    store.create_from_frame(
+        "navigator_title", nav.render(), NAV_TITLE.as_tuple(), threshold=0.9, search_full=True
     )
 
 
@@ -376,3 +440,40 @@ def test_an_event_plays_the_new_stage_at_the_top(play):
     summary = play(game, minutes=20)
     assert game.played == [(0, "NORMAL")] and summary["runs"] == 1
     assert "No uncleared stage left" in summary["reason"]
+
+
+def all_cleared(new: set[int] = frozenset()) -> dict[int, set[str]]:
+    return {s: (set() if s in new else set(DIFFICULTIES)) for s in range(8)}
+
+
+NEXT = {"next_event": "yes", "claim_missions": "no", "max_events": 10}
+
+
+def test_goes_on_with_the_next_event_when_one_is_finished(play):
+    game = NavGame([all_cleared({0}), all_cleared({0, 1})])
+    summary = play(game, NEXT, minutes=60)
+    assert summary["counters"]["stages_cleared"] == 3
+    assert all(not game.new(s) for s in range(game.stages))
+    assert game.opened  # the second event was reached through the navigator
+    assert "no more events" in summary["reason"] and not summary["error"]
+
+
+def test_an_event_that_stays_in_the_navigator_is_skipped(play):
+    # Event 0 stays listed (sticky) with nothing to play; the farm moves on to entry 2.
+    game = NavGame([all_cleared(), all_cleared({0})], sticky={0})
+    summary = play(game, NEXT, minutes=60)
+    assert 1 in game.opened and summary["counters"]["stages_cleared"] == 1
+    assert "no more events" in summary["reason"]
+
+
+def test_stops_at_max_events(play):
+    game = NavGame([all_cleared({0}), all_cleared({0}), all_cleared({0})])
+    summary = play(game, {**NEXT, "max_events": 1}, minutes=60)
+    assert summary["counters"]["stages_cleared"] == 1
+    assert "1 events done" in summary["reason"]
+
+
+def test_without_next_event_the_farm_stops_on_the_finished_list(play):
+    game = NavGame([all_cleared(), all_cleared({0})])
+    summary = play(game, {"claim_missions": "no"}, minutes=20)
+    assert not game.opened and "No uncleared stage left" in summary["reason"]
