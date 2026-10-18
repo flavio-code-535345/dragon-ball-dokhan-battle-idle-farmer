@@ -34,6 +34,8 @@ RESULT = Box(100, 300, 520, 100)
 MTITLE = Box(200, 60, 320, 60)
 ACCEPT = Box(380, 1000, 260, 90)
 MCANCEL = Box(60, 1000, 260, 90)
+EVENT_ROW = Box(40, 400, 640, 140)
+ROW_HEADER = Box(50, 470, 360, 41)
 TAPS_TO_WIN = 3
 MEAT = 60  # stamina of one piece
 
@@ -52,6 +54,7 @@ class StageGame:
         self.meat_used = 0
         self.stones_used = 0
         self.missions_accepted = False
+        self.origin = "details"
 
     def render(self):
         img = _canvas((30, 60, 30))
@@ -60,6 +63,10 @@ class StageGame:
             _button(img, HEADER, "CLEAR REWARD FEATURED", "nav")
             _button(img, BAR, "HARD 40", "retry")
             _button(img, BOOST, "BOOST ON" if self.boost_on else "BOOST OFF", self.boost_style)
+            _button(img, MISSION, "MISSION", "ok")
+        elif s == "event":
+            _button(img, EVENT_ROW, "STAGE", "retry")
+            _button(img, ROW_HEADER, "CLEAR REWARD FEATURED", "nav")
             _button(img, MISSION, "MISSION", "ok")
         elif s == "restore":
             _button(img, TITLE, "RESTORE STA", "no")
@@ -104,7 +111,7 @@ class StageGame:
                 self.cost = 80 if self.boost_on else 40
                 self.screen = "restore" if self.sta < self.cost else "team"
             elif MISSION.contains(x, y):
-                self.screen = "missions"
+                self.origin, self.screen = "details", "missions"
         elif s == "restore":
             if ITEM_SELECT.contains(x, y):
                 self.screen, self.pieces = "items", 2
@@ -139,12 +146,17 @@ class StageGame:
         elif s == "result":
             self.clears += 1
             self.boost_on = False
-            self.screen = "details"
+            self.screen = "event"
+        elif s == "event":
+            if EVENT_ROW.contains(x, y) and not MISSION.contains(x, y):
+                self.screen = "details"
+            elif MISSION.contains(x, y):
+                self.origin, self.screen = "event", "missions"
         elif s == "missions":
             if ACCEPT.contains(x, y) and not self.missions_accepted:
                 self.screen = "mission_confirm"
             elif MCANCEL.contains(x, y):
-                self.screen = "details"
+                self.screen = self.origin
         elif s == "mission_confirm":
             if OK.contains(x, y):
                 self.missions_accepted = True
@@ -174,6 +186,7 @@ def capture_templates(store: TemplateStore) -> None:
     crop("boost_on", "details", BOOST, mode="color")
     game.boost_on = False
     crop("event_mission", "details", MISSION)
+    crop("event_stage_row", "event", ROW_HEADER)
     crop("restore_with_item", "restore", ITEM_ROW)
     crop("restore_sta", "restore", TITLE)
     crop("restore_items_to_use", "items", USE_LABEL)

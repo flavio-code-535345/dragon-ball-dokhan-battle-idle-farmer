@@ -149,6 +149,11 @@ templates:
     description: >-
       Something on the results screen at the end of a stage, e.g. "Obtained Item" (counts the
       clears).
+  event_stage_row:
+    level: recommended
+    description: >-
+      The "Clear Reward / Featured Reward" headings of the stage row on the event's page: after a
+      stage the game returns there, and the routine opens the stage again from it.
   boost_off:
     level: recommended
     description: >-
@@ -295,7 +300,7 @@ rules:
   - name: Map → choose a path
     when:
       color_visible: path_arrow
-      not_visible: [battle_screen, start_button, home_screen, stage_details]
+      not_visible: [battle_screen, start_button, home_screen, stage_details, event_stage_row]
     do: [{tap_color: path_arrow}]
     cooldown: 3
 
@@ -312,6 +317,14 @@ rules:
   - name: Start stage (team page)
     when: {visible: start_button}
     do: [{tap: start_button}]
+    cooldown: 5
+
+  # After a stage the game returns to the event's page (the stage row): open the stage.
+  - name: Event page → open the stage
+    when:
+      visible: event_stage_row
+      counter_below: {clears: $max_clears}
+    do: [{tap_xy: [0.5, 0.34]}]
     cooldown: 5
 
   # --- The stage's details page: boost, start, and the missions at the end ---------
@@ -362,7 +375,8 @@ rules:
   # --- Missions (after the last clear) -----------------------------------------------
   - name: Missions → open
     when:
-      visible: [stage_details, event_mission]
+      visible: event_mission
+      not_visible: [mission_dialog, restore_sta]
       counter_at_least: {clears: $max_clears}
       counter_below: {mission_opens: 1}
       option: {claim_missions: "yes"}
@@ -396,13 +410,15 @@ rules:
 
   - name: Done → stop (missions accepted)
     when:
-      visible: stage_details
+      visible: event_mission
+      not_visible: mission_dialog
       counter_at_least: {clears: $max_clears, accepts: 1}
     do: [{stop: "{clears} clears done, mission rewards accepted."}]
 
   - name: Done → stop
     when:
-      visible: stage_details
+      visible: event_mission
+      not_visible: mission_dialog
       counter_at_least: {clears: $max_clears}
       option: {claim_missions: "no"}
     do: [{stop: "{clears} clears done."}]
@@ -423,7 +439,7 @@ rules:
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_details, start_button, restore_sta, mission_dialog]
+      not_visible: [stage_details, event_stage_row, start_button, restore_sta, mission_dialog]
       static_for: 4
     do: [{key: BACK}]
     cooldown: 3
@@ -431,13 +447,13 @@ rules:
   - name: Tap to continue
     when:
       static_for: $continue_after
-      not_visible: [defeat_give_up, stage_details, restore_sta, mission_dialog]
+      not_visible: [defeat_give_up, stage_details, event_stage_row, restore_sta, mission_dialog]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
 
   - name: Nothing recognised → tap the top
     when:
       idle_for: 10
-      not_visible: [defeat_give_up, battle_screen, map_screen, start_button, error_retry, stage_details, restore_sta, mission_dialog]
+      not_visible: [defeat_give_up, battle_screen, map_screen, start_button, error_retry, stage_details, event_stage_row, restore_sta, mission_dialog]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
