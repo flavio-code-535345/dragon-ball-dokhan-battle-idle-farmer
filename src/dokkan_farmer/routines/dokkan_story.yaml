@@ -388,7 +388,7 @@ rules:
   - name: Map → choose a path
     when:
       color_visible: path_arrow
-      not_visible: [battle_screen, stage_list, start_button, saga_wheel]
+      not_visible: [battle_screen, stage_list, start_button, saga_wheel, home_screen, menu_quest, chapter_wheel]
     do: [{tap_color: path_arrow}]
     cooldown: 3
 

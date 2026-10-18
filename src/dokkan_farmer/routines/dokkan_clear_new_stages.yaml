@@ -242,6 +242,11 @@ templates:
   friend_request:
     level: optional
     description: The title of the "send a friend request?" popup after a stage.
+  home_screen:
+    level: optional
+    description: >-
+      Something only the home screen shows. The home screen has blue buttons that look like
+      the path arrows, so the routine never looks for arrows while it is on screen.
   back_button:
     level: optional
     description: >-
@@ -339,7 +344,7 @@ rules:
   - name: Map → choose a path
     when:
       color_visible: path_arrow
-      not_visible: [battle_screen, stage_list, start_button]
+      not_visible: [battle_screen, stage_list, start_button, home_screen]
     do: [{tap_color: path_arrow}]
     cooldown: 3
 
