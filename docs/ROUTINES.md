@@ -259,6 +259,29 @@ Only PHY enemies are covered: for another type capture its badge as e.g. `enemy_
 three `Order` rules with that type's winning and losing ring colours (the wheel is AGL > STR > PHY >
 INT > TEQ > AGL). Whether the swap really lowers the damage taken is not measured.
 
+## Repeating an event stage
+
+**Dokkan Repeat Stage** clears one event stage again and again from its details page (the page
+with the difficulty bar and the BOOST and MISSION buttons), for drops like Skill Orbs and for the
+event's mission rewards (Dragon Stones, Skill Orb Tickets, Aged Meat). Open the stage, select the
+routine, set `max_clears` and press Start. It starts the stage, plays its map and battles like
+*Clear New Stages*, and afterwards opens MISSION and accepts what is ready.
+
+- **BOOST** (option): the routine taps BOOST ON first (templates `boost_off` and `boost_on`;
+  capture them in colour mode, since the two look alike in grey tones). A boost charge is used per
+  run and refills slowly; when none is left the stage is played without it. A boosted clear costs
+  and pays double but counts as one clear for the missions, so unboosted runs are cheaper for those.
+- **Stamina**: when the stage cannot start, the refill dialog opens. The routine only ever taps the
+  "Restore STA with Item" row (Aged Meat, one piece unless `meat_pieces` says two), at most
+  `max_refills` times, and never the Dragon Stone row. With `refill` = stop it stops instead.
+- Capture `stage_details` (the "Clear Reward / Featured Reward" headings), `restore_sta`,
+  `restore_with_item`, `event_mission`, `mission_dialog` and `claim_all` once; the rest are shared
+  with the other routines.
+
+The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of the event
+screens) lists the events that still pay stones, with the stones for stage clears and for
+missions: a good list to pick the next event from.
+
 ## Farming Dragon Stones
 
 Dragon Stones cannot be farmed forever: every source pays once. Stamina is only needed for the
