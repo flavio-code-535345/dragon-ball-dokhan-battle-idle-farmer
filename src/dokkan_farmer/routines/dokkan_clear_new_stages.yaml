@@ -163,8 +163,8 @@ counters:
 colors:
   path_arrow:
     description: The bright blue arrows where the path on the map forks.
-    hsv_min: [95, 200, 150]
-    hsv_max: [115, 255, 255]
+    hsv_min: [98, 225, 190]
+    hsv_max: [106, 255, 255]
     min_area: 0.0015
     max_area: 0.02
     region: [0, 0.05, 1, 0.68]
