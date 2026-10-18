@@ -95,10 +95,12 @@ options:
   act_policy:
     label: When ACT runs out
     type: choice
-    choices: [wait, item, stone, stop]
+    choices: [wait, item, meat, stone, stop]
     default: wait
     help: >-
       wait = let ACT regenerate, item = use ACT recovery items,
+      meat = refill with Aged Meat through the "Restore STA" dialog (its "with Item" row,
+      one piece at a time, never a Dragon Stone; needs restore_sta, restore_with_item),
       stone = spend Dragon Stones (up to the limit below), stop = stop.
   act_wait_minutes:
     label: Minutes to wait for ACT to regenerate
@@ -106,6 +108,12 @@ options:
     default: 60
     min: 1
     max: 1440
+  max_meat_refills:
+    label: Max Aged Meat refills per session (ACT policy = meat)
+    type: number
+    default: 10
+    min: 1
+    max: 50
   max_stone_refills:
     label: Max Dragon Stones spent on ACT per session
     type: number
@@ -243,6 +251,18 @@ templates:
     description: >-
       The "Give up" / "No" button when your team is defeated and Dokkan offers a
       revive for Dragon Stones.
+  restore_sta:
+    level: optional
+    description: >-
+      The title "Restore STA" of the stamina refill dialogs (only for ACT policy = meat).
+  restore_with_item:
+    level: optional
+    description: >-
+      The heading "Restore STA with Item" of the first refill dialog (not the Dragon Stone
+      row; only for ACT policy = meat). The routine taps that row's Select button.
+  restore_items_to_use:
+    level: optional
+    description: '"Item(s) to Use" of the second refill dialog (only for ACT policy = meat).'
   requirement_not_met:
     level: recommended
     description: >-
@@ -305,6 +325,43 @@ rules:
     cooldown: 5
 
   # --- ACT (stamina) ran out ---------------------------------------------------
+  # Stamina refill with Aged Meat (the "Restore STA" dialog of Dokkan: a Dragon Stone row and
+  # an "with Item" row). Only the item row is ever tapped.
+  - name: Out of stamina → Aged Meat limit reached, stop
+    when:
+      visible: [restore_sta, restore_with_item, cancel_button]
+      option: {act_policy: meat}
+      counter_at_least: {meat_refills: $max_meat_refills}
+    do:
+      - tap: cancel_button
+      - stop: "Stamina is low and {meat_refills} Aged Meat refills were used: stopping after {stages_cleared} cleared stages."
+
+  - name: Out of stamina → use an Aged Meat
+    when:
+      visible: [restore_sta, restore_with_item]
+      not_visible: restore_items_to_use
+      option: {act_policy: meat}
+      counter_below: {meat_refills: $max_meat_refills}
+    do: [{count: meat_refills}, {reset: minus}, {tap_xy: [0.82, 0.606]}]
+    cooldown: 4
+
+  # The dialog suggests two pieces: use one.
+  - name: Out of stamina → one piece only
+    when:
+      visible: [restore_sta, ok_button]
+      option: {act_policy: meat}
+      counter_below: {minus: 1}
+    do: [{count: minus}, {tap_xy: [0.305, 0.542]}]
+    cooldown: 2
+
+  - name: Out of stamina → stop
+    when:
+      visible: [restore_sta, restore_with_item, cancel_button]
+      option: {act_policy: stop}
+    do:
+      - tap: cancel_button
+      - stop: Out of stamina after {stages_cleared} cleared stages
+
   - name: Out of ACT → stop
     when: {visible: act_empty_dialog, option: {act_policy: stop}}
     do:
@@ -494,7 +551,7 @@ rules:
     cooldown: 2
 
   - name: Confirm (OK)
-    when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up]}
+    when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up, restore_with_item]}
     do: [{tap: ok_button}]
     cooldown: 2
 
@@ -512,7 +569,7 @@ rules:
   - name: Tap to continue
     when:
       static_for: $continue_after
-      not_visible: [act_empty_dialog, defeat_give_up, stage_list, event_stage_row]
+      not_visible: [act_empty_dialog, defeat_give_up, stage_list, event_stage_row, restore_sta]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
 
@@ -523,6 +580,6 @@ rules:
   - name: Nothing recognised → tap the top
     when:
       idle_for: 10
-      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
