@@ -236,7 +236,7 @@ rules:
     cooldown: 3
 
   - name: Team not allowed → stop
-    when: {visible: [requirement_not_met, ok_button]}
+    when: {visible: [requirement_not_met, ok_button], not_visible: [restore_sta, restore_items_to_use]}
     do:
       - tap: ok_button
       - screenshot: requirement_not_met
