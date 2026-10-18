@@ -209,6 +209,12 @@ templates:
   defeat_give_up:
     level: recommended
     description: The "Give up" / "No" button when your team is defeated and a revive is offered.
+  requirement_not_met:
+    level: recommended
+    description: >-
+      The title "Requirement Not Met" of the dialog that says your team breaks a stage's
+      restriction (e.g. only non-PHY units). Without it the routine would press Start and OK
+      over and over.
   error_retry:
     level: recommended
     description: The "Retry" button of connection error dialogs.
@@ -228,6 +234,13 @@ rules:
     when: {visible: error_retry}
     do: [{tap: error_retry}]
     cooldown: 3
+
+  - name: Team not allowed → stop
+    when: {visible: [requirement_not_met, ok_button]}
+    do:
+      - tap: ok_button
+      - screenshot: requirement_not_met
+      - stop: "This stage restricts the team (see the dialog): no cleared stages from here. Change the team and start again."
 
   - name: Defeat → give up and stop
     when: {visible: defeat_give_up, counter_at_least: {defeats: $retries}}
