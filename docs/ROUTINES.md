@@ -235,6 +235,34 @@ continues, so a lost battle spends nothing; after `tries` battles in a row that 
 results the routine stops with "Use a stronger team for this level". `max_battles` stops after that
 many won battles (0 = no limit).
 
+With **Events to play = all** it needs no stage page to start on: start it anywhere. It goes START
+→ Event (`home_screen`, `menu_event`), opens the Z-Battle tab (`xb_tabs`: crop the "Challenge" tab
+of the tab row, which is grey unless selected), opens the first event whose banner says
+"NEXT >> Lv. 1" (`xb_lv1`: tick *search the whole screen*, leave a little empty space after the 1 so
+"Lv. 11" does not match, and give it a tap point on the banner picture), plays it until the team
+loses, goes back with `back_button` and takes the next fresh event. Events played before show a
+higher level and are skipped; the list is scanned from the top, then down. It stops with "No
+Extreme Z-Battle event with a fresh level 1 is left", or when the very first level of an event is
+lost `tries` times.
+
+## Farming Dragon Stones
+
+Dragon Stones cannot be farmed forever: every source pays once. Stamina is only needed for the
+first, and it is refilled by rank-ups, so never press a Dragon Stone refill button (the routines
+do not).
+
+| Source | Routine | What it pays |
+| --- | --- | --- |
+| Quest Dokkan Story, first clear | Dokkan Story, then Dokkan Clear New Stages | about 3 stones per stage on the hardest difficulty (clearing it also pays the easier ones at once); an area you have visited no longer shows a NEW mark, but can still have new stages |
+| Extreme Z-Battle, level clear bonuses | Dokkan Extreme Z-Battle | about 1 stone at certain levels; no stamina, no continues, a lost battle costs nothing |
+| Missions, presents, events | Dokkan Collect Rewards | what is waiting in the Missions screen and the Present Box |
+
+How far an Extreme Z-Battle goes depends on the team: each event has its own limit (one level per
+clear; a team of the usual rarity stops around Lv. 5 to 25 depending on the event), and the
+routine stops there by itself. A stronger team of the event's type moves that limit. Run the
+routines one after the other (Collect Rewards, Story, Extreme Z-Battle with *all* events):
+start each one on the home screen.
+
 ## The safety net
 
 On top of your rules the engine:

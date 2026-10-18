@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from dokkan_farmer.device.sim import Box, _button, _canvas
+from dokkan_farmer.device.sim import Box, _button, _canvas, _text
 from dokkan_farmer.engine import Farmer
 from dokkan_farmer.library import BUNDLED_DIR, RoutineLibrary
 from dokkan_farmer.routine import parse_routine
@@ -22,6 +22,13 @@ SPHERE = Box(240, 520, 200, 200)  # (0.47, 0.47) of 720x1280 is inside
 TITLE = Box(60, 60, 600, 100)
 OK = Box(240, 1180, 240, 80)
 TAPS_TO_WIN = 3
+BACK = Box(20, 1170, 140, 90)
+HOME_START = Box(240, 800, 240, 140)
+MENU_EVENT = Box(200, 380, 320, 100)
+TABS = Box(20, 150, 400, 70)
+Z_TAB = Box(560, 150, 140, 70)  # (0.89, 0.14) of 720x1280 is inside
+SLOTS = 2  # banners in view
+BANNER_TOP, BANNER_STEP = 260, 260
 
 
 class ExtremeGame:
@@ -81,8 +88,83 @@ class ExtremeGame:
         pass
 
 
-def capture_templates(store: TemplateStore) -> None:
-    game = ExtremeGame(strongest=9)
+class EventsGame(ExtremeGame):
+    """The same event pages, reached from the home screen through the Z-Battle list.
+
+    ``events`` are the strongest level each team can beat, in list order; ``nexts`` are the
+    levels the banners say are next (default: all fresh, level 1).
+    """
+
+    def __init__(self, events: list[int], nexts: list[int] | None = None, screen="home") -> None:
+        super().__init__(strongest=0)
+        self.events = events
+        self.next_levels = list(nexts or [1] * len(events))
+        self.screen, self.tab, self.offset, self.current = screen, "story", 0, 0
+        self.played: list[list[int]] = [[] for _ in events]
+
+    @staticmethod
+    def banner(slot: int) -> Box:
+        return Box(40, BANNER_TOP + slot * BANNER_STEP, 640, 200)
+
+    @staticmethod
+    def label(slot: int) -> Box:
+        return Box(60, BANNER_TOP + slot * BANNER_STEP + 120, 300, 60)
+
+    def render(self):
+        if self.screen in ("home", "menu", "list"):
+            img = _canvas((30, 30, 50))
+            if self.screen == "home":
+                _button(img, HOME_START, "START", "start")
+            elif self.screen == "menu":
+                _button(img, MENU_EVENT, "EVENT", "nav")
+            else:
+                _button(img, TABS, "STORY BONUS GROWTH", "nav")
+                _button(img, Z_TAB, "Z-BATTLE", "nav")
+                if self.tab == "z":
+                    for slot in range(SLOTS):
+                        i = self.offset + slot
+                        if i < len(self.events):
+                            _button(img, self.banner(slot), f"EVENT {i}", "ok")
+                            _text(img, f"NEXT Lv. {self.next_levels[i]}", self.label(slot).center)
+            return img
+        img = super().render()
+        if self.screen in ("stage", "team"):
+            _button(img, BACK, "<<<", "nav")
+        return img
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "home":
+            if HOME_START.contains(x, y):
+                self.screen = "menu"
+        elif self.screen == "menu":
+            if MENU_EVENT.contains(x, y):
+                self.screen, self.tab = "list", "story"
+        elif self.screen == "list":
+            if Z_TAB.contains(x, y):
+                self.tab = "z"
+            elif self.tab == "z":
+                for slot in range(SLOTS):
+                    i = self.offset + slot
+                    if i < len(self.events) and self.banner(slot).contains(x, y):
+                        self.current, self.strongest = i, self.events[i]
+                        self.level, self.screen = self.next_levels[i], "stage"
+        elif self.screen in ("stage", "team") and BACK.contains(x, y):
+            self.screen = "list" if self.screen == "stage" else "stage"
+        else:
+            before = len(self.won)
+            super().tap(x, y)
+            if len(self.won) > before:
+                self.played[self.current].append(self.won[-1])
+            self.next_levels[self.current] = self.level
+
+    def swipe(self, y1: float, y2: float) -> None:
+        if self.screen == "list" and self.tab == "z":
+            step = 1 if y1 > y2 else -1
+            self.offset = max(0, min(len(self.events) - SLOTS, self.offset + step))
+
+
+def capture_templates(store: TemplateStore, events: bool = False) -> None:
+    game = EventsGame([9]) if events else ExtremeGame(strongest=9)
     for screen, name, box in [
         ("stage", "xb_fight", FIGHT),
         ("team", "xb_start", START),
@@ -93,14 +175,31 @@ def capture_templates(store: TemplateStore) -> None:
         store.create_from_frame(name, game.render(), box.as_tuple(), threshold=0.9)
     game.screen = "results"
     store.create_from_frame("ok_button", game.render(), OK.as_tuple(), search_full=True)
+    if not events:
+        return
+    for screen, name, box in [
+        ("home", "home_screen", HOME_START),
+        ("menu", "menu_event", MENU_EVENT),
+        ("list", "xb_tabs", Box(TABS.x, TABS.y, 300, TABS.h)),
+    ]:
+        game.screen = screen
+        store.create_from_frame(name, game.render(), box.as_tuple(), threshold=0.9)
+    game.screen = "stage"
+    store.create_from_frame("back_button", game.render(), BACK.as_tuple(), threshold=0.9)
+    game.screen, game.tab = "list", "z"
+    label = game.label(0)
+    box = Box(label.x + 35, label.y, 230, label.h)
+    store.create_from_frame(
+        "xb_lv1", game.render(), box.as_tuple(), threshold=0.9, search_full=True
+    )
 
 
 @pytest.fixture
 def play(tmp_path: Path):
-    def run(game: ExtremeGame, options: dict | None = None) -> dict:
+    def run(game: ExtremeGame, options: dict | None = None, minutes: int = 60) -> dict:
         settings = Settings(data_dir=tmp_path / "data", device_backend="sim")
         store = TemplateStore(settings.templates_dir)
-        capture_templates(store)
+        capture_templates(store, isinstance(game, EventsGame))
         library = RoutineLibrary(settings.routines_dir)
         library.install_defaults()
         routine = library.load(ROUTINE)
@@ -113,7 +212,7 @@ def play(tmp_path: Path):
             wall=clock,
             sleeper=clock.sleep,
         )
-        end = clock.t + 60 * 60
+        end = clock.t + minutes * 60
         return farmer.run_session(
             ROUTINE, routine, routine.option_values(options or {}), until=lambda: clock.t >= end
         )
@@ -138,3 +237,26 @@ def test_stops_when_a_level_is_too_hard(play):
     summary = play(game, {"max_battles": 0, "tries": 2})
     assert game.won == [1, 2] and game.lost == [3, 3]
     assert "Lost 2 battles in a row after 2 won" in summary["reason"]
+
+
+def test_plays_every_fresh_event_then_stops(play):
+    # The third event was played before (next level 4): it is skipped.
+    game = EventsGame([2, 1, 99], nexts=[1, 1, 4])
+    summary = play(game, {"events": "all", "tries": 2}, minutes=240)
+    assert game.played == [[1, 2], [1], []]
+    assert "No Extreme Z-Battle event with a fresh level 1 is left" in summary["reason"]
+    assert game.next_levels == [3, 2, 4]
+
+
+def test_finds_events_further_down_the_list(play):
+    game = EventsGame([1, 1, 1, 1], nexts=[3, 3, 3, 1], screen="list")
+    summary = play(game, {"events": "all", "tries": 2}, minutes=240)
+    assert game.played == [[], [], [], [1]]
+    assert "No Extreme Z-Battle event with a fresh level 1 is left" in summary["reason"]
+
+
+def test_stops_when_an_event_cannot_be_started(play):
+    game = EventsGame([0, 5])
+    summary = play(game, {"events": "all", "tries": 2}, minutes=240)
+    assert game.played == [[], []] and game.lost == [1, 1]
+    assert "An event was lost 2 times at its first level" in summary["reason"]

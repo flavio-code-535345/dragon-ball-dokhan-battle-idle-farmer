@@ -1,34 +1,47 @@
-# Dokkan Extreme Z-Battle: plays an Extreme Z-Battle event again and again
-# (Awakening Medals, Dragon Stones for first clears, training items), one level
-# after the other, and stops when a level is too hard for the team.
+# Dokkan Extreme Z-Battle: plays Extreme Z-Battle events level after level (Awakening
+# Medals, first-clear Dragon Stones, training items) and stops when the team cannot win.
 #
-# How it works: open the event's stage page (the one with the big "Fight" button
-# and the enemy level) and start this routine. It presses Fight, then Start! on
-# the team page (the team of the previous clear is used as it is), taps a ki
-# sphere in the battle, clicks through the results and the friend popup, and
-# the game moves on to the next level by itself. Extreme Z-Battles cost no
-# stamina and do not allow continues, so a lost battle spends nothing: after
-# `tries` lost battles in a row the routine stops.
+# One event: open the event's stage page (the big "Fight" button and the enemy level) and
+# start this routine. It presses Fight, then Start! on the team page (the team of the
+# previous clear is used as it is), taps a ki sphere in the battle, clicks through the
+# results and the friend popup, and the game moves on to the next level by itself.
 #
-# Templates are shared with the other routines: OK, Close and Retry you
-# captured for them work here too.
+# All events ("Events to play" = all): start it anywhere, on the home screen, the event list
+# or a stage page. It goes START → Event → the Z-Battle tab, opens an event whose next level
+# is still 1, plays it until the team loses, goes back and opens the next such event, and
+# stops when no event with a fresh level 1 is left (events played up to the team's limit
+# show a higher "NEXT Lv." and are skipped).
+#
+# Extreme Z-Battles cost no stamina and allow no continues, so a lost battle spends nothing:
+# after `tries` lost battles in a row the routine gives up on the event.
+#
+# Templates are shared with the other routines: OK, Close, Cancel and Retry you captured for
+# them work here too.
 #
 # Full reference: docs/ROUTINES.md
 name: Dokkan Extreme Z-Battle
 description: >-
-  Plays an Extreme Z-Battle level after level (Fight, Start!, battle, results)
-  until the team loses `tries` times in a row or the limit is reached. Start it
-  on the event's stage page.
-version: 1
+  Plays Extreme Z-Battle events level after level (Fight, Start!, battle, results) until the
+  team loses `tries` times in a row. One event (start on its stage page) or all of them (start
+  anywhere).
+version: 2
 
 options:
+  events:
+    label: Events to play
+    type: choice
+    choices: [this, all]
+    default: this
+    help: >-
+      this = the event whose stage page is open. all = every event of the Z-Battle list that
+      still has a fresh level 1, one after the other (needs the templates marked "all events").
   max_battles:
     label: Stop after this many won battles (0 = no limit)
     type: number
-    default: 3
+    default: 0
     min: 0
   tries:
-    label: Lost battles in a row before it gives up
+    label: Lost battles in a row before it gives up on an event
     type: number
     default: 2
     min: 1
@@ -39,7 +52,7 @@ options:
   max_minutes:
     label: Give up after (minutes)
     type: number
-    default: 60
+    default: 240
     min: 5
     max: 600
   sphere_x:
@@ -121,13 +134,40 @@ templates:
       routine's OK rule would send the request.
   cancel_button:
     level: recommended
-    description: A "Cancel" / "No" button. Search the whole screen. Declines friend requests.
+    description: >-
+      A "Cancel" / "No" button. Search the whole screen. Declines friend requests and closes
+      notices ("Check the Stage Clear Info!").
   close_button:
     level: optional
     description: The "Close" / "X" of news and login-bonus popups.
   error_retry:
     level: optional
     description: The "Retry" button of connection error dialogs.
+  back_button:
+    level: optional
+    description: >-
+      The "<<<" back button at the bottom left of the stage page and the team page (only for
+      "Events to play" = all: it leaves an event the team cannot beat).
+  home_screen:
+    level: optional
+    description: >-
+      The big START button of the home screen (only for "Events to play" = all; the same
+      template as in Dokkan Collect Rewards).
+  menu_event:
+    level: optional
+    description: '"Event" in the menu behind START (only for "Events to play" = all).'
+  xb_tabs:
+    level: optional
+    description: >-
+      The tab row of the event screen (Story, Bonus, Growth ...): crop its left part, which
+      looks the same on every tab (only for "Events to play" = all).
+  xb_lv1:
+    level: optional
+    description: >-
+      "NEXT >> Lv. 1" on the banner of an event that has not been played yet. Tick "search the
+      whole screen" and include a little empty space after the "1", so that "Lv. 11" or
+      "Lv. 13" do not match. Give it a tap point on the banner, left of the label (only for
+      "Events to play" = all).
 
 rules:
   # --- Errors and popups --------------------------------------------------------
@@ -141,8 +181,47 @@ rules:
     when:
       any_visible: [xb_fight, xb_start]
       counter_at_least: {starts: $tries}
+      option: {events: this}
     do:
-      - stop: "Lost {starts} battles in a row after {wins} won. Use a stronger team for this level."
+      - stop: "Lost {starts} battles in a row after {runs} won. Use a stronger team for this level."
+
+  # All events: the team page of a lost battle: back to the stage page first.
+  - name: Too hard → leave the team page
+    when:
+      visible: [xb_start, back_button]
+      counter_at_least: {starts: $tries}
+      option: {events: all}
+    do: [{tap: back_button}]
+    cooldown: 3
+
+  - name: Event cannot be started → stop
+    when:
+      visible: xb_fight
+      not_visible: xb_start
+      counter_at_least: {starts: $tries}
+      counter_below: {lv_wins: 1}
+      option: {events: all}
+    do:
+      - stop: "An event was lost {starts} times at its first level: use a stronger team. {runs} battles won."
+
+  - name: Too hard → leave the event
+    when:
+      visible: [xb_fight, back_button]
+      not_visible: xb_start
+      counter_at_least: {starts: $tries}
+      option: {events: all}
+    do: [{reset: starts}, {count: leaving}, {tap: back_button}]
+    cooldown: 3
+
+  # Until the event list shows, keep pressing back (the stage page must not fight again).
+  - name: Leaving the event
+    when:
+      visible: [xb_fight, back_button]
+      not_visible: xb_start
+      counter_at_least: {leaving: 1}
+      option: {events: all}
+    do: [{tap: back_button}]
+    cooldown: 3
 
   # --- Battle --------------------------------------------------------------------------
   - name: Battle → tap a ki sphere
@@ -156,7 +235,7 @@ rules:
   # screen with the OK button shows.
   - name: Battle won → results
     when: {visible: xb_congrats}
-    do: [{reset: starts}, {tap_xy: [0.5, 0.5]}]
+    do: [{reset: starts}, {count: lv_wins}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   # After a win, a popup may offer a friend request: Cancel, never its OK. (When the
@@ -172,7 +251,7 @@ rules:
   # here too.
   - name: Confirm (OK)
     when: {visible: ok_button, not_visible: [xb_fight, xb_start, xb_battle]}
-    do: [{reset: starts}, {tap: ok_button}]
+    do: [{reset: starts}, {count: lv_wins}, {tap: ok_button}]
     cooldown: 2
 
   - name: Close popup
@@ -187,16 +266,108 @@ rules:
     cooldown: 5
 
   - name: Stage → Fight
-    when: {visible: xb_fight, not_visible: xb_start}
+    when:
+      visible: xb_fight
+      not_visible: xb_start
+      counter_below: {leaving: 1}
     do: [{tap: xb_fight}]
     cooldown: 4
+
+  # --- All events: home → START → Event → Z-Battle tab → an event with a fresh level 1 ---
+  - name: Home → START
+    when: {visible: home_screen, option: {events: all}}
+    do: [{tap: home_screen}]
+    cooldown: 6
+
+  - name: Menu → Event
+    when: {visible: menu_event, option: {events: all}}
+    do: [{tap: menu_event}, {reset: zb_tab}, {reset: top}, {reset: down}, {reset: misses}]
+    cooldown: 5
+
+  - name: Events → Z-Battle tab
+    when:
+      visible: xb_tabs
+      counter_below: {zb_tab: 1}
+      option: {events: all}
+    do: [{tap_xy: [0.89, 0.14]}, {count: zb_tab}]
+    cooldown: 3
+
+  - name: List → open an event with a fresh level 1
+    when: {visible: [xb_tabs, xb_lv1], counter_at_least: {zb_tab: 1}, option: {events: all}}
+    do:
+      - tap: xb_lv1
+      - reset: top
+      - reset: down
+      - reset: misses
+      - reset: leaving
+      - reset: lv_wins
+      - reset: starts
+    cooldown: 4
+
+  # The banner label can be hidden for a moment by the list's animation: look twice first.
+  - name: List → look again
+    when:
+      visible: xb_tabs
+      not_visible: xb_lv1
+      counter_at_least: {zb_tab: 1}
+      counter_below: {misses: 2}
+      option: {events: all}
+    do: [{count: misses}]
+    cooldown: 1
+
+  # Nothing in view: to the top of the list first (it keeps its place between visits) ...
+  - name: List → to the top
+    when:
+      visible: xb_tabs
+      not_visible: xb_lv1
+      counter_at_least: {zb_tab: 1, misses: 2}
+      counter_below: {top: 6}
+      option: {events: all}
+    do:
+      - swipe: {from: [0.5, 0.3], to: [0.5, 0.78], ms: 500}
+      - count: top
+      - reset: misses
+    cooldown: 2
+
+  # ... then down, one screen at a time.
+  - name: List → scroll down
+    when:
+      visible: xb_tabs
+      not_visible: xb_lv1
+      counter_at_least: {zb_tab: 1, misses: 2, top: 6}
+      counter_below: {down: 8}
+      option: {events: all}
+    do:
+      - swipe: {from: [0.5, 0.78], to: [0.5, 0.3], ms: 500}
+      - count: down
+      - reset: misses
+    cooldown: 2
+
+  - name: No fresh event left → stop
+    when:
+      visible: xb_tabs
+      not_visible: xb_lv1
+      counter_at_least: {zb_tab: 1, misses: 2, top: 6, down: 8}
+      option: {events: all}
+    do:
+      - stop: "No Extreme Z-Battle event with a fresh level 1 is left ({runs} battles won)."
 
   # --- Anything else -------------------------------------------------------------------
   - name: Tap to continue
     when:
       static_for: $continue_after
-      not_visible: [xb_fight, xb_start, xb_battle]
+      not_visible: [xb_fight, xb_start, xb_battle, xb_tabs, home_screen, menu_event]
     do: [{tap_xy: [0.5, 0.3]}]
+    cooldown: 4
+
+  # A notice on the stage page ("Check the Stage Clear Info!") hides everything else; its
+  # Cancel closes it.
+  - name: Notice → Cancel
+    when:
+      idle_for: 8
+      visible: cancel_button
+      not_visible: [xb_battle, xb_tabs, home_screen, menu_event]
+    do: [{tap: cancel_button}]
     cooldown: 4
 
   # Between battles ("GO TO THE NEXT LEVEL", the cinematics) nothing is recognised:
@@ -204,6 +375,6 @@ rules:
   - name: Nothing recognised → tap the top
     when:
       idle_for: 10
-      not_visible: [xb_fight, xb_start, xb_battle, error_retry]
+      not_visible: [xb_fight, xb_start, xb_battle, error_retry, xb_tabs, home_screen, menu_event]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
