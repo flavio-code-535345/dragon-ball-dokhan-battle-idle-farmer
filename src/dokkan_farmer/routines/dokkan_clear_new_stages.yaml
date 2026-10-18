@@ -96,7 +96,7 @@ options:
     label: When ACT runs out
     type: choice
     choices: [wait, item, meat, stone, stop]
-    default: wait
+    default: meat
     help: >-
       wait = let ACT regenerate, item = use ACT recovery items,
       meat = refill with Aged Meat through the "Restore STA" dialog (its "with Item" row,
