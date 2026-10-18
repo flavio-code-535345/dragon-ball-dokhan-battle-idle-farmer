@@ -159,9 +159,11 @@ rules:
     do: [{reset: starts}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
-  # After a win, a popup may offer a friend request: Cancel, never its OK.
+  # After a win, a popup may offer a friend request: Cancel, never its OK. (When the
+  # other player's inbox is full the popup only has an OK and nothing is sent: the OK rule
+  # below takes that one, since Cancel is not on screen.)
   - name: Decline friend request
-    when: {visible: friend_request}
+    when: {visible: [friend_request, cancel_button]}
     do: [{tap: cancel_button}]
     cooldown: 3
 
@@ -169,7 +171,7 @@ rules:
   # the CONGRATULATIONS title can fall between two looks, so the lost-battle count is reset
   # here too.
   - name: Confirm (OK)
-    when: {visible: ok_button, not_visible: [xb_fight, xb_start, xb_battle, friend_request]}
+    when: {visible: ok_button, not_visible: [xb_fight, xb_start, xb_battle]}
     do: [{reset: starts}, {tap: ok_button}]
     cooldown: 2
 
