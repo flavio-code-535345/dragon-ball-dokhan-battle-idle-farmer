@@ -278,6 +278,11 @@ routine, set `max_clears` and press Start. It starts the stage, plays its map an
   `restore_with_item`, `event_mission`, `mission_dialog` and `mission_accept_all` (colour mode) once; the rest are shared
   with the other routines.
 
+With `claim_missions` = yes, *Clear New Stages* also opens the stage list's MISSION screen once no
+NEW stage is left and accepts the rewards that are ready (events pay Dragon Stones for clearing every
+stage, on each difficulty): capture `event_mission`, `mission_dialog` and `mission_accept_all`
+(colour mode) first.
+
 *Clear New Stages* can refill stamina for free: with `act_policy` = `meat` and the optional templates
 `restore_sta`, `restore_with_item` and `restore_items_to_use` captured, it answers the game's "Restore
 STA" dialog through its "with Item" row only (one Aged Meat per refill, at most `max_meat_refills`
