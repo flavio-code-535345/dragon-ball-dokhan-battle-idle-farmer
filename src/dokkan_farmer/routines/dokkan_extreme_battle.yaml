@@ -151,9 +151,12 @@ rules:
     do: [{reset: starts}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
+  # The OK button of the results (and the friend popup) only follows a won battle. Early
+  # levels end so fast that the CONGRATULATIONS title can fall between two looks, so the
+  # lost-battle count is reset here too.
   - name: Confirm (OK)
     when: {visible: ok_button, not_visible: [xb_fight, xb_start, xb_battle]}
-    do: [{tap: ok_button}]
+    do: [{reset: starts}, {tap: ok_button}]
     cooldown: 2
 
   - name: Close popup
