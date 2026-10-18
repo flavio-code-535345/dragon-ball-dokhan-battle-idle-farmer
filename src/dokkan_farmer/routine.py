@@ -184,7 +184,8 @@ def loose_equal(actual: Any, expected: Any) -> bool:
 # ---------------------------------------------------------------------- colours
 class ColorSpec(BaseModel):
     """A colour to look for: blobs whose pixels are within an HSV range (OpenCV scales:
-    hue 0-179, saturation and value 0-255), sized ``min_area``..``max_area`` of the screen."""
+    hue 0-179, saturation and value 0-255), sized ``min_area``..``max_area`` of the screen.
+    A ``hsv_min`` hue above the ``hsv_max`` hue wraps around (red: 172 to 6)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -212,8 +213,8 @@ class ColorSpec(BaseModel):
 
     @model_validator(mode="after")
     def _ranges(self) -> ColorSpec:
-        if any(lo > hi for lo, hi in zip(self.hsv_min, self.hsv_max, strict=True)):
-            raise ValueError("hsv_min must not be above hsv_max")
+        if any(lo > hi for lo, hi in zip(self.hsv_min[1:], self.hsv_max[1:], strict=True)):
+            raise ValueError("hsv_min must not be above hsv_max (only the hue may wrap around)")
         if self.min_area > self.max_area:
             raise ValueError("min_area must not be above max_area")
         return self
@@ -233,9 +234,11 @@ class Condition(BaseModel):
     counter_at_least: dict[str, NumRef] = {}
     #: Colours (from the routine's ``colors``) that must all be on screen.
     color_visible: NameList = []
+    #: Colours that must all be absent from the screen.
+    color_absent: NameList = []
     always: bool = False
 
-    @field_validator("visible", "any_visible", "not_visible", "color_visible")
+    @field_validator("visible", "any_visible", "not_visible", "color_visible", "color_absent")
     @classmethod
     def _template_names(cls, names: list[str]) -> list[str]:
         return [validate_name(n) for n in names]
@@ -259,6 +262,7 @@ class Condition(BaseModel):
             or self.counter_below
             or self.counter_at_least
             or self.color_visible
+            or self.color_absent
             or self.always
         ):
             raise ValueError("'when' needs at least one condition (or 'always: true')")
@@ -525,9 +529,11 @@ class Routine(BaseModel):
             refs = ", ".join("$" + m for m in missing)
             raise ValueError(f"unknown option reference(s) {refs}: declare them under 'options'")
         for rule in self.rules:
-            colors = set(rule.when.color_visible) | {
-                a.args["color"] for a in rule.do if a.kind == "tap_color"
-            }
+            colors = (
+                set(rule.when.color_visible)
+                | set(rule.when.color_absent)
+                | {a.args["color"] for a in rule.do if a.kind == "tap_color"}
+            )
             unknown = sorted(colors - set(self.colors))
             if unknown:
                 raise ValueError(

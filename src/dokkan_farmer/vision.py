@@ -490,7 +490,12 @@ def find_color_blobs(
         x0, y0 = int(rx * sw), int(ry * sh)
         small = small[y0 : max(y0 + 1, int((ry + rh) * sh)), x0 : max(x0 + 1, int((rx + rw) * sw))]
     hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, np.array(hsv_min, np.uint8), np.array(hsv_max, np.uint8))
+    if hsv_min[0] > hsv_max[0]:  # the hue wraps around (red)
+        low = cv2.inRange(hsv, np.array(hsv_min, np.uint8), np.array([179, *hsv_max[1:]], np.uint8))
+        high = cv2.inRange(hsv, np.array([0, *hsv_min[1:]], np.uint8), np.array(hsv_max, np.uint8))
+        mask = cv2.bitwise_or(low, high)
+    else:
+        mask = cv2.inRange(hsv, np.array(hsv_min, np.uint8), np.array(hsv_max, np.uint8))
     count, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
     total = float(sw * sh)
     blobs = []

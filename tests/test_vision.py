@@ -189,3 +189,12 @@ def test_color_blobs_find_the_arrow_whichever_way_it_points():
     assert not find_color_blobs(
         frame, [95, 200, 150], [115, 255, 255], 0.0015, 0.05, [0, 0, 1, 0.3]
     )
+
+
+def test_color_blobs_wrap_around_the_red_hue():
+    frame = background()
+    cv2.rectangle(frame, (100, 300), (160, 360), (0, 0, 255), -1)  # hue 0
+    cv2.rectangle(frame, (300, 300), (360, 360), (60, 0, 255), -1)  # hue ~175: still red
+    cv2.rectangle(frame, (500, 300), (560, 360), (0, 255, 0), -1)  # green: not red
+    blobs = find_color_blobs(frame, [172, 150, 100], [6, 255, 255], 0.001, 0.1)
+    assert sorted(round(b.x, -2) for b in blobs) == [100, 300]

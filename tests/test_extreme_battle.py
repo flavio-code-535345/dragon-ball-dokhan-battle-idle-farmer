@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cv2
 import pytest
 
 from dokkan_farmer.device.sim import Box, _button, _canvas, _text
@@ -27,6 +28,11 @@ HOME_START = Box(240, 800, 240, 140)
 MENU_EVENT = Box(200, 380, 320, 100)
 TABS = Box(20, 150, 400, 70)
 Z_TAB = Box(560, 150, 140, 70)  # (0.89, 0.14) of 720x1280 is inside
+RINGS = [(153, 1058, 79), (355, 1034, 75), (565, 1009, 67)]  # the three team slots
+RING_BGR = {"str": (40, 40, 220), "int": (190, 50, 150), "agl": (220, 120, 30)}
+ARROWS = Box(216, 1024, 72, 58)
+BADGE = Box(30, 40, 90, 60)
+SKIP = Box(621, 721, 72, 74)
 SLOTS = 2  # banners in view
 BANNER_TOP, BANNER_STEP = 260, 260
 
@@ -163,7 +169,58 @@ class EventsGame(ExtremeGame):
             self.offset = max(0, min(len(self.events) - SLOTS, self.offset + step))
 
 
-def capture_templates(store: TemplateStore, events: bool = False) -> None:
+class OrderGame(ExtremeGame):
+    """One battle on the planning screen: three ringed units, swap arrows, the enemy's badge.
+
+    ``order`` are the unit types of the slots (a swipe onto the next slot swaps the two);
+    ``order_at_tap`` records the order whenever the ki spheres are tapped."""
+
+    def __init__(self, order: list[str], animating: bool = False) -> None:
+        super().__init__(strongest=99)
+        self.order, self.screen = order, "animation" if animating else "battle"
+        self.order_at_tap: list[list[str]] = []
+        self.skipped = 0
+
+    def render(self):
+        if self.screen not in ("battle", "animation"):
+            return super().render()
+        img = _canvas((60, 40, 30))
+        _button(img, ITEM, "ITEM", "nav")
+        _button(img, BADGE, "PHY", "danger")
+        for (cx, cy, r), kind in zip(RINGS, self.order, strict=True):
+            cv2.circle(img, (cx, cy), r - 5, RING_BGR[kind], 10)
+        if self.screen == "battle":
+            _button(img, ARROWS, "<>", "ok")
+            _button(img, SPHERE, "KI", "auto_on")
+        else:
+            _button(img, SKIP, "FF", "start")
+        return img
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "animation" and SKIP.contains(x, y):
+            self.skipped += 1
+            self.screen = "battle"
+        elif self.screen == "battle" and SPHERE.contains(x, y):
+            self.order_at_tap.append(list(self.order))
+            super().tap(x, y)
+        elif self.screen not in ("battle", "animation"):
+            super().tap(x, y)
+
+    def swipe_xy(self, x1: float, y1: float, x2: float, y2: float) -> None:
+        if self.screen != "battle" or y1 < 1000:
+            return
+        slot = lambda x: min(range(3), key=lambda i: abs(RINGS[i][0] - x))  # noqa: E731
+        a, b = slot(x1), slot(x2)
+        if abs(a - b) == 1:
+            self.order[a], self.order[b] = self.order[b], self.order[a]
+
+
+class OrderDevice(QuestDevice):
+    def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> None:
+        self.game.swipe_xy(x1, y1, x2, y2)
+
+
+def capture_templates(store: TemplateStore, events: bool = False, battle: bool = False) -> None:
     game = EventsGame([9]) if events else ExtremeGame(strongest=9)
     for screen, name, box in [
         ("stage", "xb_fight", FIGHT),
@@ -175,6 +232,12 @@ def capture_templates(store: TemplateStore, events: bool = False) -> None:
         store.create_from_frame(name, game.render(), box.as_tuple(), threshold=0.9)
     game.screen = "results"
     store.create_from_frame("ok_button", game.render(), OK.as_tuple(), search_full=True)
+    if battle:
+        game = OrderGame(["agl", "agl", "agl"])
+        store.create_from_frame("xb_planning", game.render(), ARROWS.as_tuple(), threshold=0.9)
+        store.create_from_frame("enemy_phy", game.render(), BADGE.as_tuple(), threshold=0.9)
+        game.screen = "animation"
+        store.create_from_frame("xb_skip", game.render(), SKIP.as_tuple(), threshold=0.9)
     if not events:
         return
     for screen, name, box in [
@@ -199,13 +262,13 @@ def play(tmp_path: Path):
     def run(game: ExtremeGame, options: dict | None = None, minutes: int = 60) -> dict:
         settings = Settings(data_dir=tmp_path / "data", device_backend="sim")
         store = TemplateStore(settings.templates_dir)
-        capture_templates(store, isinstance(game, EventsGame))
+        capture_templates(store, isinstance(game, EventsGame), isinstance(game, OrderGame))
         library = RoutineLibrary(settings.routines_dir)
         library.install_defaults()
         routine = library.load(ROUTINE)
         clock = Clock()
         farmer = Farmer(
-            QuestDevice(game),
+            (OrderDevice if isinstance(game, OrderGame) else QuestDevice)(game),
             Matcher(store, settings.match_scale),
             settings,
             clock=clock,
@@ -260,3 +323,30 @@ def test_stops_when_an_event_cannot_be_started(play):
     summary = play(game, {"events": "all", "tries": 2}, minutes=240)
     assert game.played == [[], []] and game.lost == [1, 1]
     assert "An event was lost 2 times at its first level" in summary["reason"]
+
+
+def test_swaps_the_strong_unit_to_the_front(play):
+    game = OrderGame(["int", "agl", "str"])
+    play(game, {"smart_order": "by_type", "max_battles": 1})
+    assert game.order_at_tap[0] == ["str", "int", "agl"]
+
+
+def test_moves_a_unit_the_enemy_beats_out_of_the_front(play):
+    game = OrderGame(["int", "agl", "agl"])
+    play(game, {"smart_order": "by_type", "max_battles": 1})
+    assert game.order_at_tap[0] == ["agl", "int", "agl"]
+
+
+def test_leaves_the_order_alone_by_default_or_when_it_is_fine(play):
+    game = OrderGame(["int", "agl", "str"])
+    play(game, {"max_battles": 1})
+    assert game.order_at_tap[0] == ["int", "agl", "str"]
+    game = OrderGame(["str", "int", "agl"])
+    play(game, {"smart_order": "by_type", "max_battles": 1})
+    assert game.order_at_tap[0] == ["str", "int", "agl"]
+
+
+def test_fast_forwards_the_animations(play):
+    game = OrderGame(["agl", "agl", "agl"], animating=True)
+    play(game, {"max_battles": 1})
+    assert game.skipped >= 1

@@ -242,6 +242,12 @@ def test_colours_are_declared_and_checked():
     bad = "colors:\n  arrow: {hsv_min: [200, 0, 0], hsv_max: [115, 255, 255]}\n"
     with pytest.raises(RoutineError, match="hue 0-179"):
         parse_routine(bad + base)
-    upside = "colors:\n  arrow: {hsv_min: [115, 0, 0], hsv_max: [95, 255, 255]}\n"
+    upside = "colors:\n  arrow: {hsv_min: [95, 255, 0], hsv_max: [115, 200, 255]}\n"
     with pytest.raises(RoutineError, match="hsv_min"):
         parse_routine(upside + base)
+    wrap = "colors:\n  arrow: {hsv_min: [172, 200, 150], hsv_max: [6, 255, 255]}\n"  # red
+    assert parse_routine(wrap + base).colors["arrow"].hsv_min[0] == 172
+    absent = base.replace("color_visible", "color_absent")
+    with pytest.raises(RoutineError, match="unknown colour"):
+        parse_routine(absent)
+    assert parse_routine(colors + absent).rules[0].when.color_absent == ["arrow"]

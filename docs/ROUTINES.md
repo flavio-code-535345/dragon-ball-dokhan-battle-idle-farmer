@@ -103,6 +103,7 @@ All listed conditions must hold.
 | `counter_below: {stone_refills: $max_stone_refills}` | counter < value |
 | `counter_at_least: {runs: 10}` | counter ≥ value |
 | `color_visible: path_arrow` | a blob of this colour (from `colors`, below) is on screen |
+| `color_absent: path_arrow` | no blob of this colour is on screen |
 | `always: true` | always (use with a cooldown) |
 
 ## Actions (`do`)
@@ -244,6 +245,19 @@ loses, goes back with `back_button` and takes the next fresh event. Events playe
 higher level and are skipped; the list is scanned from the top, then down. It stops with "No
 Extreme Z-Battle event with a fresh level 1 is left", or when the very first level of an event is
 lost `tries` times.
+
+Battles are sped up with the game's fast-forward button (the green double arrow at the right while
+animations play): capture it as `xb_skip` (*search the whole screen*) and the routine taps it.
+
+**Team order.** With the option *Team order* = `by_type` the routine swaps the team on the planning
+screen (the orange swap arrows between the slots show only then: capture them as `xb_planning`).
+Against a PHY enemy (`enemy_phy`, the type badge at the top left of the battle) the STR unit goes to
+the front slot and an INT unit is moved out of it. A unit's type is the colour of its ring, read by
+the routine's `colors` (hue-wrapping red, a short piece of each slot's ring, `color_absent` for "no
+STR ring in slot 1"); a unit is moved by swiping it onto the slot next to it, at most twice a turn.
+Only PHY enemies are covered: for another type capture its badge as e.g. `enemy_agl` and copy the
+three `Order` rules with that type's winning and losing ring colours (the wheel is AGL > STR > PHY >
+INT > TEQ > AGL). Whether the swap really lowers the damage taken is not measured.
 
 ## Farming Dragon Stones
 

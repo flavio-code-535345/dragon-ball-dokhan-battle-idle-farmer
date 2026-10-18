@@ -732,6 +732,8 @@ class Farmer:
         colors = session.routine.colors
         if not all(analysis.color_blobs(n, colors[n]) for n in when.color_visible):
             return False
+        if any(analysis.color_blobs(n, colors[n]) for n in when.color_absent):
+            return False
         if when.any_visible and not any(analysis.visible(name) for name in when.any_visible):
             return False
         return not any(analysis.visible(name) for name in when.not_visible)

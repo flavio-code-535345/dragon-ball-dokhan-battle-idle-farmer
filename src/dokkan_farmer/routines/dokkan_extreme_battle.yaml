@@ -12,6 +12,11 @@
 # stops when no event with a fresh level 1 is left (events played up to the team's limit
 # show a higher "NEXT Lv." and are skipped).
 #
+# Battles are sped up with the game's fast-forward button (template xb_skip). Optionally the
+# team order is swapped on the planning screen (option "Team order" = by_type): against a PHY enemy the
+# unit of the type that beats PHY (STR) goes to the front and an INT unit (which PHY beats) is
+# moved out of it. The type of a unit is the colour of its ring.
+#
 # Extreme Z-Battles cost no stamina and allow no continues, so a lost battle spends nothing:
 # after `tries` lost battles in a row the routine gives up on the event.
 #
@@ -55,6 +60,15 @@ options:
     default: 240
     min: 5
     max: 600
+  smart_order:
+    label: Team order against the enemy's type
+    type: choice
+    choices: [fixed, by_type]
+    default: fixed
+    help: >-
+      by_type = on every turn, swipe the unit whose type beats the enemy's to the front slot (and
+      move a unit the enemy's type beats out of it). Needs the templates xb_planning and the
+      enemy type (enemy_phy); the colours below read each unit's ring.
   sphere_x:
     label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
     type: number
@@ -103,6 +117,15 @@ counters:
     label: Battles won
     appears: xb_congrats
     rearm: xb_fight
+
+colors:
+  # The ring around a unit's portrait is the colour of its type. Each colour looks at a short
+  # piece of the left side of the ring of one slot (slot 1 = leftmost of the three units).
+  str_1: &str {description: "STR (red) ring, slot 1", hsv_min: [172, 150, 90], hsv_max: [6, 255, 255], min_area: 0.0002, max_area: 0.003, region: [0.094, 0.811, 0.033, 0.031]}
+  str_2: {<<: *str, description: "STR (red) ring, slot 2", region: [0.381, 0.792, 0.033, 0.031]}
+  str_3: {<<: *str, description: "STR (red) ring, slot 3", region: [0.683, 0.773, 0.033, 0.031]}
+  int_1: &int {description: "INT (purple) ring, slot 1", hsv_min: [125, 100, 60], hsv_max: [155, 255, 255], min_area: 0.0002, max_area: 0.003, region: [0.094, 0.811, 0.033, 0.031]}
+  int_2: {<<: *int, description: "INT (purple) ring, slot 2", region: [0.381, 0.792, 0.033, 0.031]}
 
 templates:
   xb_fight:
@@ -169,6 +192,22 @@ templates:
       "Lv. 13" do not match. Give it a tap point on the banner, left of the label (only for
       "Events to play" = all).
 
+  xb_skip:
+    level: optional
+    description: >-
+      The green double-arrow "fast forward" button at the right of a battle while animations
+      play. Tapping it skips them: the battle ends much sooner. Tick "search the whole screen".
+  xb_planning:
+    level: optional
+    description: >-
+      The orange swap arrows between the first two team slots. They show only while the battle
+      waits for your tap (the planning screen). Needed for "Team order" = by_type.
+  enemy_phy:
+    level: optional
+    description: >-
+      The enemy type badge at the top left of the battle ("SUPER PHY" / "EXTREME PHY"). Needed
+      for "Team order" = by_type against PHY enemies.
+
 rules:
   # --- Errors and popups --------------------------------------------------------
   - name: Connection error → Retry
@@ -224,9 +263,50 @@ rules:
     cooldown: 3
 
   # --- Battle --------------------------------------------------------------------------
+  # While animations play the fast-forward button is on screen: tap it (and forget the swaps
+  # of the turn that just ended).
+  - name: Battle → fast-forward
+    when: {visible: xb_skip, not_visible: xb_planning}
+    do: [{reset: swaps}, {tap: xb_skip}]
+    cooldown: 1
+
+  # Team order, against a PHY enemy: STR beats PHY (take the STR unit to the front slot), PHY
+  # beats INT (move an INT unit out of it). At most two swipes a turn, so a colour that is
+  # misread cannot make it swap back and forth. A unit is moved by swiping it onto the slot
+  # next to it.
+  - name: Order → STR unit to the front (from slot 2)
+    when:
+      visible: [xb_planning, enemy_phy]
+      color_visible: str_2
+      color_absent: str_1
+      counter_below: {swaps: 2}
+      option: {smart_order: by_type}
+    do: [{count: swaps}, {swipe: {from: [0.49, 0.83], to: [0.21, 0.83], ms: 350}}]
+    cooldown: 2
+
+  - name: Order → STR unit to slot 2 (from slot 3)
+    when:
+      visible: [xb_planning, enemy_phy]
+      color_visible: str_3
+      color_absent: [str_1, str_2]
+      counter_below: {swaps: 2}
+      option: {smart_order: by_type}
+    do: [{count: swaps}, {swipe: {from: [0.79, 0.83], to: [0.49, 0.83], ms: 350}}]
+    cooldown: 2
+
+  - name: Order → INT unit out of the front slot
+    when:
+      visible: [xb_planning, enemy_phy]
+      color_visible: int_1
+      color_absent: [int_2, str_1, str_2, str_3]
+      counter_below: {swaps: 2}
+      option: {smart_order: by_type}
+    do: [{count: swaps}, {swipe: {from: [0.49, 0.83], to: [0.21, 0.83], ms: 350}}]
+    cooldown: 2
+
   - name: Battle → tap a ki sphere
     when: {visible: xb_battle}
-    do: [{tap_xy: [$sphere_x, $sphere_y]}]
+    do: [{reset: swaps}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
 
