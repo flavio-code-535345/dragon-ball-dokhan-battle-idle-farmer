@@ -278,6 +278,12 @@ routine, set `max_clears` and press Start. It starts the stage, plays its map an
   `restore_with_item`, `event_mission`, `mission_dialog` and `mission_accept_all` (colour mode) once; the rest are shared
   with the other routines.
 
+The in-game **Dragon Stone Navigator** can also be your work list for *Clear New Stages*: with
+"Missions Included" switched OFF it lists only events that still pay stones for clearing stages, most
+stones first, and tapping an entry opens that event's stage list. On an event's stage list there is
+no MISSION button, so capture `event_stage_row` (the "Clear Reward / Featured Reward" headings of a
+row, *search the whole screen*) and the routine finds the NEW stages there too.
+
 The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of the event
 screens) lists the events that still pay stones, with the stones for stage clears and for
 missions: a good list to pick the next event from.

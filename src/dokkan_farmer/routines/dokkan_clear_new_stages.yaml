@@ -186,6 +186,13 @@ templates:
     description: >-
       The SUPER label of a stage's difficulty list (purple bar). With difficulty =
       highest it is played first: it also pays the stones of the lower ones.
+  event_stage_row:
+    level: optional
+    description: >-
+      The "Clear Reward / Featured Reward" headings of a stage row on an EVENT's stage list
+      (events have no MISSION button there, so stage_list never matches). Tick "search the
+      whole screen": the rows scroll. Used to find NEW stages of events, e.g. the ones the
+      Dragon Stone Navigator opens.
   start_button:
     level: required
     description: The "Start!" button on the team screen before a quest.
@@ -344,7 +351,7 @@ rules:
   - name: Map → choose a path
     when:
       color_visible: path_arrow
-      not_visible: [battle_screen, stage_list, start_button, home_screen]
+      not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen]
     do: [{tap_color: path_arrow}]
     cooldown: 3
 
@@ -370,7 +377,7 @@ rules:
 
   # --- Finding the next NEW stage ------------------------------------------------
   - name: Open a NEW stage
-    when: {visible: [stage_list, new_mark]}
+    when: {visible: new_mark, any_visible: [stage_list, event_stage_row]}
     do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}]
     cooldown: 4
 
@@ -423,7 +430,7 @@ rules:
   # times first (misses), and only then swipe.
   - name: No NEW mark on screen, look again
     when:
-      visible: stage_list
+      any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_below: {misses: 3}
     do: [{count: misses}]
@@ -434,7 +441,7 @@ rules:
   # looks the other way.
   - name: Look further down for a NEW stage
     when:
-      visible: stage_list
+      any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_at_least: {misses: 3}
       counter_below: {scrolls_down: $max_scrolls}
@@ -446,7 +453,7 @@ rules:
 
   - name: Look further up for a NEW stage
     when:
-      visible: stage_list
+      any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_at_least: {misses: 3}
       counter_below: {scrolls_up: $max_scrolls}
@@ -459,7 +466,10 @@ rules:
     cooldown: 2
 
   - name: No NEW stage left → stop
-    when: {visible: stage_list, not_visible: new_mark, counter_at_least: {misses: 3}}
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: new_mark
+      counter_at_least: {misses: 3}
     do:
       - screenshot: no_new_stage
       - stop: No uncleared stage left in this list ({stages_cleared} cleared). Open the next area and start again.
@@ -481,7 +491,7 @@ rules:
   - name: Close a details page
     when:
       visible: back_button
-      not_visible: [stage_list, start_button, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      not_visible: [stage_list, event_stage_row, start_button, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
       static_for: 4
     do: [{key: BACK}]
     cooldown: 3
@@ -489,7 +499,7 @@ rules:
   - name: Tap to continue
     when:
       static_for: $continue_after
-      not_visible: [act_empty_dialog, defeat_give_up, stage_list]
+      not_visible: [act_empty_dialog, defeat_give_up, stage_list, event_stage_row]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
 
@@ -500,6 +510,6 @@ rules:
   - name: Nothing recognised → tap the top
     when:
       idle_for: 10
-      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, start_button, error_retry, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
     do: [{tap_xy: [0.5, 0.15]}]
     cooldown: 4
