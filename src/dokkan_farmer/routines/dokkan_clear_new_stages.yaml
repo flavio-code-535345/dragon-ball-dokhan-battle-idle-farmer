@@ -557,7 +557,6 @@ rules:
     when:
       visible: difficulty_super
       counter_below: {blocked: 1}
-      counter_below: {blocked: 1}
       option: {difficulty: highest}
     do: [{tap: difficulty_super}]
     cooldown: 4
@@ -592,7 +591,6 @@ rules:
   - name: Pick Normal (easiest)
     when:
       visible: difficulty_normal
-      counter_below: {blocked: 1}
       counter_below: {blocked: 1}
       option: {difficulty: easiest}
     do: [{tap: difficulty_normal}]
@@ -700,6 +698,27 @@ rules:
       option: {claim_missions: "no", next_event: "yes"}
     do: [{count: claimed}]
     cooldown: 1
+
+  # Some event pages have no MISSION button at all: nothing to claim there.
+  - name: Missions → no button here, skip
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: [event_mission, mission_dialog, new_mark]
+      counter_at_least: {misses: 3}
+      counter_below: {claimed: 1, mission_opens: 1}
+      option: {claim_missions: "yes", next_event: "yes"}
+    do: [{count: claimed}]
+    cooldown: 2
+
+  - name: Missions → no button here, skip (event given up)
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: [event_mission, mission_dialog]
+      counter_at_least: {blocked: 1}
+      counter_below: {claimed: 1, mission_opens: 1}
+      option: {claim_missions: "yes", next_event: "yes"}
+    do: [{count: claimed}]
+    cooldown: 2
 
   - name: Missions → accept all
     when:
