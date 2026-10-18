@@ -181,9 +181,11 @@ templates:
   mission_dialog:
     level: optional
     description: The title "Mission(s)" of the event's mission list.
-  claim_all:
+  mission_accept_all:
     level: optional
-    description: The orange "Accept all" button of the mission list (shared with Collect Rewards).
+    description: >-
+      The orange "Accept all" button of the event's mission list (orange while something is
+      ready, grey otherwise): capture it in colour mode, with "search the whole screen".
   map_screen:
     level: recommended
     description: >-
@@ -385,17 +387,17 @@ rules:
 
   - name: Missions → accept all
     when:
-      visible: [mission_dialog, claim_all]
+      visible: [mission_dialog, mission_accept_all]
       counter_at_least: {mission_opens: 1}
       counter_below: {accepts: 1}
-    do: [{count: accepts}, {tap: claim_all}]
+    do: [{count: accepts}, {tap: mission_accept_all}]
     cooldown: 4
 
   # "Accept all" is grey when nothing is ready: close the list.
   - name: Missions → nothing to accept
     when:
       visible: [mission_dialog, cancel_button]
-      not_visible: claim_all
+      not_visible: mission_accept_all
       counter_at_least: {mission_opens: 1}
       counter_below: {accepts: 1}
     do: [{count: accepts}, {tap: cancel_button}]

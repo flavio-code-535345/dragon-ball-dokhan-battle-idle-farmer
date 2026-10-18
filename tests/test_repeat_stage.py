@@ -194,7 +194,7 @@ def capture_templates(store: TemplateStore) -> None:
     crop("battle_screen", "battle", ITEM)
     crop("stage_result", "result", RESULT)
     crop("mission_dialog", "missions", MTITLE)
-    crop("claim_all", "missions", ACCEPT, search_full=True)
+    crop("mission_accept_all", "missions", ACCEPT, search_full=True)
     crop("cancel_button", "missions", MCANCEL, search_full=True)
     crop("ok_button", "accepted", OK, search_full=True)
 

@@ -275,7 +275,7 @@ routine, set `max_clears` and press Start. It starts the stage, plays its map an
   "Restore STA with Item" row (Aged Meat, one piece unless `meat_pieces` says two), at most
   `max_refills` times, and never the Dragon Stone row. With `refill` = stop it stops instead.
 - Capture `stage_details` (the "Clear Reward / Featured Reward" headings), `restore_sta`,
-  `restore_with_item`, `event_mission`, `mission_dialog` and `claim_all` once; the rest are shared
+  `restore_with_item`, `event_mission`, `mission_dialog` and `mission_accept_all` (colour mode) once; the rest are shared
   with the other routines.
 
 The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of the event
