@@ -251,3 +251,17 @@ def test_colours_are_declared_and_checked():
     with pytest.raises(RoutineError, match="unknown colour"):
         parse_routine(absent)
     assert parse_routine(colors + absent).rules[0].when.color_absent == ["arrow"]
+
+
+def test_colour_near_must_be_a_point_on_the_screen():
+    base = (
+        "name: C\nrules:\n  - name: Arrow\n"
+        "    when: {color_visible: arrow}\n    do: [{tap_color: arrow}]\n"
+    )
+    ok = (
+        "colors:\n  arrow: {hsv_min: [95, 200, 150], hsv_max: [115, 255, 255], near: [0.5, 0.46]}\n"
+    )
+    assert parse_routine(ok + base).colors["arrow"].near == [0.5, 0.46]
+    bad = ok.replace("[0.5, 0.46]", "[0.5, 1.4]")
+    with pytest.raises(RoutineError, match="near"):
+        parse_routine(bad + base)

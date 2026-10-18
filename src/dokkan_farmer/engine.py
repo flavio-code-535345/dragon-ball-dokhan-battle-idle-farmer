@@ -853,8 +853,12 @@ class Farmer:
                 log.info("Tap on colour %s skipped: it is not on screen", name)
                 return
             width, height = self._frame_size(analysis)
-            px = int(min(width - 1, max(0, round(blobs[0].x))))
-            py = int(min(height - 1, max(0, round(blobs[0].y))))
+            blob = blobs[0]
+            if spec.near is not None:
+                nx, ny = spec.near[0] * width, spec.near[1] * height
+                blob = min(blobs, key=lambda b: (b.x - nx) ** 2 + (b.y - ny) ** 2)
+            px = int(min(width - 1, max(0, round(blob.x))))
+            py = int(min(height - 1, max(0, round(blob.y))))
             self._with_device(lambda d: d.tap(px, py))
         elif kind == "tap_xy":
             width, height = self._frame_size(analysis)

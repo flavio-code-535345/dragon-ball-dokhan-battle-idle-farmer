@@ -477,6 +477,7 @@ def find_color_blobs(
     min_area: float,
     max_area: float,
     region: list[float] | None = None,
+    close: int = 0,
 ) -> list[ColorBlob]:
     """Connected areas of pixels within an HSV range, sized ``min_area``..``max_area`` of the
     screen, largest first (e.g. the blue path arrows of the map, whichever way they point)."""
@@ -496,6 +497,9 @@ def find_color_blobs(
         mask = cv2.bitwise_or(low, high)
     else:
         mask = cv2.inRange(hsv, np.array(hsv_min, np.uint8), np.array(hsv_max, np.uint8))
+    if close > 0:
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * close + 1, 2 * close + 1))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     count, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
     total = float(sw * sh)
     blobs = []
@@ -522,7 +526,13 @@ class FrameAnalysis:
         """Blobs of the routine colour ``name`` (a ``routine.ColorSpec``), largest first."""
         if name not in self._colors:
             self._colors[name] = find_color_blobs(
-                self.frame, spec.hsv_min, spec.hsv_max, spec.min_area, spec.max_area, spec.region
+                self.frame,
+                spec.hsv_min,
+                spec.hsv_max,
+                spec.min_area,
+                spec.max_area,
+                spec.region,
+                spec.close,
             )
         return self._colors[name]
 

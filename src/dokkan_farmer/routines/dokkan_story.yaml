@@ -175,12 +175,17 @@ counters:
 # Colours the routine looks for (hue 0-179, saturation and value 0-255, as in OpenCV).
 colors:
   path_arrow:
-    description: The bright blue arrows where the path on the map forks.
-    hsv_min: [98, 225, 190]
-    hsv_max: [106, 255, 255]
-    min_area: 0.0015
-    max_area: 0.02
-    region: [0, 0.05, 1, 0.68]
+    description: >-
+      The bright blue arrows where the path on the map forks (hue 99-104: the sea of some maps
+      is a little lighter). The one nearest the screen centre is tapped: the game keeps the
+      player there, and the arrows sit next to it.
+    hsv_min: [99, 190, 170]
+    hsv_max: [104, 255, 255]
+    min_area: 0.001
+    max_area: 0.03
+    region: [0, 0.22, 1, 0.46]
+    close: 2
+    near: [0.5, 0.46]
 
 templates:
   new_mark:

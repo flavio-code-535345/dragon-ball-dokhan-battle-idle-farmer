@@ -198,3 +198,13 @@ def test_color_blobs_wrap_around_the_red_hue():
     cv2.rectangle(frame, (500, 300), (560, 360), (0, 255, 0), -1)  # green: not red
     blobs = find_color_blobs(frame, [172, 150, 100], [6, 255, 255], 0.001, 0.1)
     assert sorted(round(b.x, -2) for b in blobs) == [100, 300]
+
+
+def test_color_blobs_close_merges_the_pieces_of_a_shape():
+    frame = background()
+    cv2.rectangle(frame, (100, 300), (160, 360), (224, 125, 7), -1)
+    cv2.line(frame, (100, 330), (160, 330), (255, 255, 255), 3)  # a pale highlight splits it
+    split = find_color_blobs(frame, [95, 200, 150], [115, 255, 255], 0.0005, 0.05)
+    merged = find_color_blobs(frame, [95, 200, 150], [115, 255, 255], 0.0005, 0.05, close=3)
+    assert len(split) == 2 and len(merged) == 1
+    assert merged[0].area > split[0].area

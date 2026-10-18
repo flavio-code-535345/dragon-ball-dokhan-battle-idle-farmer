@@ -196,12 +196,25 @@ class ColorSpec(BaseModel):
     max_area: float = Field(0.05, gt=0, le=1)
     #: ``[x, y, w, h]`` fractions of the screen to look in; ``None`` = all of it.
     region: list[float] | None = None
+    #: Gaps of up to this many pixels (on a 360 pixel wide frame) inside a shape are closed,
+    #: e.g. the pale highlights that split an arrow into pieces.
+    close: int = Field(0, ge=0, le=20)
+    #: Which blob ``tap_color`` taps: the biggest, or the one nearest ``near`` (``[x, y]``
+    #: fractions of the screen, e.g. the centre the game keeps the player on).
+    near: list[float] | None = None
 
     @field_validator("hsv_min", "hsv_max")
     @classmethod
     def _hsv(cls, value: list[int]) -> list[int]:
         if len(value) != 3 or not (0 <= value[0] <= 179) or not all(0 <= v <= 255 for v in value):
             raise ValueError("an HSV colour is [hue 0-179, saturation 0-255, value 0-255]")
+        return value
+
+    @field_validator("near")
+    @classmethod
+    def _near(cls, value: list[float] | None) -> list[float] | None:
+        if value is not None and (len(value) != 2 or not all(0 <= v <= 1 for v in value)):
+            raise ValueError("near is [x, y], fractions of the screen")
         return value
 
     @field_validator("region")
