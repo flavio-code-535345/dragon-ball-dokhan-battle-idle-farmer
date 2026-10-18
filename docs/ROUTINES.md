@@ -278,6 +278,11 @@ routine, set `max_clears` and press Start. It starts the stage, plays its map an
   `restore_with_item`, `event_mission`, `mission_dialog` and `mission_accept_all` (colour mode) once; the rest are shared
   with the other routines.
 
+On an event's stage list the newest stage is always at the top, so with `quick_finish` = yes (the
+default) *Clear New Stages* decides "nothing left" at once when the list, as it opens, has no NEW mark
+(it needs `event_stage_row`); with no it scrolls up and down to be sure, which takes a minute or two.
+Quest area lists are always scrolled.
+
 With `claim_missions` = yes, *Clear New Stages* also opens the stage list's MISSION screen once no
 NEW stage is left and accepts the rewards that are ready (events pay Dragon Stones for clearing every
 stage, on each difficulty): capture `event_mission`, `mission_dialog` and `mission_accept_all`

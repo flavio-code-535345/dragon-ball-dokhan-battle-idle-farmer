@@ -169,6 +169,30 @@ class QuestGame:
             self.screen = "list"
 
 
+class EventGame(QuestGame):
+    """An event's stage list: no area title, every row has the Clear Reward / Featured Reward
+    heading, and the newest (NEW) stage is at the top."""
+
+    HEADING = Box(40, ROW_TOP + 130, 320, 40)
+
+    def __init__(self, cleared: dict[int, set[str]], stages: int = 8) -> None:
+        super().__init__(cleared, stages)
+        self.swipes = 0
+
+    def render(self) -> np.ndarray:
+        img = super().render()
+        if self.screen == "list":
+            _button(img, TITLE, "EVENT", "retry")  # not the quest list's title
+            for row in range(ROWS):
+                top = ROW_TOP + row * ROW_HEIGHT
+                _text(img, "CLEAR REWARD FEATURED", (200, top + 150), 0.8)
+        return img
+
+    def swipe(self, y1: float, y2: float) -> None:
+        self.swipes += 1
+        super().swipe(y1, y2)
+
+
 class QuestDevice(Device):
     backend = "test"
 
@@ -225,6 +249,14 @@ def capture_templates(store: TemplateStore) -> None:
         store.create_from_frame(
             name, game.render(), box.as_tuple(), threshold=0.9, search_full=search_full
         )
+    event = EventGame({})
+    store.create_from_frame(
+        "event_stage_row",
+        event.render(),
+        Box(40, ROW_TOP + 135, 320, 30).as_tuple(),
+        threshold=0.8,
+        search_full=True,
+    )
 
 
 class Clock:
@@ -320,3 +352,27 @@ def test_a_defeat_gives_up_without_paying(play):
     assert game.played == [(1, "NORMAL"), (1, "NORMAL")]  # one more try, then stop
     assert "defeated" in summary["reason"] and summary["runs"] == 0
     assert not game.paid
+
+
+def test_an_event_without_a_new_stage_at_the_top_stops_without_scrolling(play):
+    cleared = {s: set(DIFFICULTIES) for s in range(8)}
+    game = EventGame(cleared)
+    summary = play(game, minutes=10)
+    assert game.swipes == 0 and not game.played
+    assert "No uncleared stage left" in summary["reason"]
+
+
+def test_an_event_is_scrolled_when_quick_finish_is_off(play):
+    cleared = {s: set(DIFFICULTIES) for s in range(8)}
+    game = EventGame(cleared)
+    play(game, {"quick_finish": "no", "max_scrolls": 2}, minutes=10)
+    assert game.swipes > 0
+
+
+def test_an_event_plays_the_new_stage_at_the_top(play):
+    cleared = {s: set(DIFFICULTIES) for s in range(8)}
+    cleared[0] = set()
+    game = EventGame(cleared)
+    summary = play(game, minutes=20)
+    assert game.played == [(0, "NORMAL")] and summary["runs"] == 1
+    assert "No uncleared stage left" in summary["reason"]

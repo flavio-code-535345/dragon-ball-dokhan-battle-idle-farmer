@@ -108,6 +108,15 @@ options:
     default: 60
     min: 1
     max: 1440
+  quick_finish:
+    label: Event lists - stop when the top of the list has no NEW stage
+    type: choice
+    choices: ["yes", "no"]
+    default: "yes"
+    help: >-
+      An event's newest stage is always at the top of its list, so if the list (as it opens)
+      shows no NEW mark the event is done: no need to scroll up and down to be sure. Only for
+      event lists (the event_stage_row template); no = always scroll to look.
   claim_missions:
     label: Accept the event's mission rewards before stopping
     type: choice
@@ -475,7 +484,7 @@ rules:
   # --- Finding the next NEW stage ------------------------------------------------
   - name: Open a NEW stage
     when: {visible: new_mark, any_visible: [stage_list, event_stage_row]}
-    do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}]
+    do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
     cooldown: 4
 
   # Clearing the highest difficulty of a stage also pays the lower ones' first-clear
@@ -533,6 +542,18 @@ rules:
     do: [{count: misses}]
     cooldown: 1
 
+  # An event's newest stage is at the top of its list: no NEW mark there (before any swipe)
+  # means the event is finished, so skip the scrolling.
+  - name: Event list without NEW at the top → no scrolling
+    when:
+      visible: event_stage_row
+      not_visible: new_mark
+      counter_at_least: {misses: 3}
+      counter_below: {scrolls_down: 1, scrolls_up: 1, skip_scroll: 1}
+      option: {quick_finish: "yes"}
+    do: [{count: skip_scroll}]
+    cooldown: 1
+
   # Swiping up scrolls the list down. At the end of the list a swipe changes
   # nothing: after a few of those the engine pauses this rule, and the next one
   # looks the other way.
@@ -541,7 +562,7 @@ rules:
       any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_at_least: {misses: 3}
-      counter_below: {scrolls_down: $max_scrolls}
+      counter_below: {scrolls_down: $max_scrolls, skip_scroll: 1}
     do:
       - swipe: {from: [0.5, 0.75], to: [0.5, 0.4], ms: 500}
       - count: scrolls_down
@@ -553,7 +574,7 @@ rules:
       any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_at_least: {misses: 3}
-      counter_below: {scrolls_up: $max_scrolls}
+      counter_below: {scrolls_up: $max_scrolls, skip_scroll: 1}
     do:
       - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
       - wait: 1
