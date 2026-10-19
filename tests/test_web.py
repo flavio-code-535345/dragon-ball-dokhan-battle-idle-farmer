@@ -53,20 +53,10 @@ def test_health_status_and_index(client):
     assert client.get("/manifest.webmanifest").json()["short_name"] == "Farmer"
 
 
-def test_basic_auth(tmp_path):
-    settings = Settings(data_dir=tmp_path / "data", device_backend="sim", web_password="s3cret")
-    ctx = AppContext(settings)
-    with TestClient(create_app(ctx)) as client:
-        assert client.get("/api/health").status_code == 200
-        assert client.get("/static/icon-192.png").status_code == 200
-        denied = client.get("/api/status")
-        assert denied.status_code == 401
-        assert "Basic" in denied.headers["www-authenticate"]
-        assert client.get("/", auth=("admin", "wrong")).status_code == 401
-        assert client.get("/api/status", auth=("admin", "s3cret")).status_code == 200
-        bad = {"Authorization": "Basic " + base64.b64encode(b"nonsense").decode()}
-        assert client.get("/api/status", headers=bad).status_code == 401
-        assert client.get("/api/status", headers={"Authorization": "Basic !!!"}).status_code == 401
+def test_the_web_ui_needs_no_login(client):
+    assert client.get("/").status_code == 200
+    assert client.get("/api/status").status_code == 200
+    assert "auth_enabled" not in client.get("/api/status").json()["settings"]
 
 
 def test_screen_capture_and_analyze(client):

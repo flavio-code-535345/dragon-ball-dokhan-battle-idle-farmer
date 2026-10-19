@@ -91,7 +91,7 @@ Dokkan from APKPure (the *Apps* card's button) and the game runs to its *Create 
 
    Directly on Linux: `ls -l /dev/kvm` must exist (enable virtualization in the BIOS).
 2. Deploy [`docker-compose.emulator.yml`](../docker-compose.emulator.yml) (Portainer: paste it
-   into the *Web editor*). Set `WEB_PASSWORD`, `TZ` and, if needed, `HOST_PORT`. The first start
+   into the *Web editor*). Set `TZ` and, if needed, `HOST_PORT`. The first start
    downloads the emulator (about 2.5 GB); Android then boots in a minute or two.
 3. **Device** tab: *connected*, *ARM apps: ✅ translated*.
 4. **Device** tab → *Apps* → **Install Dokkan (APKPure)**. That is the game's 32-bit ARM build,
@@ -207,7 +207,7 @@ services:
 
 1. Portainer → *Stacks* → *Add stack* → paste
    [`docker-compose.redroid.yml`](../docker-compose.redroid.yml) into the *Web editor* (or use
-   *Repository* with that compose path). Set `WEB_PASSWORD`, `TZ` and, if port 8080 is taken,
+   *Repository* with that compose path). Set `TZ` and, if port 8080 is taken,
    `HOST_PORT`. Deploy.
 2. The first start downloads Android (about 900 MB) and boots it in a minute or two. The
    **Device** tab then shows *connected* and *ARM apps: ✅ translated*.

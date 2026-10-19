@@ -35,5 +35,4 @@ is up, `find_templates` is much cheaper than a screenshot; to follow a farm, cal
    `https://your-domain/mcp/<token>`. No OAuth: the token in the URL is the password, so keep the
    URL secret and make a new token if it leaks.
 
-The `/mcp/` path skips the web UI's Basic auth (MCP clients cannot do it) and answers 404 to a
-wrong token. Whoever has the URL can control the device, like with the web UI's password.
+The `/mcp/` path answers 404 to a wrong token. Whoever has the URL can control the device.

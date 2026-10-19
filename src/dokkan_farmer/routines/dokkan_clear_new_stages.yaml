@@ -362,7 +362,7 @@ rules:
   # --- Errors and dangerous dialogs first -----------------------------------
   - name: Connection error → Retry
     when: {visible: error_retry}
-    do: [{tap: error_retry}]
+    do: [{reset: lost}, {tap: error_retry}]
     cooldown: 3
 
   # A stage that needs a team you do not have: with "next event" the event is given up, and
@@ -372,7 +372,7 @@ rules:
       visible: [requirement_not_met, ok_button]
       not_visible: [restore_sta, restore_items_to_use]
       option: {next_event: "yes"}
-    do: [{tap: ok_button}, {count: blocked}]
+    do: [{reset: lost}, {tap: ok_button}, {count: blocked}]
     cooldown: 3
 
   - name: Team not allowed → stop
@@ -381,6 +381,7 @@ rules:
       not_visible: [restore_sta, restore_items_to_use]
       option: {next_event: "no"}
     do:
+      - reset: lost
       - tap: ok_button
       - screenshot: requirement_not_met
       - stop: "This stage restricts the team (see the dialog): no cleared stages from here. Change the team and start again."
@@ -388,6 +389,7 @@ rules:
   - name: Defeat → give up and stop
     when: {visible: defeat_give_up, counter_at_least: {defeats: $retries}}
     do:
+      - reset: lost
       - tap: defeat_give_up
       - screenshot: defeat
       - stop: Team was defeated after {stages_cleared} cleared stages. Use a stronger team for this stage.
@@ -395,6 +397,7 @@ rules:
   - name: Defeat → give up and try again
     when: {visible: defeat_give_up}
     do:
+      - reset: lost
       - tap: defeat_give_up
       - count: defeats
       - notify: "Defeat #{defeats} (after {stages_cleared} cleared stages), trying again"
@@ -409,6 +412,7 @@ rules:
       option: {act_policy: meat}
       counter_at_least: {meat_refills: $max_meat_refills}
     do:
+      - reset: lost
       - tap: cancel_button
       - stop: "Stamina is low and {meat_refills} Aged Meat refills were used: stopping after {stages_cleared} cleared stages."
 
@@ -418,7 +422,7 @@ rules:
       not_visible: restore_items_to_use
       option: {act_policy: meat}
       counter_below: {meat_refills: $max_meat_refills}
-    do: [{count: meat_refills}, {reset: minus}, {tap_xy: [0.82, 0.606]}]
+    do: [{reset: lost}, {count: meat_refills}, {reset: minus}, {tap_xy: [0.82, 0.606]}]
     cooldown: 4
 
   # The dialog suggests two pieces: use one.
@@ -427,7 +431,7 @@ rules:
       visible: [restore_sta, ok_button]
       option: {act_policy: meat}
       counter_below: {minus: 1}
-    do: [{count: minus}, {tap_xy: [0.305, 0.542]}]
+    do: [{reset: lost}, {count: minus}, {tap_xy: [0.305, 0.542]}]
     cooldown: 2
 
   - name: Out of stamina → stop
@@ -435,18 +439,20 @@ rules:
       visible: [restore_sta, restore_with_item, cancel_button]
       option: {act_policy: stop}
     do:
+      - reset: lost
       - tap: cancel_button
       - stop: Out of stamina after {stages_cleared} cleared stages
 
   - name: Out of ACT → stop
     when: {visible: act_empty_dialog, option: {act_policy: stop}}
     do:
+      - reset: lost
       - tap: cancel_button
       - stop: Out of ACT after {stages_cleared} cleared stages
 
   - name: Out of ACT → use item
     when: {visible: [act_empty_dialog, act_use_item], option: {act_policy: item}}
-    do: [{tap: act_use_item}, {count: item_refills}]
+    do: [{reset: lost}, {tap: act_use_item}, {count: item_refills}]
     cooldown: 5
 
   - name: Out of ACT → use Dragon Stone
@@ -455,6 +461,7 @@ rules:
       option: {act_policy: stone}
       counter_below: {stone_refills: $max_stone_refills}
     do:
+      - reset: lost
       - tap: act_use_stone
       - count: stone_refills
       - notify: "Spent a Dragon Stone on ACT ({stone_refills}/{max_stone_refills})"
@@ -463,6 +470,7 @@ rules:
   - name: Out of ACT → wait
     when: {visible: act_empty_dialog}
     do:
+      - reset: lost
       - tap: cancel_button
       - count: act_waits
       - notify: "Out of ACT after {stages_cleared} cleared stages, waiting {act_wait_minutes} min"
@@ -471,23 +479,23 @@ rules:
   # --- Playing a stage -----------------------------------------------------------
   - name: Stage cleared → results
     when: {visible: stage_result}
-    do: [{reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
+    do: [{reset: lost}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle won → results
     when: {visible: stage_clear}
-    do: [{tap_xy: [0.5, 0.5]}]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle → tap a ki sphere
     when: {visible: battle_screen}
-    do: [{tap_xy: [$sphere_x, $sphere_y]}]
+    do: [{reset: lost}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
 
   - name: Skip story scene
     when: {visible: skip_button}
-    do: [{tap: skip_button}]
+    do: [{reset: lost}, {tap: skip_button}]
     cooldown: 3
 
   # Where the path forks, blue arrows next to your character show the ways on (the
@@ -498,27 +506,28 @@ rules:
     when:
       color_visible: path_arrow
       not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen]
+      counter_below: {lost: 2}
     do: [{tap_color: path_arrow}]
     cooldown: 3
 
   - name: Map → move
     when: {visible: map_screen, not_visible: battle_screen}
-    do: [{tap_xy: [$move_x, $move_y]}]
+    do: [{reset: lost}, {tap_xy: [$move_x, $move_y]}]
     cooldown: 2
 
   - name: Decline friend request
     when: {visible: friend_request}
-    do: [{tap: cancel_button}]
+    do: [{reset: lost}, {tap: cancel_button}]
     cooldown: 3
 
   - name: Start quest
     when: {visible: start_button, counter_below: {blocked: 1}}
-    do: [{tap: start_button}]
+    do: [{reset: lost}, {tap: start_button}]
     cooldown: 5
 
   - name: Pick the first support
     when: {visible: select_support, counter_below: {blocked: 1}}
-    do: [{tap: select_support}]
+    do: [{reset: lost}, {tap: select_support}]
     cooldown: 4
 
   # After a blocked stage ("next event"): back out of the team / difficulty pages to the list.
@@ -528,7 +537,7 @@ rules:
       not_visible: [stage_list, event_stage_row, navigator_title, requirement_not_met]
       counter_at_least: {blocked: 1}
       option: {next_event: "yes"}
-    do: [{tap: back_button}]
+    do: [{reset: lost}, {tap: back_button}]
     cooldown: 3
 
   # Enough events: stop before the next event's first stage starts.
@@ -539,6 +548,7 @@ rules:
       counter_at_least: {events_done: $max_events}
       option: {next_event: "yes"}
     do:
+      - reset: lost
       - stop: "{events_done} events done ({stages_cleared} stages cleared)."
 
   # --- Finding the next NEW stage ------------------------------------------------
@@ -547,7 +557,7 @@ rules:
       visible: new_mark
       any_visible: [stage_list, event_stage_row]
       counter_below: {blocked: 1}
-    do: [{tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
+    do: [{reset: lost}, {tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
     cooldown: 4
 
   # Clearing the highest difficulty of a stage also pays the lower ones' first-clear
@@ -558,7 +568,7 @@ rules:
       visible: difficulty_super
       counter_below: {blocked: 1}
       option: {difficulty: highest}
-    do: [{tap: difficulty_super}]
+    do: [{reset: lost}, {tap: difficulty_super}]
     cooldown: 4
 
   - name: Pick Z-Hard
@@ -567,7 +577,7 @@ rules:
       not_visible: difficulty_super
       counter_below: {blocked: 1}
       option: {difficulty: highest}
-    do: [{tap: difficulty_zhard}]
+    do: [{reset: lost}, {tap: difficulty_zhard}]
     cooldown: 4
 
   - name: Pick Hard
@@ -576,7 +586,7 @@ rules:
       not_visible: [difficulty_super, difficulty_zhard]
       counter_below: {blocked: 1}
       option: {difficulty: highest}
-    do: [{tap: difficulty_hard}]
+    do: [{reset: lost}, {tap: difficulty_hard}]
     cooldown: 4
 
   - name: Pick Normal
@@ -585,7 +595,7 @@ rules:
       not_visible: [difficulty_super, difficulty_zhard, difficulty_hard]
       counter_below: {blocked: 1}
       option: {difficulty: highest}
-    do: [{tap: difficulty_normal}]
+    do: [{reset: lost}, {tap: difficulty_normal}]
     cooldown: 4
 
   - name: Pick Normal (easiest)
@@ -593,7 +603,7 @@ rules:
       visible: difficulty_normal
       counter_below: {blocked: 1}
       option: {difficulty: easiest}
-    do: [{tap: difficulty_normal}]
+    do: [{reset: lost}, {tap: difficulty_normal}]
     cooldown: 4
 
   - name: Pick Hard (easiest; Quest stages have no Normal)
@@ -602,7 +612,7 @@ rules:
       not_visible: difficulty_normal
       counter_below: {blocked: 1}
       option: {difficulty: easiest}
-    do: [{tap: difficulty_hard}]
+    do: [{reset: lost}, {tap: difficulty_hard}]
     cooldown: 4
 
   # The NEW label shimmers: one frame without it is no reason to scroll. Look three
@@ -612,7 +622,7 @@ rules:
       any_visible: [stage_list, event_stage_row]
       not_visible: new_mark
       counter_below: {misses: 3}
-    do: [{count: misses}]
+    do: [{reset: lost}, {count: misses}]
     cooldown: 1
 
   # An event's newest stage is at the top of its list: no NEW mark there (before any swipe)
@@ -624,7 +634,7 @@ rules:
       counter_at_least: {misses: 3}
       counter_below: {scrolls_down: 1, scrolls_up: 1, skip_scroll: 1}
       option: {quick_finish: "yes"}
-    do: [{count: skip_scroll}]
+    do: [{reset: lost}, {count: skip_scroll}]
     cooldown: 1
 
   # Swiping up scrolls the list down. At the end of the list a swipe changes
@@ -637,6 +647,7 @@ rules:
       counter_at_least: {misses: 3}
       counter_below: {scrolls_down: $max_scrolls, skip_scroll: 1}
     do:
+      - reset: lost
       - swipe: {from: [0.5, 0.75], to: [0.5, 0.4], ms: 500}
       - count: scrolls_down
       - reset: misses
@@ -649,6 +660,7 @@ rules:
       counter_at_least: {misses: 3}
       counter_below: {scrolls_up: $max_scrolls, skip_scroll: 1}
     do:
+      - reset: lost
       - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
       - wait: 1
       - swipe: {from: [0.5, 0.4], to: [0.5, 0.75], ms: 500}
@@ -665,7 +677,7 @@ rules:
       counter_at_least: {misses: 3}
       counter_below: {mission_opens: 1}
       option: {claim_missions: "yes"}
-    do: [{count: mission_opens}, {tap: event_mission}]
+    do: [{reset: lost}, {count: mission_opens}, {tap: event_mission}]
     cooldown: 4
 
   - name: Missions → open (event given up)
@@ -676,7 +688,7 @@ rules:
       counter_at_least: {blocked: 1}
       counter_below: {mission_opens: 1}
       option: {claim_missions: "yes", next_event: "yes"}
-    do: [{count: mission_opens}, {tap: event_mission}]
+    do: [{reset: lost}, {count: mission_opens}, {tap: event_mission}]
     cooldown: 4
 
   - name: Missions → skipped (claiming is off)
@@ -686,7 +698,7 @@ rules:
       counter_at_least: {misses: 3}
       counter_below: {claimed: 1}
       option: {claim_missions: "no", next_event: "yes"}
-    do: [{count: claimed}]
+    do: [{reset: lost}, {count: claimed}]
     cooldown: 1
 
   - name: Missions → skipped (event given up, claiming is off)
@@ -696,7 +708,7 @@ rules:
       counter_at_least: {blocked: 1}
       counter_below: {claimed: 1}
       option: {claim_missions: "no", next_event: "yes"}
-    do: [{count: claimed}]
+    do: [{reset: lost}, {count: claimed}]
     cooldown: 1
 
   # Some event pages have no MISSION button at all: nothing to claim there.
@@ -707,7 +719,7 @@ rules:
       counter_at_least: {misses: 3}
       counter_below: {claimed: 1, mission_opens: 1}
       option: {claim_missions: "yes", next_event: "yes"}
-    do: [{count: claimed}]
+    do: [{reset: lost}, {count: claimed}]
     cooldown: 2
 
   - name: Missions → no button here, skip (event given up)
@@ -717,7 +729,7 @@ rules:
       counter_at_least: {blocked: 1}
       counter_below: {claimed: 1, mission_opens: 1}
       option: {claim_missions: "yes", next_event: "yes"}
-    do: [{count: claimed}]
+    do: [{reset: lost}, {count: claimed}]
     cooldown: 2
 
   - name: Missions → accept all
@@ -725,7 +737,7 @@ rules:
       visible: [mission_dialog, mission_accept_all]
       counter_at_least: {mission_opens: 1}
       counter_below: {accepts: 1}
-    do: [{count: accepts}, {tap: mission_accept_all}]
+    do: [{reset: lost}, {count: accepts}, {tap: mission_accept_all}]
     cooldown: 4
 
   # "Accept all" is grey when nothing is ready.
@@ -735,14 +747,14 @@ rules:
       not_visible: mission_accept_all
       counter_at_least: {mission_opens: 1}
       counter_below: {accepts: 1}
-    do: [{count: accepts}, {tap: cancel_button}]
+    do: [{reset: lost}, {count: accepts}, {tap: cancel_button}]
     cooldown: 4
 
   - name: Missions → close the list
     when:
       visible: [mission_dialog, cancel_button]
       counter_at_least: {accepts: 1}
-    do: [{count: claimed}, {tap: cancel_button}]
+    do: [{reset: lost}, {count: claimed}, {tap: cancel_button}]
     cooldown: 4
 
   # --- "Next event": the list is done, go on with the Dragon Stone Navigator --------------
@@ -754,6 +766,7 @@ rules:
       counter_below: {blocked: 1, events_done: $max_events}
       option: {next_event: "yes"}
     do:
+      - reset: lost
       - count: events_done
       - reset: ev_stages
       - reset: claimed
@@ -775,6 +788,7 @@ rules:
       counter_below: {blocked: 1, ev_stages: 1, events_done: $max_events}
       option: {next_event: "yes"}
     do:
+      - reset: lost
       - count: events_done
       - reset: ev_stages
       - reset: claimed
@@ -793,6 +807,31 @@ rules:
       any_visible: [stage_list, event_stage_row]
       not_visible: mission_dialog
       counter_at_least: {blocked: 1, claimed: 1}
+      counter_below: {events_done: $max_events}
+      option: {next_event: "yes"}
+    do:
+      - reset: lost
+      - count: events_done
+      - reset: ev_stages
+      - reset: claimed
+      - reset: accepts
+      - reset: mission_opens
+      - reset: misses
+      - reset: scrolls_down
+      - reset: scrolls_up
+      - reset: skip_scroll
+      - reset: blocked
+      - count: nav_index
+      - tap: navigator_open
+    cooldown: 4
+
+  # Failsafe: the list has not changed for 90 s and no rule got anywhere (a missing template,
+  # a button that does nothing): give this event up and go on.
+  - name: Event list stalled → next entry
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: mission_dialog
+      static_for: 90
       counter_below: {events_done: $max_events}
       option: {next_event: "yes"}
     do:
@@ -817,7 +856,7 @@ rules:
       visible: navigator_title
       counter_below: {nav_index: 1}
       option: {next_event: "yes"}
-    do: [{tap_xy: [0.5, 0.24]}]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.24]}]
     cooldown: 3
 
   - name: Navigator → open entry 2
@@ -826,7 +865,7 @@ rules:
       counter_at_least: {nav_index: 1}
       counter_below: {nav_index: 2}
       option: {next_event: "yes"}
-    do: [{tap_xy: [0.5, 0.45]}]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.45]}]
     cooldown: 3
 
   - name: Navigator → open entry 3
@@ -835,7 +874,7 @@ rules:
       counter_at_least: {nav_index: 2}
       counter_below: {nav_index: 3}
       option: {next_event: "yes"}
-    do: [{tap_xy: [0.5, 0.66]}]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.66]}]
     cooldown: 3
 
   # Tapping an entry changes the screen. If the navigator stays as it is, there is no entry
@@ -846,6 +885,7 @@ rules:
       static_for: 8
       option: {next_event: "yes"}
     do:
+      - reset: lost
       - tap: ok_button
       - stop: "The Dragon Stone Navigator has no more events to play ({events_done} events done, {stages_cleared} stages cleared)."
 
@@ -856,6 +896,7 @@ rules:
       counter_at_least: {misses: 3, accepts: 1}
       option: {next_event: "no"}
     do:
+      - reset: lost
       - stop: No uncleared stage left in this list ({stages_cleared} cleared), mission rewards accepted.
 
   - name: No NEW stage left → stop
@@ -865,18 +906,19 @@ rules:
       counter_at_least: {misses: 3}
       option: {claim_missions: "no", next_event: "no"}
     do:
+      - reset: lost
       - screenshot: no_new_stage
       - stop: No uncleared stage left in this list ({stages_cleared} cleared). Open the next area and start again.
 
   # --- Dialogs and fallbacks -------------------------------------------------------
   - name: Close popup
     when: {visible: close_button}
-    do: [{tap: close_button}]
+    do: [{reset: lost}, {tap: close_button}]
     cooldown: 2
 
   - name: Confirm (OK)
     when: {visible: ok_button, not_visible: [act_empty_dialog, defeat_give_up, restore_with_item, navigator_title]}
-    do: [{tap: ok_button}]
+    do: [{reset: lost}, {tap: ok_button}]
     cooldown: 2
 
   # A tap that lands on a character (in battle, or while a battle starts) opens its
@@ -900,10 +942,32 @@ rules:
   # The results screen of a stage has a popup ("... were cleared at the same time") that
   # hides its label, and the light behind it never stops moving, so the still-screen rule
   # above never fires. After 10 quiet seconds on a screen none of the rules knows, a tap
-  # near the top (away from the buttons of dialogs) dismisses it.
+  # near the top (away from the buttons of dialogs) dismisses it; then Back;
+  # and if even that does not help for a couple of minutes the routine stops (and notifies)
+  # instead of tapping at the wrong screen for hours. Any recognised screen resets the count.
   - name: Nothing recognised → tap the top
     when:
       idle_for: 10
       not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
-    do: [{tap_xy: [0.5, 0.15]}]
+      counter_below: {lost: 2}
+    do: [{count: lost}, {tap_xy: [0.5, 0.15]}]
     cooldown: 4
+
+  - name: Lost → press Back
+    when:
+      idle_for: 10
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      counter_at_least: {lost: 2}
+      counter_below: {lost: 12}
+    do: [{count: lost}, {key: BACK}]
+    cooldown: 5
+
+  - name: Lost → give up and stop
+    when:
+      idle_for: 10
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      counter_at_least: {lost: 12}
+    do:
+      - screenshot: lost
+      - notify: "Lost: the screen was not recognised for two minutes, Back did not help ({stages_cleared} stages cleared)."
+      - stop: "Lost on a screen the routine does not know (see the 'lost' screenshot). Open an event or stage list and start again."

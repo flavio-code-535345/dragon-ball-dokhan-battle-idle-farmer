@@ -309,6 +309,12 @@ stage list / event screen, whole-screen search) and `navigator_title` ("Dragon S
 header of its list) first; without them the finish rules are disabled and the routine would wait on
 the finished list. Combine it with `claim_missions` = yes, `act_policy` = meat and `quick_finish` = yes.
 
+**Failsafes.** The routine does not tap at an unknown screen forever: after two taps near the top it
+presses Back every ~10 s, and after about two minutes without recognising anything it takes a
+`lost` screenshot, notifies and stops. Every recognised screen resets that count. With `next_event`, an
+event list that stays unchanged for 90 s (a tap that does nothing, a missing template) is given up
+and the next navigator entry is opened, and event pages without a MISSION button skip the missions step.
+
 The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of the event
 screens) lists the events that still pay stones, with the stones for stage clears and for
 missions: a good list to pick the next event from.

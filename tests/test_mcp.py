@@ -22,9 +22,7 @@ TOKEN = "test-token-0123456789"
 
 @pytest.fixture
 def client(tmp_path):
-    settings = Settings(
-        data_dir=tmp_path / "data", device_backend="sim", mcp_token=TOKEN, web_password="pw"
-    )
+    settings = Settings(data_dir=tmp_path / "data", device_backend="sim", mcp_token=TOKEN)
     device = SimDevice(SimGame(SimConfig(battle_seconds=1.0)), package=settings.game_package)
     ctx = AppContext(settings, device=device)
     with TestClient(create_app(ctx)) as test_client:
@@ -59,9 +57,8 @@ def test_handshake_and_tool_list(client):
     names = {t["name"] for t in rpc(client, "tools/list")["result"]["tools"]}
     assert {"screenshot", "tap", "create_template", "find_templates", "start_farm"} <= names
     assert rpc(client, "nope")["error"]["code"] == -32601
-    # Basic auth does not apply, the token does.
+    # The token decides, not a login.
     assert client.post("/mcp/wrong-token-0123456789", json={}).status_code == 404
-    assert client.get("/api/status").status_code == 401
     assert client.get("/.well-known/oauth-protected-resource").status_code == 404
 
 

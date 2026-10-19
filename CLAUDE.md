@@ -82,7 +82,7 @@ fractional only if both values are ≤ 1. `static/app.js` is one IIFE bound to `
 id breaks it silently; `node --check` only checks syntax); all device input goes through one FIFO queue
 (taps wait 250 ms to detect a double tap). With `MCP_TOKEN`, `web/mcp.py` serves MCP (JSON-RPC over POST, no SSE) at
 `/mcp/<token>`; its tools in `create_app` call the route functions (named `mcp_*` so they don't shadow
-them) and it skips Basic auth.
+them) and the web UI has no login (it is meant for a trusted network).
 
 **Deployment and CI.** The image (`Dockerfile`) holds only `requirements.txt`, `src/` and `docker/*.sh`;
 runtime files must live under `src/dokkan_farmer/`. Stacks: `docker-compose.yml` (phone over adb),

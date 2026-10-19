@@ -18,7 +18,6 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
-    PlainTextResponse,
     Response,
     StreamingResponse,
 )
@@ -44,9 +43,6 @@ from .mcp import text as mcp_text
 log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
-#: /mcp/<token> checks its own secret: MCP clients cannot do Basic auth. They also probe
-#: /.well-known/ for OAuth: a plain 404 there, not a Basic auth 401, says "no login needed".
-PUBLIC_PATHS = ("/api/health", "/manifest.webmanifest", "/static/icon", "/mcp/", "/.well-known/")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -79,43 +75,6 @@ class SameOriginMiddleware:
             return True
         hosts = {headers.get("host"), headers.get("x-forwarded-host")}
         return urlsplit(origin).netloc in hosts - {None}
-
-
-class BasicAuthMiddleware:
-    """HTTP Basic auth for everything except health checks and app icons."""
-
-    def __init__(self, app: ASGIApp, username: str, password: str) -> None:
-        self.app = app
-        self.username = username.encode("utf-8")
-        self.password = password.encode("utf-8")
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        path = scope.get("path", "")
-        if scope["type"] != "http" or path.startswith(PUBLIC_PATHS) or self._authorized(scope):
-            await self.app(scope, receive, send)
-            return
-        response = PlainTextResponse(
-            "Authentication required",
-            status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="Dokkan Farmer", charset="UTF-8"'},
-        )
-        await response(scope, receive, send)
-
-    def _authorized(self, scope: Scope) -> bool:
-        for key, value in scope.get("headers", []):
-            if key != b"authorization":
-                continue
-            scheme, _, encoded = value.decode("latin-1").partition(" ")
-            if scheme.lower() != "basic":
-                return False
-            try:
-                user, _, password = base64.b64decode(encoded, validate=True).partition(b":")
-            except ValueError:
-                return False
-            user_ok = hmac.compare_digest(user, self.username)
-            password_ok = hmac.compare_digest(password, self.password)
-            return user_ok and password_ok
-        return False
 
 
 # ------------------------------------------------------------------ requests
@@ -278,12 +237,6 @@ def create_app(ctx: AppContext) -> FastAPI:
         openapi_url="/api/openapi.json",
     )
     app.add_middleware(SameOriginMiddleware)
-    if ctx.settings.web_password:
-        app.add_middleware(
-            BasicAuthMiddleware,
-            username=ctx.settings.web_username,
-            password=ctx.settings.web_password,
-        )
 
     @app.exception_handler(RoutineError)
     async def _routine_error(_: Any, exc: RoutineError) -> JSONResponse:

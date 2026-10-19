@@ -42,7 +42,7 @@ own Auto Mode, so the farmer is simple and does not try to play battles itself.
 
 - **Docker / Portainer native**: one container, a volume for your data, prebuilt multi-arch image
   on Docker Hub (amd64 + arm64, e.g. Raspberry Pi), healthcheck, runs as non-root (`PUID`/`PGID`).
-- **Mobile web UI** (add it to your home screen): start/pause/stop, live screen with the detected
+- **Mobile web UI** (no login: keep it on your own network; add it to your home screen): start/pause/stop, live screen with the detected
   buttons, **remote touch control** of the device, logs, statistics.
 - **Template studio**: drag a box around a button on a live screenshot to teach it. A checklist shows
   what the routine needs, and "Test on screen" shows match scores.
@@ -86,7 +86,6 @@ Add environment variables (all optional, see [.env.example](.env.example)), for 
 | Variable | Example |
 |---|---|
 | `ADB_SERIAL` | `192.168.1.50:5555` |
-| `WEB_PASSWORD` | something long |
 | `TZ` | `Europe/Rome` |
 | `NOTIFY_URLS` | `tgram://123456:ABC/987654` |
 
@@ -106,7 +105,7 @@ Without Portainer it is the same with plain Docker Compose:
 
 ```sh
 curl -O https://raw.githubusercontent.com/flavio-code-535345/dragon-ball-dokhan-battle-idle-farmer/main/docker-compose.yml
-ADB_SERIAL=192.168.1.50:5555 WEB_PASSWORD=change-me docker compose up -d
+ADB_SERIAL=192.168.1.50:5555 docker compose up -d
 ```
 
 > [!NOTE]
@@ -146,7 +145,6 @@ All settings are environment variables:
 | `AUTOSTART` | `resume` | `resume`: keep farming after a restart if it was farming. `true`: always start. `false`: never start. |
 | `ACTIVE_HOURS` | *(always)* | Daily windows, e.g. `23:00-07:00, 13:00-14:00` (uses `TZ`). |
 | `TZ` | `UTC` | Time zone, e.g. `Europe/Berlin`. |
-| `WEB_USERNAME` / `WEB_PASSWORD` | `admin` / *(empty)* | HTTP basic auth for the web UI. **Set a password.** |
 | `MCP_TOKEN` | *(empty = off)* | Turns on the MCP endpoint `/mcp/<MCP_TOKEN>` for AI assistants such as Claude (screenshots, taps, templates, routines, the farm). 16+ random characters, e.g. `openssl rand -hex 24`. See [docs/MCP.md](docs/MCP.md). |
 | `HOST_PORT` | `8080` | Port on your server (compose files only). |
 | `IMAGE` / `IMAGE_TAG` | `flavio11113/dokkan-idle-farmer` / `latest` | Image to run (compose files only): a version like `0.1.0` or a commit SHA pins it. |

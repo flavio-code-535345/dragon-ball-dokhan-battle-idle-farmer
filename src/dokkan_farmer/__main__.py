@@ -30,8 +30,6 @@ def main() -> None:
         settings.game_package,
         settings.data_dir,
     )
-    if not settings.web_password:
-        log.warning("WEB_PASSWORD is not set: anyone on your network can open the web UI")
     context = AppContext(settings)
     app = create_app(context)
     uvicorn.run(

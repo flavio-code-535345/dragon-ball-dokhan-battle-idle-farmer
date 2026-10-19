@@ -1464,7 +1464,6 @@
       ["MATCH_SCALE", s.match_scale],
       ["TAP_JITTER", s.tap_jitter],
       ["KEEP_SCREEN_ON", s.keep_screen_on],
-      ["WEB_PASSWORD", s.auth_enabled ? "set" : "not set"],
       ["MCP_TOKEN", s.mcp_enabled ? "set (/mcp/<token>)" : "not set"],
       ["DATA_DIR", s.data_dir],
     ];

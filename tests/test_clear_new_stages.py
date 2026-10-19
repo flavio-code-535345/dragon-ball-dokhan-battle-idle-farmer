@@ -477,3 +477,61 @@ def test_without_next_event_the_farm_stops_on_the_finished_list(play):
     game = NavGame([all_cleared(), all_cleared({0})])
     summary = play(game, {"claim_missions": "no"}, minutes=20)
     assert not game.opened and "No uncleared stage left" in summary["reason"]
+
+
+class LostGame(QuestGame):
+    """A screen no rule knows (like a story chapter list) that only Back leaves."""
+
+    def __init__(self, cleared, backs_needed: int) -> None:
+        super().__init__(cleared)
+        self.screen = "mystery"
+        self.backs = 0
+        self.backs_needed = backs_needed
+
+    def render(self) -> np.ndarray:
+        if self.screen == "mystery":
+            img = _canvas((60, 30, 70))
+            _text(img, "CHAPTER 6", (200, 400), 1.5)
+            return img
+        return super().render()
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen != "mystery":
+            super().tap(x, y)
+
+    def back(self) -> None:
+        if self.screen == "mystery":
+            self.backs += 1
+            if self.backs >= self.backs_needed:
+                self.screen = "list"
+        else:
+            super().back()
+
+
+def test_a_lost_screen_is_left_with_back(play):
+    cleared = {s: set(DIFFICULTIES) for s in range(8)}
+    cleared[1] = set()
+    game = LostGame(cleared, backs_needed=3)
+    summary = play(game, minutes=30)
+    assert game.backs == 3 and game.played == [(1, "NORMAL")]
+    assert summary["runs"] == 1
+
+
+def test_a_screen_that_never_clears_stops_the_farm_instead_of_looping(play):
+    game = LostGame({}, backs_needed=10_000)
+    summary = play(game, minutes=60)
+    assert "Lost on a screen" in summary["reason"] and not game.played
+    assert game.backs >= 8
+
+
+def test_a_stalled_event_list_goes_on_with_the_next_entry(play):
+    # Event 0 shows a NEW stage that never opens (the tap does nothing).
+    class Stuck(NavGame):
+        def tap(self, x, y):
+            if self.screen == "list" and self.current == 0 and not NAV_BUTTON.contains(x, y):
+                return
+            super().tap(x, y)
+
+    game = Stuck([all_cleared({0}), all_cleared({0})])
+    summary = play(game, {**NEXT}, minutes=60)
+    assert 1 in game.opened and summary["counters"]["stages_cleared"] == 1

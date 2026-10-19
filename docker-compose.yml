@@ -29,9 +29,6 @@ services:
       # Only farm in these windows, e.g. "23:00-07:00, 13:00-14:00" (empty = always).
       ACTIVE_HOURS: ${ACTIVE_HOURS:-}
       TZ: ${TZ:-UTC}
-      # Protect the web UI with HTTP basic auth (user "admin" unless WEB_USERNAME is set).
-      WEB_USERNAME: ${WEB_USERNAME:-admin}
-      WEB_PASSWORD: ${WEB_PASSWORD:-}
       MCP_TOKEN: ${MCP_TOKEN:-}
       # Apprise URLs, e.g. "tgram://bottoken/ChatID" or "discord://id/token" or "ntfy://topic".
       NOTIFY_URLS: ${NOTIFY_URLS:-}

@@ -75,8 +75,6 @@ class Settings:
     active_hours: str = ""
     web_host: str = "0.0.0.0"
     web_port: int = 8080
-    web_username: str = "admin"
-    web_password: str = ""
     #: secret of the MCP endpoint /mcp/<token> for AI assistants; empty = no MCP endpoint
     mcp_token: str = ""
     notify_urls: str = ""
@@ -125,8 +123,6 @@ class Settings:
             active_hours=_text(env, "ACTIVE_HOURS", ""),
             web_host=_text(env, "WEB_HOST", "0.0.0.0"),
             web_port=_int(env, "WEB_PORT", 8080),
-            web_username=_text(env, "WEB_USERNAME", "admin"),
-            web_password=env.get("WEB_PASSWORD", "") or "",
             mcp_token=mcp_token,
             notify_urls=_text(env, "NOTIFY_URLS", ""),
             notify_every_runs=max(0, _int(env, "NOTIFY_EVERY_RUNS", 0)),
@@ -178,7 +174,6 @@ class Settings:
             "keep_screen_on": self.keep_screen_on,
             "power_save": "auto" if self.power_save is None else self.power_save,
             "screen_off_minutes": self.screen_off_minutes,
-            "auth_enabled": bool(self.web_password),
             "mcp_enabled": bool(self.mcp_token),
             "data_dir": str(self.data_dir),
         }
