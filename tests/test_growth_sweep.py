@@ -22,6 +22,7 @@ MENU_EVENT = Box(60, 300, 600, 120)
 NAV = Box(300, 1050, 120, 90)
 BACK = Box(20, 1060, 150, 80)
 REQ_TITLE = Box(160, 380, 400, 60)
+LIMIT_TITLE = Box(120, 380, 480, 60)
 REQ_OK = Box(380, 820, 260, 80)  # like the OK of the stage fakes (the ok_button template)
 FULL = 4  # taps on an event's stage row that never start it before the sweep leaves
 
@@ -39,6 +40,7 @@ class SweepGame(StageGame):
         self.tab = None
         self.visited: list[int] = []
         self.restricted_hits = 0
+        self.limit_hits = 0
 
     def entry(self) -> dict:
         return self.entries[self.current]
@@ -57,6 +59,11 @@ class SweepGame(StageGame):
             img = _canvas((30, 30, 60))
             _button(img, NAV, "STONE", "danger")
             _text(img, f"ENTRY {self.selected}", (200, 520), 1.5)
+            return img
+        if s == "limit":
+            img = _canvas((40, 40, 40))
+            _button(img, LIMIT_TITLE, "ATTEMPT LIMIT REACHED", "retry")
+            _button(img, REQ_OK, "OK", "ok")
             return img
         if s == "req":
             img = _canvas((40, 40, 40))
@@ -83,6 +90,9 @@ class SweepGame(StageGame):
                 self.current = self.selected
                 self.visited.append(self.selected)
                 self.screen = "event"
+        elif s == "limit":
+            if REQ_OK.contains(x, y):
+                self.screen = "event"
         elif s == "req":
             if REQ_OK.contains(x, y):
                 self.screen = "team"
@@ -90,7 +100,10 @@ class SweepGame(StageGame):
             if BACK.contains(x, y):
                 self.screen = "eventmenu"
             elif MISSION.contains(x, y) or self.entry()["attempts"] != 0:
-                super().tap(x, y)  # (a row without attempts left does not open)
+                super().tap(x, y)
+            else:  # a row without attempts left: the dialog
+                self.limit_hits += 1
+                self.screen = "limit"
         elif s == "details":
             if BACK.contains(x, y):
                 self.screen = "event"
@@ -128,6 +141,7 @@ def capture_templates(store: TemplateStore) -> None:
         ("eventmenu", "navigator_open", NAV, {}),
         ("event", "back_button", BACK, {}),
         ("req", "requirement_not_met", REQ_TITLE, {"mode": "color"}),
+        ("limit", "attempt_limit", LIMIT_TITLE, {}),
     ):
         game.screen = screen
         game.current = 0
@@ -213,3 +227,11 @@ def test_a_screen_nobody_knows_ends_in_a_stop(play):
     game.back = lambda: None
     summary = play(game, hours=1)
     assert "Lost on a screen" in summary["reason"]
+
+
+def test_a_limited_event_without_attempts_is_left_after_one_try(play):
+    game = SweepGame([{"attempts": 0}, {"attempts": 1}])
+    summary = play(game, {"max_entries": 2, "claim_missions": "no"})
+    assert game.visited == [0, 1] and game.clears == 1
+    assert game.limit_hits == 1  # not four tries
+    assert "Growth sweep done: 2 events" in summary["reason"]

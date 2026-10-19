@@ -225,6 +225,11 @@ templates:
   error_retry:
     level: recommended
     description: The "Retry" button of connection error dialogs.
+  attempt_limit:
+    level: recommended
+    description: >-
+      The title "Attempt Limit Reached" of the dialog a limited event's stage opens when you have no
+      attempt left today (search the whole screen). Without it the stage is tried four times.
   close_button:
     level: optional
     description: The "Close" / "X" of popups.
@@ -237,6 +242,18 @@ rules:
     do:
       - reset: lost
       - tap: error_retry
+    cooldown: 3
+
+  # A limited event (once a day / week) with no attempt left: the stage's tap opens this dialog. The
+  # event is done: its missions are still looked at, then the sweep goes on.
+  - name: Attempt limit reached → this event is done
+    when:
+      visible: [attempt_limit, ok_button]
+      counter_below: {finishing: 1}
+    do:
+      - reset: lost
+      - tap: ok_button
+      - count: finishing
     cooldown: 3
 
   - name: Team not allowed → give this event up
