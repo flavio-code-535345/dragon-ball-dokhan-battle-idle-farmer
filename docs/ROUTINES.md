@@ -313,7 +313,10 @@ the finished list. Combine it with `claim_missions` = yes, `act_policy` = meat a
 presses Back every ~10 s, and after about two minutes without recognising anything it takes a
 `lost` screenshot, notifies and stops. Every recognised screen resets that count. With `next_event`, an
 event list that stays unchanged for 90 s (a tap that does nothing, a missing template) is given up
-and the next navigator entry is opened, and event pages without a MISSION button skip the missions step.
+and the next navigator entry is opened, and event pages without a MISSION button skip the missions step. Lost with `next_event`
+on, it presses the HOME tab and walks Home, START, Event, the navigator button back to the events
+(capture `home_screen` and `menu_event`, the "Event" entry of the START menu). The map-fork arrows are
+only tapped inside a stage, so the blue buttons of the menus are left alone.
 
 The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of the event
 screens) lists the events that still pay stones, with the stones for stage clears and for

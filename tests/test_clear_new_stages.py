@@ -321,6 +321,15 @@ def capture_templates(store: TemplateStore) -> None:
     store.create_from_frame(
         "navigator_title", nav.render(), NAV_TITLE.as_tuple(), threshold=0.9, search_full=True
     )
+    home = HomeGame([{}])
+    for screen, name, box in (
+        ("home", "home_screen", HOME_START),
+        ("menu", "menu_event", MENU_EVENT),
+    ):
+        home.screen = screen
+        store.create_from_frame(
+            name, home.render(), box.as_tuple(), threshold=0.9, search_full=True
+        )
 
 
 class Clock:
@@ -521,7 +530,7 @@ def test_a_screen_that_never_clears_stops_the_farm_instead_of_looping(play):
     game = LostGame({}, backs_needed=10_000)
     summary = play(game, minutes=60)
     assert "Lost on a screen" in summary["reason"] and not game.played
-    assert game.backs >= 8
+    assert game.backs >= 3
 
 
 def test_a_stalled_event_list_goes_on_with_the_next_entry(play):
@@ -535,3 +544,73 @@ def test_a_stalled_event_list_goes_on_with_the_next_entry(play):
     game = Stuck([all_cleared({0}), all_cleared({0})])
     summary = play(game, {**NEXT}, minutes=60)
     assert 1 in game.opened and summary["counters"]["stages_cleared"] == 1
+
+
+HOME_START = Box(200, 800, 320, 100)
+MENU_EVENT = Box(60, 300, 600, 120)
+HOME_TAB = Box(0, 1230, 130, 50)
+
+
+class HomeGame(NavGame):
+    """Lost on a screen only the HOME tab leaves; from there START, Event and the navigator
+    lead back to the events."""
+
+    def __init__(self, events, sticky=frozenset()) -> None:
+        super().__init__(events, sticky)
+        self.screen = "mystery"
+        self.backs = 0
+
+    def render(self) -> np.ndarray:
+        if self.screen == "mystery":
+            img = _canvas((60, 30, 70))
+            _text(img, "CHAPTER 6", (200, 400), 1.5)
+            return img
+        if self.screen == "home":
+            img = _canvas((20, 60, 20))
+            _button(img, HOME_START, "START", "start")
+            return img
+        if self.screen == "menu":
+            img = _canvas((50, 50, 20))
+            _button(img, MENU_EVENT, "EVENT", "retry")
+            return img
+        if self.screen == "eventmenu":
+            img = _canvas((30, 30, 60))
+            _text(img, "EVENTS", (200, 600), 2.0)
+            _button(img, NAV_BUTTON, "STONE", "danger")
+            return img
+        return super().render()
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "mystery":
+            if HOME_TAB.contains(x, y):
+                self.screen = "home"
+        elif self.screen == "home":
+            if HOME_START.contains(x, y):
+                self.screen = "menu"
+        elif self.screen == "menu":
+            if MENU_EVENT.contains(x, y):
+                self.screen = "eventmenu"
+        elif self.screen == "eventmenu":
+            if NAV_BUTTON.contains(x, y):
+                self.screen = "navigator"
+        else:
+            super().tap(x, y)
+
+    def back(self) -> None:
+        if self.screen == "mystery":
+            self.backs += 1
+        else:
+            super().back()
+
+
+def test_lost_with_next_event_finds_the_way_back_through_home(play):
+    game = HomeGame([all_cleared({0})])
+    summary = play(game, NEXT, minutes=60)
+    assert game.backs >= 3  # Back first
+    assert game.opened == [0] and summary["counters"]["stages_cleared"] == 1
+
+
+def test_lost_without_next_event_still_stops(play):
+    game = HomeGame([all_cleared({0})])
+    summary = play(game, {"claim_missions": "no"}, minutes=60)
+    assert "Lost on a screen" in summary["reason"] and not game.played

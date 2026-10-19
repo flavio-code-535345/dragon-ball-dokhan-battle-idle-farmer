@@ -314,6 +314,11 @@ templates:
     level: optional
     description: >-
       The title "Dragon Stone Navigator" of its dialog (only for "next event").
+  menu_event:
+    level: optional
+    description: >-
+      The "Event" entry of the menu behind the home screen's START button (only for "next event": the
+      way back to the Dragon Stone Navigator when the routine got lost: Home, START, Event).
   restore_sta:
     level: optional
     description: >-
@@ -479,7 +484,7 @@ rules:
   # --- Playing a stage -----------------------------------------------------------
   - name: Stage cleared → results
     when: {visible: stage_result}
-    do: [{reset: lost}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
+    do: [{reset: lost}, {reset: in_stage}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle won → results
@@ -489,7 +494,7 @@ rules:
 
   - name: Battle → tap a ki sphere
     when: {visible: battle_screen}
-    do: [{reset: lost}, {tap_xy: [$sphere_x, $sphere_y]}]
+    do: [{reset: lost}, {count: in_stage}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
 
@@ -502,17 +507,20 @@ rules:
   # move cards turn grey). They point any of eight ways, so instead of one template per
   # direction the routine looks for their colour (see colors: path_arrow) and taps the
   # biggest arrow. Battles have blue ki spheres: hence not_visible: battle_screen.
+  # Only inside a stage (in_stage: Start quest, the map and the battle count it): the home
+  # screen, the START menu and the story wheels have blue buttons too.
   - name: Map → choose a path
     when:
       color_visible: path_arrow
-      not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen]
+      not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen, menu_event, navigator_title]
+      counter_at_least: {in_stage: 1}
       counter_below: {lost: 2}
     do: [{tap_color: path_arrow}]
     cooldown: 3
 
   - name: Map → move
     when: {visible: map_screen, not_visible: battle_screen}
-    do: [{reset: lost}, {tap_xy: [$move_x, $move_y]}]
+    do: [{reset: lost}, {count: in_stage}, {tap_xy: [$move_x, $move_y]}]
     cooldown: 2
 
   - name: Decline friend request
@@ -522,7 +530,7 @@ rules:
 
   - name: Start quest
     when: {visible: start_button, counter_below: {blocked: 1}}
-    do: [{reset: lost}, {tap: start_button}]
+    do: [{reset: lost}, {count: in_stage}, {tap: start_button}]
     cooldown: 5
 
   - name: Pick the first support
@@ -557,7 +565,7 @@ rules:
       visible: new_mark
       any_visible: [stage_list, event_stage_row]
       counter_below: {blocked: 1}
-    do: [{reset: lost}, {tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
+    do: [{reset: lost}, {reset: in_stage}, {tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
     cooldown: 4
 
   # Clearing the highest difficulty of a stage also pays the lower ones' first-clear
@@ -849,6 +857,31 @@ rules:
       - tap: navigator_open
     cooldown: 4
 
+  # --- Way back to the navigator (Home → START → Event → navigator button) -----------------
+  - name: Home → START
+    when:
+      visible: home_screen
+      not_visible: [menu_event, navigator_open, navigator_title]
+      option: {next_event: "yes"}
+    do: [{reset: lost}, {tap: home_screen}]
+    cooldown: 6
+
+  - name: START menu → Event
+    when:
+      visible: menu_event
+      not_visible: [navigator_open, stage_list, event_stage_row, navigator_title]
+      option: {next_event: "yes"}
+    do: [{reset: lost}, {tap: menu_event}]
+    cooldown: 6
+
+  - name: Event menu → open the navigator
+    when:
+      visible: navigator_open
+      not_visible: [stage_list, event_stage_row, navigator_title, mission_dialog, battle_screen, start_button, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      option: {next_event: "yes"}
+    do: [{reset: lost}, {tap: navigator_open}]
+    cooldown: 5
+
   # The navigator lists the events with Dragon Stones left, most stones first. Entries that
   # stay (a stage needs another team, ...) are skipped by index.
   - name: Navigator → open entry 1
@@ -958,8 +991,19 @@ rules:
       idle_for: 10
       not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
       counter_at_least: {lost: 2}
-      counter_below: {lost: 12}
+      counter_below: {lost: 5}
     do: [{count: lost}, {key: BACK}]
+    cooldown: 5
+
+  # Back did not help: the HOME tab of the bottom bar. With "next event" the rules below then
+  # lead on through START and Event to the Dragon Stone Navigator.
+  - name: Lost → go home
+    when:
+      idle_for: 10
+      not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
+      counter_at_least: {lost: 5}
+      counter_below: {lost: 12}
+    do: [{count: lost}, {reset: nav_index}, {reset: in_stage}, {tap_xy: [0.09, 0.965]}]
     cooldown: 5
 
   - name: Lost → give up and stop
