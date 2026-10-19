@@ -313,6 +313,13 @@ the finished list. Combine it with `claim_missions` = yes, `act_policy` = meat a
 three, so the routine reaches up to 12 entries (entries that stay listed, like a team-restricted event,
 are skipped by position). Past the end of the list it may revisit entries until `max_events`.
 
+**Stage will not start.** If Start! was pressed four times without a map or battle following (an unknown
+dialog, a team restriction whose dialog was not recognised), the event is given up with `next_event` on
+(otherwise the routine stops with a `start_blocked` screenshot). `requirement_not_met` is captured in
+colour mode and searched on the whole screen, since the dialog sits at different heights. If the
+navigator does not react to the first tap (a list scrolled somewhere unexpected), the routine looks
+from the top once before it concludes that nothing is left.
+
 **Failsafes.** The routine does not tap at an unknown screen forever: after two taps near the top it
 presses Back every ~10 s, and after about two minutes without recognising anything it takes a
 `lost` screenshot, notifies and stops. Every recognised screen resets that count. With `next_event`, an

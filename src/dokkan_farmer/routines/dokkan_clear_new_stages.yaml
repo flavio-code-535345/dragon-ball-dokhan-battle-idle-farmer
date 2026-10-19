@@ -484,7 +484,7 @@ rules:
   # --- Playing a stage -----------------------------------------------------------
   - name: Stage cleared → results
     when: {visible: stage_result}
-    do: [{reset: lost}, {reset: in_stage}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
+    do: [{reset: lost}, {reset: start_tries}, {reset: in_stage}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle won → results
@@ -494,7 +494,7 @@ rules:
 
   - name: Battle → tap a ki sphere
     when: {visible: battle_screen}
-    do: [{reset: lost}, {count: in_stage}, {tap_xy: [$sphere_x, $sphere_y]}]
+    do: [{reset: lost}, {reset: start_tries}, {count: in_stage}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
 
@@ -520,7 +520,7 @@ rules:
 
   - name: Map → move
     when: {visible: map_screen, not_visible: battle_screen}
-    do: [{reset: lost}, {count: in_stage}, {tap_xy: [$move_x, $move_y]}]
+    do: [{reset: lost}, {reset: start_tries}, {count: in_stage}, {tap_xy: [$move_x, $move_y]}]
     cooldown: 2
 
   - name: Decline friend request
@@ -528,9 +528,28 @@ rules:
     do: [{reset: lost}, {tap: cancel_button}]
     cooldown: 3
 
+  # Failsafe: Start! was pressed four times and no map or battle followed (a dialog we do not
+  # know blocks the stage, a team restriction, a full box ...): give up this event.
+  - name: Stage will not start → give up this event
+    when:
+      visible: start_button
+      counter_at_least: {start_tries: 4}
+      option: {next_event: "yes"}
+    do: [{reset: lost}, {reset: start_tries}, {count: blocked}, {key: BACK}]
+    cooldown: 3
+
+  - name: Stage will not start → stop
+    when:
+      visible: start_button
+      counter_at_least: {start_tries: 4}
+      option: {next_event: "no"}
+    do:
+      - screenshot: start_blocked
+      - stop: "The stage does not start (see the 'start_blocked' screenshot): a dialog or a team restriction is in the way."
+
   - name: Start quest
     when: {visible: start_button, counter_below: {blocked: 1}}
-    do: [{reset: lost}, {count: in_stage}, {tap: start_button}]
+    do: [{reset: lost}, {count: in_stage}, {count: start_tries}, {tap: start_button}]
     cooldown: 5
 
   - name: Pick the first support
@@ -1033,17 +1052,33 @@ rules:
     do: [{reset: lost}, {tap_xy: [0.5, 0.66]}]
     cooldown: 3
 
-  # Tapping an entry changes the screen. If the navigator stays as it is, there is no entry
-  # there: nothing usable is left.
+  # Tapping an entry changes the screen. If the navigator stays as it is, the list may be
+  # scrolled somewhere unexpected (the farm was restarted): look from the top once; if it still
+  # stays as it is, there is no entry there and nothing usable is left.
+  - name: Navigator → unchanged, look from the top
+    when:
+      visible: navigator_title
+      static_for: 4
+      counter_below: {nav_top: 1}
+      option: {next_event: "yes"}
+    do:
+      - reset: lost
+      - count: nav_top
+      - reset: nav_page
+      - swipe: {from: [0.5, 0.25], to: [0.5, 0.8], ms: 400}
+      - swipe: {from: [0.5, 0.25], to: [0.5, 0.8], ms: 400}
+    cooldown: 3
+
   - name: Navigator → nothing usable left, stop
     when:
       visible: navigator_title
       static_for: 8
+      counter_at_least: {nav_top: 1}
       option: {next_event: "yes"}
     do:
       - reset: lost
       - tap: ok_button
-      - stop: "The Dragon Stone Navigator has no more events to play ({events_done} events done, {stages_cleared} stages cleared)."
+      - stop: "The Dragon Stone Navigator has no more events to play ({runs} stages cleared)."
 
   - name: No NEW stage left → stop (missions accepted)
     when:

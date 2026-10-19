@@ -253,6 +253,8 @@ class NavGame(EventGame):
         if self.screen == "navigator":  # a slow drag moves the list by three entries
             if y1 > y2:
                 self.page = min(self.page + 3, max(0, len(self.entries()) - 3))
+            else:
+                self.page = 0
             return
         super().swipe(y1, y2)
 
@@ -631,3 +633,43 @@ def test_entries_beyond_the_first_page_are_reached_by_scrolling_the_navigator(pl
     summary = play(game, NEXT, minutes=90)
     assert 4 in game.opened and summary["counters"]["stages_cleared"] == 1
     assert not summary["error"]  # (past the end of the list it revisits entries until max_events)
+
+
+class NoStartGame(NavGame):
+    """The team page of event 0 answers every Start! with a dialog nobody knows (only OK closes
+    it), so the stage never starts."""
+
+    def render(self) -> np.ndarray:
+        if self.screen == "dialog":
+            img = _canvas((40, 40, 40))
+            _button(img, OK, "OK", "ok")
+            return img
+        return super().render()
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "dialog":
+            if OK.contains(x, y):
+                self.screen = "team"
+            return
+        if self.screen == "team" and self.current == 0 and START.contains(x, y):
+            self.screen = "dialog"
+            return
+        super().tap(x, y)
+
+    def back(self) -> None:
+        if self.screen == "team":
+            self.screen = "list"
+        else:
+            super().back()
+
+
+def test_a_stage_that_will_not_start_is_given_up_with_next_event(play):
+    game = NoStartGame([all_cleared({0}), all_cleared({0})])
+    summary = play(game, NEXT, minutes=60)
+    assert 1 in game.opened and summary["counters"]["stages_cleared"] == 1
+
+
+def test_a_stage_that_will_not_start_stops_without_next_event(play):
+    game = NoStartGame([all_cleared({0})])
+    summary = play(game, {"claim_missions": "no"}, minutes=20)
+    assert "does not start" in summary["reason"]
