@@ -377,7 +377,7 @@ rules:
       visible: [requirement_not_met, ok_button]
       not_visible: [restore_sta, restore_items_to_use]
       option: {next_event: "yes"}
-    do: [{reset: lost}, {tap: ok_button}, {count: blocked}]
+    do: [{reset: lost}, {reset: start_tries}, {tap: ok_button}, {count: blocked}]
     cooldown: 3
 
   - name: Team not allowed → stop
@@ -484,7 +484,7 @@ rules:
   # --- Playing a stage -----------------------------------------------------------
   - name: Stage cleared → results
     when: {visible: stage_result}
-    do: [{reset: lost}, {reset: start_tries}, {reset: in_stage}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
+    do: [{reset: lost}, {reset: idle_events}, {reset: start_tries}, {reset: in_stage}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Battle won → results
@@ -568,6 +568,20 @@ rules:
     cooldown: 3
 
   # Enough events: stop before the next event's first stage starts.
+  # A whole pass over the navigator gave nothing (other teams needed, no NEW stage left):
+  # stop with that message instead of going round until max_events.
+  - name: Next event → nothing playable, stop
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: mission_dialog
+      counter_at_least: {idle_events: 13}
+      option: {next_event: "yes"}
+    do:
+      - reset: lost
+      - screenshot: nothing_playable
+      - notify: "Dragon Stone farm: no event is playable with this team any more ({runs} stages cleared)."
+      - stop: "No playable event left: 13 events in a row gave no stage (they need other teams or have no NEW stage). {runs} stages cleared."
+
   - name: Next event → limit reached, stop
     when:
       any_visible: [stage_list, event_stage_row]
@@ -787,6 +801,7 @@ rules:
   # --- "Next event": the list is done, go on with the Dragon Stone Navigator --------------
   - name: Event finished → next event
     when:
+      visible: navigator_open
       any_visible: [stage_list, event_stage_row]
       not_visible: [new_mark, mission_dialog]
       counter_at_least: {misses: 3, claimed: 1, ev_stages: 1}
@@ -810,6 +825,7 @@ rules:
   # Nothing was cleared in it: the event stays in the navigator, so try the next entry.
   - name: Event without progress → next entry
     when:
+      visible: navigator_open
       any_visible: [stage_list, event_stage_row]
       not_visible: [new_mark, mission_dialog]
       counter_at_least: {misses: 3, claimed: 1}
@@ -818,6 +834,7 @@ rules:
     do:
       - reset: lost
       - count: events_done
+      - count: idle_events
       - reset: ev_stages
       - reset: claimed
       - reset: accepts
@@ -833,6 +850,7 @@ rules:
 
   - name: Event given up → next entry
     when:
+      visible: navigator_open
       any_visible: [stage_list, event_stage_row]
       not_visible: mission_dialog
       counter_at_least: {blocked: 1, claimed: 1}
@@ -841,6 +859,7 @@ rules:
     do:
       - reset: lost
       - count: events_done
+      - count: idle_events
       - reset: ev_stages
       - reset: claimed
       - reset: accepts
@@ -866,6 +885,7 @@ rules:
       option: {next_event: "yes"}
     do:
       - count: events_done
+      - count: idle_events
       - reset: ev_stages
       - reset: claimed
       - reset: accepts
@@ -881,6 +901,17 @@ rules:
     cooldown: 4
 
   # --- Way back to the navigator (Home → START → Event → navigator button) -----------------
+  # The navigator button never showed up on a list that is done: Home, START, Event, button.
+  - name: Navigator button missing → go home
+    when:
+      any_visible: [stage_list, event_stage_row]
+      not_visible: [navigator_open, mission_dialog, new_mark]
+      static_for: 45
+      counter_at_least: {misses: 3}
+      option: {next_event: "yes"}
+    do: [{reset: nav_index}, {reset: nav_page}, {reset: in_stage}, {reset: blocked}, {reset: claimed}, {tap_xy: [0.09, 0.965]}]
+    cooldown: 10
+
   - name: Home → START
     when:
       visible: home_screen

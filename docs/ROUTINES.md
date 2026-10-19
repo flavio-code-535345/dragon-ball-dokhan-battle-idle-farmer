@@ -313,6 +313,12 @@ the finished list. Combine it with `claim_missions` = yes, `act_policy` = meat a
 three, so the routine reaches up to 12 entries (entries that stay listed, like a team-restricted event,
 are skipped by position). Past the end of the list it may revisit entries until `max_events`.
 
+**Nothing playable.** The next-entry rules only fire while the navigator button is on the very frame (the
+screen is dimmed for a moment when a dialog closes, and a skipped tap used to send the farm round the
+same blocked event for 30 rounds). Thirteen events in a row without a cleared stage (other teams needed,
+no NEW stage left) end the run with a `nothing_playable` screenshot and a notification; if a finished
+list never shows the button, the routine goes Home, START, Event and tries the button there.
+
 **Stage will not start.** If Start! was pressed four times without a map or battle following (an unknown
 dialog, a team restriction whose dialog was not recognised), the event is given up with `next_event` on
 (otherwise the routine stops with a `start_blocked` screenshot). `requirement_not_met` is captured in

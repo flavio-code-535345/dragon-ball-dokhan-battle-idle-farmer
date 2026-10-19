@@ -673,3 +673,12 @@ def test_a_stage_that_will_not_start_stops_without_next_event(play):
     game = NoStartGame([all_cleared({0})])
     summary = play(game, {"claim_missions": "no"}, minutes=20)
     assert "does not start" in summary["reason"]
+
+
+def test_stops_when_a_whole_pass_over_the_navigator_gave_nothing(play):
+    # Three events stay listed and give nothing: the farm stops at once with that message
+    # instead of going round until max_events.
+    game = NavGame([all_cleared(), all_cleared(), all_cleared()], sticky={0, 1, 2})
+    summary = play(game, {**NEXT, "max_events": 50}, minutes=120)
+    assert "No playable event left" in summary["reason"] or "no more events" in summary["reason"]
+    assert summary["counters"].get("events_done", 0) < 50
