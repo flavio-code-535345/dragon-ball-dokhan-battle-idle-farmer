@@ -112,8 +112,9 @@ settings:
   stuck:
     static_seconds: 180
     idle_seconds: 300
+    # (never the Android Back key: on an event page it closes the game)
     recovery:
-      - key: BACK
+      - tap: back_button
       - wait: 3
     restart_after: 2
     max_restarts: 3
@@ -513,6 +514,7 @@ rules:
     do:
       - reset: lost
       - count: accepts
+      - count: mission_done
       - tap: cancel_button
     cooldown: 4
 
@@ -597,16 +599,37 @@ rules:
       - tap: home_screen
     cooldown: 6
 
+  # Each start of the Event menu from the home screen begins a pass over the list (a restart of the game
+  # or the HOME tab does that). More than three passes mean something keeps throwing the sweep out.
+  - name: Sweep → thrown out too often, stop
+    when:
+      visible: menu_event
+      not_visible: [event_stage_row, stage_details, navigator_open]
+      counter_at_least: {passes: 3}
+    do:
+      - screenshot: sweep_restarted
+      - notify: "Growth sweep stopped: it was thrown back to the home screen three times."
+      - stop: "The sweep was thrown back to the home screen three times ({clears} stages cleared)."
+
   - name: START menu → Event
     when:
       visible: menu_event
       not_visible: [event_stage_row, stage_details, navigator_open]
     do:
       - reset: lost
+      - count: passes
       - reset: tab_taps
       - reset: top_swipes
       - reset: opened
       - reset: swiped_next
+      - reset: entries_done
+      - reset: event_taps
+      - reset: event_clears
+      - reset: give_up
+      - reset: finishing
+      - reset: mission_opens
+      - reset: accepts
+      - reset: mission_done
       - tap: menu_event
     cooldown: 6
 
