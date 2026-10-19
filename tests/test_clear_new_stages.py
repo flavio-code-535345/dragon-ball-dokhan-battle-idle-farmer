@@ -213,6 +213,7 @@ class NavGame(EventGame):
         self.sticky = set(sticky)
         self.current = 0
         self.opened: list[int] = []  # the events opened from the navigator
+        self.page = 0  # the navigator's scroll position, in entries
 
     def entries(self) -> list[int]:
         return [
@@ -225,7 +226,7 @@ class NavGame(EventGame):
         if self.screen == "navigator":
             img = _canvas((30, 40, 60))
             _button(img, NAV_TITLE, "DRAGON STONE NAVIGATOR", "nav")
-            for row, _ in enumerate(self.entries()[:3]):
+            for row, _ in enumerate(self.entries()[self.page : self.page + 3]):
                 _button(img, nav_entry(row), f"EVENT {row + 1}", "retry")
             return img
         img = super().render()
@@ -236,7 +237,7 @@ class NavGame(EventGame):
     def tap(self, x: float, y: float) -> None:
         if self.screen == "navigator":
             entries = self.entries()
-            for row, event in enumerate(entries[:3]):
+            for row, event in enumerate(entries[self.page : self.page + 3]):
                 if nav_entry(row).contains(x, y):
                     self.current = event
                     self.cleared = self.events[event]
@@ -244,9 +245,16 @@ class NavGame(EventGame):
                     self.offset, self.screen = 0, "list"
             return
         if self.screen == "list" and NAV_BUTTON.contains(x, y):
-            self.screen = "navigator"
+            self.screen, self.page = "navigator", 0
             return
         super().tap(x, y)
+
+    def swipe(self, y1: float, y2: float) -> None:
+        if self.screen == "navigator":  # a slow drag moves the list by three entries
+            if y1 > y2:
+                self.page = min(self.page + 3, max(0, len(self.entries()) - 3))
+            return
+        super().swipe(y1, y2)
 
 
 class QuestDevice(Device):
@@ -614,3 +622,12 @@ def test_lost_without_next_event_still_stops(play):
     game = HomeGame([all_cleared({0})])
     summary = play(game, {"claim_missions": "no"}, minutes=60)
     assert "Lost on a screen" in summary["reason"] and not game.played
+
+
+def test_entries_beyond_the_first_page_are_reached_by_scrolling_the_navigator(play):
+    # Four events stay listed (sticky); the fifth has a NEW stage, on the second page.
+    events = [all_cleared() for _ in range(4)] + [all_cleared({0})]
+    game = NavGame(events, sticky={0, 1, 2, 3})
+    summary = play(game, NEXT, minutes=90)
+    assert 4 in game.opened and summary["counters"]["stages_cleared"] == 1
+    assert not summary["error"]  # (past the end of the list it revisits entries until max_events)

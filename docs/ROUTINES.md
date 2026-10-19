@@ -309,6 +309,10 @@ stage list / event screen, whole-screen search) and `navigator_title` ("Dragon S
 header of its list) first; without them the finish rules are disabled and the routine would wait on
 the finished list. Combine it with `claim_missions` = yes, `act_policy` = meat and `quick_finish` = yes.
 
+**Navigator paging.** The navigator shows three entries at a time; a slow drag moves its list by exactly
+three, so the routine reaches up to 12 entries (entries that stay listed, like a team-restricted event,
+are skipped by position). Past the end of the list it may revisit entries until `max_events`.
+
 **Failsafes.** The routine does not tap at an unknown screen forever: after two taps near the top it
 presses Back every ~10 s, and after about two minutes without recognising anything it takes a
 `lost` screenshot, notifies and stops. Every recognised screen resets that count. With `next_event`, an
