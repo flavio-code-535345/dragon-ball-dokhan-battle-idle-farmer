@@ -452,12 +452,13 @@ rules:
       - tap_xy: [0.5, 0.34]
     cooldown: 5
 
-  # The sweep did not open this event page (the farm was started on it): back to the Event menu.
+  # The sweep did not open this event page (the farm was started on it): back to the Event menu
+  # (only before the sweep used the menu: afterwards a second tap would leave the menu).
   - name: Event page → not from the sweep, back to the menu
     when:
       visible: [event_stage_row, back_button]
       not_visible: [mission_dialog, restore_sta]
-      counter_below: {opened: 1}
+      counter_below: {opened: 1, tab_taps: 1}
     do:
       - reset: lost
       - tap: back_button
@@ -638,13 +639,29 @@ rules:
       - tap_xy: [0.5, 0.544]
     cooldown: 4
 
-  # Each swipe of 0.3 moves the wheel by about three entries and stops at the top of the list.
-  - name: Event menu → to the top of the list
+  # Each swipe of 0.3 moves the wheel by three entries and stops at the top of the list: four
+  # swipes reach the top from the end of a list of 13 (a fifth would be paused by the engine's
+  # no-effect guard, so the count stays at four).
+  - name: Event menu → to the top of the list (first swipes)
     when:
       visible: navigator_open
       not_visible: [event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
       counter_at_least: {tab_taps: 1}
-      counter_below: {top_swipes: 6}
+      counter_below: {top_swipes: 2}
+    do:
+      - reset: lost
+      - count: top_swipes
+      - swipe: {from: [0.5, 0.6], to: [0.5, 0.9], ms: 400}
+    cooldown: 3
+
+  # Two rules of two swipes: a wheel that is at the top already gives identical frames, and the
+  # engine pauses a rule after three of those in a row.
+  - name: Event menu → to the top of the list (last swipes)
+    when:
+      visible: navigator_open
+      not_visible: [event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
+      counter_at_least: {tab_taps: 1, top_swipes: 2}
+      counter_below: {top_swipes: 4}
     do:
       - reset: lost
       - count: top_swipes
@@ -656,7 +673,7 @@ rules:
     when:
       visible: navigator_open
       not_visible: [event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
-      counter_at_least: {top_swipes: 6, entries_done: 1}
+      counter_at_least: {top_swipes: 4, entries_done: 1}
       counter_below: {swiped_next: 1, opened: 1}
     do:
       - reset: lost
@@ -668,7 +685,7 @@ rules:
     when:
       visible: navigator_open
       not_visible: [event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
-      counter_at_least: {top_swipes: 6}
+      counter_at_least: {top_swipes: 4}
       counter_below: {entries_done: 1, opened: 1}
     do:
       - reset: lost
@@ -680,7 +697,7 @@ rules:
     when:
       visible: navigator_open
       not_visible: [event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
-      counter_at_least: {top_swipes: 6, entries_done: 1, swiped_next: 1}
+      counter_at_least: {top_swipes: 4, entries_done: 1, swiped_next: 1}
       counter_below: {opened: 1}
     do:
       - reset: lost
