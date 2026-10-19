@@ -250,6 +250,8 @@ templates:
     description: >-
       Something that is always on screen during a battle and nowhere else, e.g.
       the pause / menu button of the battle screen.
+      Best the green ITEM button at the bottom right: it is in every battle (the BATTLE DETAILS button
+      at the top right is replaced by MENU in some).
   stage_result:
     level: required
     description: >-
