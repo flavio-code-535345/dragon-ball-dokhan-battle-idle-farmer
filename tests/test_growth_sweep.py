@@ -13,7 +13,7 @@ from dokkan_farmer.routine import parse_routine
 from dokkan_farmer.settings import Settings
 from dokkan_farmer.vision import Matcher, TemplateStore
 from test_clear_new_stages import Clock, QuestDevice
-from test_repeat_stage import START, StageGame
+from test_repeat_stage import MISSION, START, StageGame
 from test_repeat_stage import capture_templates as capture_stage_templates
 
 ROUTINE = "dokkan_growth_sweep"
@@ -22,7 +22,7 @@ MENU_EVENT = Box(60, 300, 600, 120)
 NAV = Box(300, 1050, 120, 90)
 BACK = Box(20, 1060, 150, 80)
 REQ_TITLE = Box(160, 380, 400, 60)
-REQ_OK = Box(240, 700, 240, 90)
+REQ_OK = Box(380, 820, 260, 80)  # like the OK of the stage fakes (the ok_button template)
 FULL = 4  # taps on an event's stage row that never start it before the sweep leaves
 
 
@@ -89,8 +89,8 @@ class SweepGame(StageGame):
         elif s == "event":
             if BACK.contains(x, y):
                 self.screen = "eventmenu"
-            elif self.entry()["attempts"] != 0:
-                super().tap(x, y)
+            elif MISSION.contains(x, y) or self.entry()["attempts"] != 0:
+                super().tap(x, y)  # (a row without attempts left does not open)
         elif s == "details":
             if BACK.contains(x, y):
                 self.screen = "event"
