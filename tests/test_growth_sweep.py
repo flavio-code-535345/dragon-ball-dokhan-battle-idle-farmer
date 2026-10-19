@@ -114,9 +114,7 @@ class SweepGame(StageGame):
     def swipe(self, y1: float, y2: float) -> None:
         if self.screen == "eventmenu":
             step = -1 if y1 < y2 else 1
-            size = max(
-                1, round(abs(y2 - y1) / 0.15 * 0.0 + abs(y2 - y1) / 128)
-            )  # 0.3 → 3, 0.15 → 1
+            size = 1 if abs(y2 - y1) < 250 else 3  # 0.15 → one entry, 0.3 → three
             self.selected = min(max(self.selected + step * size, 0), len(self.entries) - 1)
 
 

@@ -123,6 +123,12 @@ counters:
     label: Stages cleared
     appears: stage_result
     rearm: start_button
+  # Once per cleared stage (the results screen is tapped several times, so a plain count would
+  # be inflated); reset when an event is left.
+  event_clears:
+    label: Clears in this event
+    appears: stage_result
+    rearm: start_button
 
 colors:
   path_arrow:
@@ -316,7 +322,6 @@ rules:
       - reset: minus
       - reset: in_stage
       - reset: start_tries
-      - count: event_clears
       - tap_xy: [0.5, 0.5]
     cooldown: 3
 
