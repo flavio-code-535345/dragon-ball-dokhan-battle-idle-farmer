@@ -1,0 +1,620 @@
+# Dokkan Skill Orbs: walks to the "God-Level Intensive Training" stage by itself and grinds it for
+# Skill Orbs (the stage's featured rewards) and the event's mission rewards (Dragon Stones, Skill
+# Orb Tickets, Aged Meat).
+#
+# Start it from anywhere: the home screen, the START menu, the Event menu, the event's page or the
+# stage's details page. From the home screen it goes START, Event, the Bonus tab, and scrolls the
+# list until the stage's banner shows, then opens it. For every clear it
+#  - turns BOOST on when the option says so (double rewards for double stamina; a boost charge is
+#    used up, and when none is left the stage is played without it),
+#  - starts the stage and plays its map and battles like "Dokkan Clear New Stages",
+#  - refills stamina with an Aged Meat when it is too low (never with Dragon Stones: only the
+#    "with Item" row of the refill dialog is ever tapped),
+# and after the last clear it opens the MISSION screen and accepts the rewards that are ready.
+#
+# Failsafes: a stage that does not start, a screen it does not know (Back, then the HOME tab, then it
+# stops with a screenshot) and a stage that is not in the list today never loop for long.
+#
+# Templates are shared with the other routines: the ones you captured for them work here.
+#
+# Full reference: docs/ROUTINES.md
+name: Dokkan Skill Orbs
+description: >-
+  Walks Home, START, Event, Bonus to "God-Level Intensive Training" and clears it again and again
+  for Skill Orbs: Boost on request, stamina refilled with Aged Meat (never Dragon Stones), then
+  accepts the event's mission rewards.
+version: 1
+
+options:
+  max_clears:
+    label: Clears to play
+    type: number
+    default: 10
+    min: 1
+    max: 200
+  boost:
+    label: BOOST
+    type: choice
+    choices: ["off", "on"]
+    default: "on"
+    help: >-
+      on = double rewards for double stamina, as long as boost charges are left (then the
+      stage is played without). Missions count clears, so off is cheaper for them.
+  refill:
+    label: When stamina is too low
+    type: choice
+    choices: [meat, stop]
+    default: meat
+    help: >-
+      meat = use Aged Meat (the dialog's "with Item" row; never a Dragon Stone), stop = stop.
+  meat_pieces:
+    label: Aged Meat per refill
+    type: number
+    default: 1
+    min: 1
+    max: 2
+  max_refills:
+    label: Stop after this many refills
+    type: number
+    default: 10
+    min: 1
+    max: 50
+  claim_missions:
+    label: Accept the mission rewards at the end
+    type: choice
+    choices: ["yes", "no"]
+    default: "yes"
+  retries:
+    label: Tries again after a defeat (0 = stop at the first defeat)
+    type: number
+    default: 0
+    min: 0
+    max: 20
+  sphere_x:
+    label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
+    type: number
+    default: 0.5
+    min: 0
+    max: 1
+  sphere_y:
+    label: "Battle: where to tap a ki sphere, y (0 = top, 1 = bottom)"
+    type: number
+    default: 0.45
+    min: 0
+    max: 1
+  tap_every:
+    label: "Battle: seconds between taps"
+    type: number
+    default: 1.5
+    min: 0.5
+    max: 10
+  move_x:
+    label: "Map: where to tap to move, x"
+    type: number
+    default: 0.5
+    min: 0
+    max: 1
+  move_y:
+    label: "Map: where to tap to move, y"
+    type: number
+    default: 0.85
+    min: 0
+    max: 1
+  max_scrolls:
+    label: Steps of the event list to look for the stage (each way)
+    type: number
+    default: 14
+    min: 1
+    max: 40
+  continue_after:
+    label: Seconds of a still screen before tapping to continue
+    type: number
+    default: 6
+    min: 2
+    max: 120
+
+settings:
+  tick_interval: 1.0
+  action_delay: 1.5
+  run_counter: clears
+  ensure_foreground: true
+  stuck:
+    static_seconds: 180
+    idle_seconds: 300
+    recovery:
+      - key: BACK
+      - wait: 3
+    restart_after: 2
+    max_restarts: 3
+
+counters:
+  clears:
+    label: Stages cleared
+    appears: stage_result
+    rearm: start_button
+
+colors:
+  path_arrow:
+    description: >-
+      The bright blue arrows where the path on the map forks (hue 99-104: the sea of some maps
+      is a little lighter). The one nearest the screen centre is tapped: the game keeps the
+      player there, and the arrows sit next to it.
+    hsv_min: [99, 190, 170]
+    hsv_max: [104, 255, 255]
+    min_area: 0.001
+    max_area: 0.03
+    region: [0, 0.22, 1, 0.46]
+    close: 2
+    near: [0.5, 0.46]
+
+templates:
+  stage_details:
+    level: required
+    description: >-
+      The "Clear Reward / Featured Reward" headings of a stage's details page (the page
+      with the difficulty bar, BOOST and MISSION).
+  start_button:
+    level: required
+    description: The "Start!" button on the team screen before a stage.
+  battle_screen:
+    level: required
+    description: Something that is on screen during a battle and nowhere else (e.g. the ITEM button).
+  stage_result:
+    level: required
+    description: >-
+      Something on the results screen at the end of a stage, e.g. "Obtained Item" (counts the
+      clears).
+  event_stage_row:
+    level: recommended
+    description: >-
+      The "Clear Reward / Featured Reward" headings of the stage row on the event's page: after a
+      stage the game returns there, and the routine opens the stage again from it.
+  boost_off:
+    level: recommended
+    description: >-
+      The BOOST OFF button of the details page (grey, also when no charge is left). Capture it
+      in colour mode: BOOST ON looks the same in grey tones.
+  boost_on:
+    level: recommended
+    description: >-
+      The BOOST ON button of the details page (green; capture it in colour mode while a
+      charge is left).
+  restore_sta:
+    level: recommended
+    description: The title "Restore STA" of the stamina refill dialogs.
+  restore_with_item:
+    level: recommended
+    description: >-
+      The heading "Restore STA with Item" of the first refill dialog (not the Dragon Stone
+      row). The routine taps the Select button of that row at a fixed spot below it.
+  restore_items_to_use:
+    level: recommended
+    description: '"Item(s) to Use" of the second refill dialog (with the - and + buttons).'
+  event_mission:
+    level: optional
+    description: The MISSION button of the details page (only to accept the mission rewards).
+  mission_dialog:
+    level: optional
+    description: The title "Mission(s)" of the event's mission list.
+  mission_accept_all:
+    level: optional
+    description: >-
+      The orange "Accept all" button of the event's mission list (orange while something is
+      ready, grey otherwise): capture it in colour mode, with "search the whole screen".
+  map_screen:
+    level: recommended
+    description: >-
+      Something only the map shows while it waits for your move (the top edge of the middle
+      orange move card, colour mode).
+  stage_clear:
+    level: recommended
+    description: The "Battle Results" title after each won battle of a stage.
+  ok_button:
+    level: recommended
+    description: An "OK" button. Search the whole screen, so it is found in any dialog.
+  cancel_button:
+    level: recommended
+    description: A "Cancel" / "No" button (search the whole screen).
+  friend_request:
+    level: optional
+    description: The title of the "send a friend request?" popup after a stage.
+  skip_button:
+    level: optional
+    description: The "Skip" button of story scenes.
+  defeat_give_up:
+    level: recommended
+    description: The "Give up" / "No" button when your team is defeated and a revive is offered.
+  requirement_not_met:
+    level: recommended
+    description: >-
+      The title "Requirement Not Met" of the dialog that says your team breaks a stage's
+      restriction (e.g. only non-PHY units). Without it the routine would press Start and OK
+      over and over.
+  error_retry:
+    level: recommended
+    description: The "Retry" button of connection error dialogs.
+  close_button:
+    level: optional
+    description: The "Close" / "X" of popups.
+  back_button:
+    level: optional
+    description: The "<<<" back button at the bottom left.
+  home_screen:
+    level: optional
+    description: >-
+      Something only the home screen shows (the big START button; it has blue buttons like the
+      path arrows). The routine taps it to open the START menu.
+  menu_event:
+    level: recommended
+    description: >-
+      The "Event" entry of the menu behind the home screen's START button (Home, START, Event is
+      the way to the stage).
+  skill_orb_banner:
+    level: required
+    description: >-
+      The big "God-Level Intensive Training" lettering of the Event menu's banner, shown while that
+      entry is selected in the Bonus list. The routine scrolls the list until it shows.
+  navigator_open:
+    level: optional
+    description: >-
+      The orange Dragon Stone button at the bottom of the Event menu: it tells the routine it is
+      on the Event menu (shared with Dokkan Clear New Stages).
+
+rules:
+  # --- Errors and defeats ---------------------------------------------------------
+  - name: Connection error → Retry
+    when: {visible: error_retry}
+    do: [{reset: lost}, {tap: error_retry}]
+    cooldown: 3
+
+  - name: Team not allowed → stop
+    when: {visible: [requirement_not_met, ok_button], not_visible: [restore_sta, restore_items_to_use]}
+    do:
+      - reset: lost
+      - tap: ok_button
+      - screenshot: requirement_not_met
+      - stop: "This stage restricts the team (see the dialog): no cleared stages from here. Change the team and start again."
+
+  - name: Defeat → give up and stop
+    when: {visible: defeat_give_up, counter_at_least: {defeats: $retries}}
+    do:
+      - reset: lost
+      - tap: defeat_give_up
+      - screenshot: defeat
+      - stop: "Team was defeated after {clears} clears. Use a stronger team for this stage."
+
+  - name: Defeat → give up and try again
+    when: {visible: defeat_give_up}
+    do: [{reset: lost}, {tap: defeat_give_up}, {count: defeats}]
+    cooldown: 5
+
+  # --- Stamina refill (only ever the "with Item" row) ----------------------------
+  - name: Refill → out of tries, stop
+    when:
+      visible: [restore_sta, restore_with_item, cancel_button]
+      counter_at_least: {refills: $max_refills}
+    do:
+      - reset: lost
+      - tap: cancel_button
+      - stop: "Stamina too low and {refills} refills were used: stopping after {clears} clears."
+
+  - name: Refill → stop (option)
+    when:
+      visible: [restore_sta, restore_with_item, cancel_button]
+      option: {refill: stop}
+    do:
+      - reset: lost
+      - tap: cancel_button
+      - stop: "Out of stamina after {clears} clears."
+
+  - name: Refill → use an Aged Meat
+    when:
+      visible: [restore_sta, restore_with_item]
+      not_visible: restore_items_to_use
+      counter_below: {refills: $max_refills}
+    do: [{reset: lost}, {count: refills}, {reset: minus}, {tap_xy: [0.82, 0.606]}]
+    cooldown: 4
+
+  # The dialog suggests two pieces: use one unless the option says two (the - button is
+  # tapped once, as soon as the dialog with an OK button shows; the counter is reset by
+  # the rule above, once per refill).
+  - name: Refill → one piece only
+    when:
+      visible: [restore_sta, ok_button]
+      counter_below: {minus: 1}
+      option: {meat_pieces: 1}
+    do: [{reset: lost}, {count: minus}, {tap_xy: [0.305, 0.542]}]
+    cooldown: 2
+
+  # --- Playing a stage ---------------------------------------------------------------
+  - name: Stage cleared → results
+    when: {visible: stage_result}
+    do: [{reset: lost}, {reset: defeats}, {reset: boost_taps}, {reset: minus}, {reset: in_stage}, {reset: start_tries}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Battle won → results
+    when: {visible: stage_clear}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Battle → tap a ki sphere
+    when: {visible: battle_screen}
+    do: [{reset: lost}, {count: in_stage}, {reset: start_tries}, {tap_xy: [$sphere_x, $sphere_y]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Skip story scene
+    when: {visible: skip_button}
+    do: [{reset: lost}, {tap: skip_button}]
+    cooldown: 3
+
+  - name: Map → choose a path
+    when:
+      color_visible: path_arrow
+      not_visible: [battle_screen, start_button, home_screen, menu_event, stage_details, event_stage_row, navigator_open]
+      counter_at_least: {in_stage: 1}
+      counter_below: {lost: 2}
+    do: [{tap_color: path_arrow}]
+    cooldown: 3
+
+  - name: Map → move
+    when: {visible: map_screen, not_visible: battle_screen}
+    do: [{reset: lost}, {count: in_stage}, {tap_xy: [$move_x, $move_y]}]
+    cooldown: 2
+
+  - name: Decline friend request
+    when: {visible: [friend_request, cancel_button]}
+    do: [{reset: lost}, {tap: cancel_button}]
+    cooldown: 3
+
+  # Failsafe: Start! was pressed four times and no map or battle followed.
+  - name: Stage will not start → stop
+    when:
+      visible: start_button
+      counter_at_least: {start_tries: 4}
+    do:
+      - reset: lost
+      - screenshot: start_blocked
+      - stop: "The stage does not start (see the 'start_blocked' screenshot): a dialog or a team restriction is in the way."
+
+  - name: Start stage (team page)
+    when: {visible: start_button}
+    do: [{reset: lost}, {count: in_stage}, {count: start_tries}, {tap: start_button}]
+    cooldown: 5
+
+  # After a stage the game returns to the event's page (the stage row): open the stage.
+  - name: Event page → open the stage
+    when:
+      visible: event_stage_row
+      counter_below: {clears: $max_clears}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.34]}]
+    cooldown: 5
+
+  # --- The stage's details page: boost, start, and the missions at the end ---------
+  - name: Details → BOOST on
+    when:
+      visible: [stage_details, boost_off]
+      not_visible: boost_on
+      counter_below: {clears: $max_clears, boost_taps: 2}
+      option: {boost: "on"}
+    do: [{reset: lost}, {count: boost_taps}, {tap: boost_off}]
+    cooldown: 2
+
+  - name: Details → start (boosted)
+    when:
+      visible: [stage_details, boost_on]
+      counter_below: {clears: $max_clears}
+      option: {boost: "on"}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.23]}]
+    cooldown: 6
+
+  - name: Details → start (boost off)
+    when:
+      visible: stage_details
+      counter_below: {clears: $max_clears}
+      option: {boost: "off"}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.23]}]
+    cooldown: 6
+
+  # The boost button did not turn on (no charge left): play without it.
+  - name: Details → start (no boost charge left)
+    when:
+      visible: stage_details
+      not_visible: boost_on
+      counter_at_least: {boost_taps: 2}
+      counter_below: {clears: $max_clears}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.23]}]
+    cooldown: 6
+
+  # Nothing above fired for a while on the details page (no boost template captured): go on.
+  - name: Details → start (nothing else happened)
+    when:
+      visible: stage_details
+      idle_for: 12
+      counter_below: {clears: $max_clears}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.23]}]
+    cooldown: 6
+
+  # --- Way to the stage: Home → START → Event → Bonus → the stage's banner → its page ----
+  - name: Home → START
+    when:
+      visible: home_screen
+      not_visible: [menu_event, event_stage_row, stage_details]
+    do: [{reset: lost}, {tap: home_screen}]
+    cooldown: 6
+
+  - name: START menu → Event
+    when:
+      visible: menu_event
+      not_visible: [event_stage_row, stage_details, navigator_open]
+    do: [{reset: lost}, {reset: tab_taps}, {reset: up_steps}, {reset: down_steps}, {reset: entered}, {tap: menu_event}]
+    cooldown: 6
+
+  # The Event menu: its Bonus tab (tapped once; the menu opens on the tab used last).
+  - name: Event menu → Bonus tab
+    when:
+      visible: navigator_open
+      not_visible: [event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, skill_orb_banner, home_screen, menu_event]
+      counter_below: {tab_taps: 1, entered: 1}
+    do: [{reset: lost}, {count: tab_taps}, {tap_xy: [0.3, 0.544]}]
+    cooldown: 4
+
+  - name: Event menu → open the stage
+    when:
+      visible: skill_orb_banner
+      counter_below: {entered: 1}
+    do: [{reset: lost}, {count: entered}, {tap_xy: [0.5, 0.67]}]
+    cooldown: 4
+
+  # The list is a wheel: one swipe of 0.15 moves it by one entry.
+  - name: Event menu → look further up the list
+    when:
+      visible: navigator_open
+      not_visible: [skill_orb_banner, event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
+      counter_at_least: {tab_taps: 1}
+      counter_below: {entered: 1, up_steps: $max_scrolls}
+    do:
+      - reset: lost
+      - count: up_steps
+      - swipe: {from: [0.5, 0.6], to: [0.5, 0.75], ms: 400}
+    cooldown: 2
+
+  - name: Event menu → look further down the list
+    when:
+      visible: navigator_open
+      not_visible: [skill_orb_banner, event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
+      counter_at_least: {tab_taps: 1, up_steps: $max_scrolls}
+      counter_below: {entered: 1, down_steps: $max_scrolls}
+    do:
+      - reset: lost
+      - count: down_steps
+      - swipe: {from: [0.5, 0.75], to: [0.5, 0.6], ms: 400}
+    cooldown: 2
+
+  - name: Stage not in the list → stop
+    when:
+      visible: navigator_open
+      not_visible: [skill_orb_banner, event_stage_row, stage_details, start_button, battle_screen, restore_sta, mission_dialog, home_screen, menu_event]
+      counter_at_least: {up_steps: $max_scrolls, down_steps: $max_scrolls}
+      counter_below: {entered: 1}
+    do:
+      - reset: lost
+      - screenshot: stage_not_found
+      - stop: "\"God-Level Intensive Training\" is not in the Event menu's Bonus list today (it is not there every day). Try again later."
+
+  # --- Missions (after the last clear) -----------------------------------------------
+  - name: Missions → open
+    when:
+      visible: event_mission
+      not_visible: [mission_dialog, restore_sta]
+      counter_at_least: {clears: $max_clears}
+      counter_below: {mission_opens: 1}
+      option: {claim_missions: "yes"}
+    do: [{reset: lost}, {count: mission_opens}, {tap: event_mission}]
+    cooldown: 4
+
+  - name: Missions → accept all
+    when:
+      visible: [mission_dialog, mission_accept_all]
+      counter_at_least: {mission_opens: 1}
+      counter_below: {accepts: 1}
+    do: [{reset: lost}, {count: accepts}, {tap: mission_accept_all}]
+    cooldown: 4
+
+  # "Accept all" is grey when nothing is ready: close the list.
+  - name: Missions → nothing to accept
+    when:
+      visible: [mission_dialog, cancel_button]
+      not_visible: mission_accept_all
+      counter_at_least: {mission_opens: 1}
+      counter_below: {accepts: 1}
+    do: [{reset: lost}, {count: accepts}, {tap: cancel_button}]
+    cooldown: 4
+
+  - name: Missions → close the list
+    when:
+      visible: [mission_dialog, cancel_button]
+      counter_at_least: {accepts: 1}
+    do: [{reset: lost}, {tap: cancel_button}]
+    cooldown: 4
+
+  - name: Done → stop (missions accepted)
+    when:
+      visible: event_mission
+      not_visible: mission_dialog
+      counter_at_least: {clears: $max_clears, accepts: 1}
+    do: [{reset: lost}, {stop: "{clears} clears done, mission rewards accepted."}]
+
+  - name: Done → stop
+    when:
+      visible: event_mission
+      not_visible: mission_dialog
+      counter_at_least: {clears: $max_clears}
+      option: {claim_missions: "no"}
+    do: [{reset: lost}, {stop: "{clears} clears done."}]
+
+  # --- Dialogs and fallbacks ------------------------------------------------------------
+  - name: Close popup
+    when: {visible: close_button}
+    do: [{reset: lost}, {tap: close_button}]
+    cooldown: 2
+
+  - name: Confirm (OK)
+    when:
+      visible: ok_button
+      not_visible: [defeat_give_up, restore_with_item]
+    do: [{reset: lost}, {tap: ok_button}]
+    cooldown: 2
+
+  - name: Close a details page
+    when:
+      visible: back_button
+      not_visible: [stage_details, event_stage_row, start_button, restore_sta, mission_dialog, navigator_open, home_screen, menu_event, skill_orb_banner]
+      static_for: 4
+    do: [{key: BACK}]
+    cooldown: 3
+
+  - name: Tap to continue
+    when:
+      static_for: $continue_after
+      not_visible: [defeat_give_up, stage_details, event_stage_row, restore_sta, mission_dialog, navigator_open, home_screen, menu_event, skill_orb_banner]
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4
+
+  # A screen nothing above knows: a tap near the top, then Back, then the HOME tab, then stop
+  # (instead of tapping at the wrong screen for hours). Any recognised screen resets the count.
+  - name: Nothing recognised → tap the top
+    when:
+      idle_for: 10
+      not_visible: [defeat_give_up, battle_screen, map_screen, start_button, error_retry, stage_details, event_stage_row, restore_sta, mission_dialog, navigator_open, skill_orb_banner, home_screen, menu_event]
+      counter_below: {lost: 2}
+    do: [{count: lost}, {tap_xy: [0.5, 0.15]}]
+    cooldown: 4
+
+  - name: Lost → press Back
+    when:
+      idle_for: 10
+      not_visible: [defeat_give_up, battle_screen, map_screen, start_button, error_retry, stage_details, event_stage_row, restore_sta, mission_dialog, navigator_open, skill_orb_banner, home_screen, menu_event]
+      counter_at_least: {lost: 2}
+      counter_below: {lost: 5}
+    do: [{count: lost}, {key: BACK}]
+    cooldown: 5
+
+  - name: Lost → go home
+    when:
+      idle_for: 10
+      not_visible: [defeat_give_up, battle_screen, map_screen, start_button, error_retry, stage_details, event_stage_row, restore_sta, mission_dialog, navigator_open, skill_orb_banner, home_screen, menu_event]
+      counter_at_least: {lost: 5}
+      counter_below: {lost: 12}
+    do: [{count: lost}, {reset: in_stage}, {tap_xy: [0.09, 0.965]}]
+    cooldown: 5
+
+  - name: Lost → give up and stop
+    when:
+      idle_for: 10
+      not_visible: [defeat_give_up, battle_screen, map_screen, start_button, error_retry, stage_details, event_stage_row, restore_sta, mission_dialog, navigator_open, skill_orb_banner, home_screen, menu_event]
+      counter_at_least: {lost: 12}
+    do:
+      - screenshot: lost
+      - notify: "Lost: the screen was not recognised for two minutes ({clears} clears)."
+      - stop: "Lost on a screen the routine does not know (see the 'lost' screenshot)."

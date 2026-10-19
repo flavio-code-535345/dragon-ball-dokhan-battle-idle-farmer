@@ -339,6 +339,20 @@ The in-game **Dragon Stone Navigator** (the orange stone button at the bottom of
 screens) lists the events that still pay stones, with the stones for stage clears and for
 missions: a good list to pick the next event from.
 
+## Grinding the Skill Orb stage
+
+`dokkan_skill_orbs` is *Repeat Stage* with a way to the stage: start it anywhere (home screen, START menu,
+Event menu, the event's page or the stage's details page). From the home screen it taps START, Event
+and the Bonus tab, scrolls the list (one swipe of 0.15 moves the wheel by one entry) until the big
+"God-Level Intensive Training" banner shows (`skill_orb_banner`), opens the stage and clears it
+`max_clears` times with Boost (`boost` = on while charges are left) and Aged Meat refills (never a
+Dragon Stone), then accepts the event's mission rewards. The stage is not in the Bonus list every day:
+if it is not found in `max_scrolls` steps each way the routine stops with a `stage_not_found`
+screenshot. Capture `skill_orb_banner` (colour or grey, whole-screen search) while the entry is
+selected, plus `menu_event`, `home_screen` and `navigator_open` (shared with *Clear New Stages*) and the
+templates of *Repeat Stage*. Failsafes as in *Clear New Stages*: a stage that does not start (four Start!
+taps), and an unknown screen (a tap, Back, the HOME tab, then it stops with a `lost` screenshot).
+
 ## Farming Dragon Stones
 
 Dragon Stones cannot be farmed forever: every source pays once. Stamina is only needed for the

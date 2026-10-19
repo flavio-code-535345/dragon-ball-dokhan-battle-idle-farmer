@@ -170,6 +170,7 @@ def test_routine_endpoints(client):
         "dokkan_collect_rewards",
         "dokkan_extreme_battle",
         "dokkan_repeat_stage",
+        "dokkan_skill_orbs",
         "dokkan_story",
     ]
     detail = client.get("/api/routines/dokkan_auto_farm").json()
