@@ -229,8 +229,8 @@ templates:
     description: >-
       Something that is always on screen during a battle and nowhere else, e.g.
       the pause / menu button of the battle screen.
-      Best the green ITEM button at the bottom right: it is in every battle (the BATTLE DETAILS button
-      at the top right is replaced by MENU in some).
+      Best the "PHASE" label of the bar at the top left, which only battles show (not the ITEM
+      button, the map has it too, and the top right button differs between stages).
   stage_result:
     level: required
     description: >-
