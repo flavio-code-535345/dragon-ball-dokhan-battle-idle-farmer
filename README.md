@@ -194,6 +194,7 @@ screenshot), when the device is unreachable and, with `NOTIFY_EVERY_RUNS`, every
   [`dokkan_clear_new_stages.yaml`](src/dokkan_farmer/routines/dokkan_clear_new_stages.yaml),
   [`dokkan_collect_rewards.yaml`](src/dokkan_farmer/routines/dokkan_collect_rewards.yaml),
   [`dokkan_extreme_battle.yaml`](src/dokkan_farmer/routines/dokkan_extreme_battle.yaml),
+  [`dokkan_growth_sweep.yaml`](src/dokkan_farmer/routines/dokkan_growth_sweep.yaml),
   [`dokkan_repeat_stage.yaml`](src/dokkan_farmer/routines/dokkan_repeat_stage.yaml),
   [`dokkan_skill_orbs.yaml`](src/dokkan_farmer/routines/dokkan_skill_orbs.yaml) and
   [`dokkan_story.yaml`](src/dokkan_farmer/routines/dokkan_story.yaml) are

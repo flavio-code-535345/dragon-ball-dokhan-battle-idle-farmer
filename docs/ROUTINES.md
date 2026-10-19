@@ -353,6 +353,24 @@ selected, plus `menu_event`, `home_screen` and `navigator_open` (shared with *Cl
 templates of *Repeat Stage*. Failsafes as in *Clear New Stages*: a stage that does not start (four Start!
 taps), and an unknown screen (a tap, Back, the HOME tab, then it stops with a `lost` screenshot).
 
+## Growing stronger: the Growth Sweep
+
+`dokkan_growth_sweep` visits the events of the Event menu's Bonus list one after the other and plays what
+each offers today. The Bonus list holds the resources that make a team stronger: Training Items (Korin
+Tower, Turtle School), Awakening Medals, Skill Orbs (God-Level Intensive Training, Stronger Than Ever),
+Link Skill Orbs (Master It!, Training at the Sanctuary), Potential Orbs (Activate Your Hidden Potential),
+Zeni, and the daily events that pay Aged Meat and mission Dragon Stones (Saiyan Gluttons, Great
+Saiyaman). From the home screen it goes START, Event, the Bonus tab (or Growth: option `tab`), scrolls to
+the top of the list (a 0.3 swipe moves the wheel three entries) and then takes the entries one by one (a
+0.15 swipe moves it exactly one). In each event it taps the top stage (limited events allow one clear a
+day or week; the stage is tried up to four times, then the event is left), refills stamina with an Aged
+Meat (never a Dragon Stone, up to `max_refills` in total), gives the event up on "Requirement Not Met",
+accepts the event's mission rewards and goes back with the on-screen "<<<" button. It stops after
+`max_entries` events. Never press Android's Back key on an event page: the game closes. Capture
+`back_button` (the "<<<"), `event_stage_row`, `navigator_open` and `stage_details` first; the rest is
+shared with *Skill Orbs* and *Clear New Stages*. Failsafes: a stage that does not start gives that
+event up, and an unknown screen ends in a tap, Back, the HOME tab and a stop with a screenshot.
+
 ## Farming Dragon Stones
 
 Dragon Stones cannot be farmed forever: every source pays once. Stamina is only needed for the

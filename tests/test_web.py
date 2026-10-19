@@ -169,6 +169,7 @@ def test_routine_endpoints(client):
         "dokkan_clear_new_stages",
         "dokkan_collect_rewards",
         "dokkan_extreme_battle",
+        "dokkan_growth_sweep",
         "dokkan_repeat_stage",
         "dokkan_skill_orbs",
         "dokkan_story",
