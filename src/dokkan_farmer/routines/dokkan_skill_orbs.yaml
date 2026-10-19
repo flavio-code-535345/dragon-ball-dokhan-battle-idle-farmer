@@ -353,8 +353,7 @@ rules:
       color_visible: path_arrow
       not_visible: [battle_screen, start_button, home_screen, menu_event, stage_details, event_stage_row, navigator_open]
       counter_at_least: {in_stage: 1}
-      counter_below: {lost: 2}
-    do: [{tap_color: path_arrow}]
+    do: [{reset: lost}, {tap_color: path_arrow}]
     cooldown: 3
 
   - name: Map → move
