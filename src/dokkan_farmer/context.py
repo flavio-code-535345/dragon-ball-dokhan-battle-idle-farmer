@@ -7,7 +7,15 @@ import threading
 import time
 from typing import Any
 
-from .device import AdbDevice, Device, DeviceError, SimDevice, create_device, install_sim_templates
+from .device import (
+    AdbDevice,
+    Device,
+    DeviceError,
+    EmulatorPower,
+    SimDevice,
+    create_device,
+    install_sim_templates,
+)
 from .engine import Farmer, missing_required_templates
 from .installer import InstallManager
 from .library import RoutineLibrary
@@ -25,6 +33,8 @@ STARTUP_CONNECT_SECONDS = 300
 STARTUP_RETRY_SECONDS = 10
 #: How often the idle screen-off of power saving is checked.
 POWER_CHECK_SECONDS = 30
+#: How long the emulator gets to confirm "start" before the farm waits for the device anyway.
+EMULATOR_START_SECONDS = 20
 
 
 class AppContext:
@@ -68,6 +78,11 @@ class AppContext:
         # screen and touch control keep working meanwhile (adb runs both at once).
         self.installer = InstallManager(settings.data_dir / "apk-tmp", lambda fn: fn(self.device))
         self._closing = threading.Event()
+        #: power control of the emulator stack (needs its supervisor, see EmulatorPower)
+        self.emulator: EmulatorPower | None = None
+        if settings.emulator_console:
+            self.emulator = EmulatorPower(settings.emulator_screenshots)
+        self._boot_lock = threading.Lock()
 
     # ------------------------------------------------------------------ device
     def _device_serial(self, settings: Settings) -> str:
@@ -142,31 +157,112 @@ class AppContext:
         values = routine.option_values(merged)
         self.state.set_routine_options(routine_id, values)
         self.state.update(selected_routine=routine_id)
+        self.ensure_emulator_on()
         self.farmer.start(routine_id, routine, values)
         return routine
+
+    # ------------------------------------------------------------ emulator power
+    def emulator_status(self) -> dict[str, Any]:
+        """For the web UI: whether the emulator can be started and stopped, and its state."""
+        state = self.emulator.state() if self.emulator is not None else None
+        minutes = self.settings.emulator_off_minutes
+        return {
+            "available": state is not None,
+            "state": state,
+            "off_minutes": minutes if state is not None else 0,
+            "busy": self.farmer.is_running,
+        }
+
+    def emulator_command(self, action: str) -> dict[str, Any]:
+        """Start, stop or restart the emulator (the Device tab's buttons)."""
+        if self.emulator is None or self.emulator.state() is None:
+            raise RuntimeError(
+                "The emulator has no power control: update the stack (docker-compose.emulator.yml)"
+            )
+        if action in ("stop", "restart") and self.farmer.is_running:
+            raise RuntimeError("Stop the farm first")
+        if action == "start" and self.emulator.state() == "running":
+            return self.emulator_status()
+        self.farmer.mark_watched()  # a started emulator is not shut down at once again
+        self.emulator.send(action)
+        if action == "stop":
+            self._on_device_status(False, "The emulator is shut down")
+        else:
+            self._spawn_boot_watch()
+        return self.emulator_status()
+
+    def ensure_emulator_on(self) -> None:
+        """Start the emulator if it was shut down; the farm then waits for the device."""
+        if self.emulator is None or self.emulator.state() in (None, "running"):
+            return
+        log.info("The emulator is shut down: starting it for the farm")
+        self.farmer.mark_watched()
+        self.emulator.send("start")
+        self.emulator.wait_for("running", EMULATOR_START_SECONDS, command="start")
+        self._spawn_boot_watch()
+
+    def check_emulator_idle(self) -> None:
+        """Shut the emulator down after EMULATOR_OFF_MINUTES without a farm or web UI use."""
+        minutes = self.settings.emulator_off_minutes
+        if not minutes or self.emulator is None or self.emulator.state() != "running":
+            return
+        if self.farmer.is_running or self.installer.busy or self._boot_lock.locked():
+            return
+        if self.farmer.idle_seconds() < minutes * 60:
+            return
+        log.info("Shutting the emulator down to save power (idle for %d min)", minutes)
+        try:
+            self.emulator.send("stop")
+        except (OSError, RuntimeError) as exc:
+            log.warning("Could not shut the emulator down: %s", exc)
+            return
+        self._on_device_status(False, "The emulator is shut down")
+
+    def _spawn_boot_watch(self) -> None:
+        threading.Thread(target=self._boot_watch, name="emulator-boot", daemon=True).start()
+
+    def _boot_watch(self) -> None:
+        """After a start or restart: connect as soon as Android is up."""
+        if not self._boot_lock.acquire(blocking=False):
+            return
+        try:
+            time.sleep(3)  # a restart: let the old Android go before looking for the new one
+            status = self._connect_with_retries()
+            if status and status["connected"] and self.farmer.power_save:
+                self.farmer.wake_at_startup()
+        finally:
+            self._boot_lock.release()
 
     # ---------------------------------------------------------------- lifecycle
     def startup(self) -> None:
         threading.Thread(target=self._startup_worker, name="startup", daemon=True).start()
-        if self.settings.power_save is not False:  # on, or automatic for the emulator
+        if self.settings.power_save is not False or self.emulator is not None:
             threading.Thread(target=self._power_worker, name="power-save", daemon=True).start()
 
     def _power_worker(self) -> None:
         while not self._closing.wait(POWER_CHECK_SECONDS):
             try:
                 self.farmer.check_idle()
+                self.check_emulator_idle()
             except Exception:
                 log.exception("Power saving check failed")
 
-    def _startup_worker(self) -> None:
+    def _connect_with_retries(self) -> dict[str, Any] | None:
+        """Try the device for STARTUP_CONNECT_SECONDS (Android needs a minute or two to boot)."""
         status = self.refresh_device()
         deadline = time.monotonic() + STARTUP_CONNECT_SECONDS
         if not status["connected"]:
             log.info("Waiting for the device (%s)...", status["error"])
         while not status["connected"] and time.monotonic() < deadline:
             if self._closing.wait(STARTUP_RETRY_SECONDS):
-                return
+                return None
             status = self.refresh_device()
+        return status
+
+    def _startup_worker(self) -> None:
+        status = self._connect_with_retries()
+        if status is None:
+            return
         if status["connected"]:
             info = status["info"]
             log.info(

@@ -118,6 +118,10 @@ class ScreenPowerRequest(BaseModel):
     on: bool
 
 
+class EmulatorPowerRequest(BaseModel):
+    action: Literal["start", "stop", "restart"]
+
+
 class TextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
@@ -266,6 +270,7 @@ def create_app(ctx: AppContext) -> FastAPI:
             "version": __version__,
             "settings": ctx.settings.public_dict(),
             "device": ctx.device_status,
+            "emulator": ctx.emulator_status(),
             "farm": ctx.farmer.snapshot(),
             "lifetime": ctx.state.get("lifetime"),
             "selected_routine": ctx.selected_routine(),
@@ -581,6 +586,18 @@ def create_app(ctx: AppContext) -> FastAPI:
         if body.action in ("launch", "restart"):
             ctx.farmer.device_call(lambda d: d.launch_app(package))
         return {"ok": True, "package": package}
+
+    @app.get("/api/emulator")
+    def emulator_status() -> dict[str, Any]:
+        return ctx.emulator_status()
+
+    @app.post("/api/emulator")
+    def emulator_power(body: EmulatorPowerRequest) -> dict[str, Any]:
+        """The Device tab's Start / Restart / Shut down buttons (emulator stack only)."""
+        try:
+            return ctx.emulator_command(body.action)
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from None
 
     @app.post("/api/device/refresh")
     def device_refresh() -> dict[str, Any]:
@@ -1054,6 +1071,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 "elapsed_s": round(farm["elapsed"]) if farm.get("elapsed") else None,
                 "last_rule": farm.get("last_rule"),
                 "screen_off": farm.get("screen_off"),
+                "emulator": ctx.emulator_status()["state"],
                 "device": "connected" if device.get("connected") else device.get("error"),
                 "selected_routine": ctx.selected_routine(),
             }
@@ -1150,6 +1168,16 @@ def create_app(ctx: AppContext) -> FastAPI:
         def mcp_start_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
             farm_start(StartRequest(routine=args["routine"], options=args.get("options") or {}))
             return [mcp_text(farm_line())]
+
+        @server.tool(
+            "Emulator stack only: start, stop (shut down) or restart the Android emulator. "
+            "It also shuts down by itself when idle and starts with the farm.",
+            {"action": {"type": "string", "enum": ["start", "stop", "restart"]}},
+            ("action",),
+        )
+        def mcp_emulator(args: dict[str, Any]) -> list[dict[str, Any]]:
+            out = emulator_power(EmulatorPowerRequest(action=args["action"]))
+            return [mcp_text(f"emulator: {out['state']}")]
 
         @server.tool("Stop farming.")
         def mcp_stop_farm(args: dict[str, Any]) -> list[dict[str, Any]]:

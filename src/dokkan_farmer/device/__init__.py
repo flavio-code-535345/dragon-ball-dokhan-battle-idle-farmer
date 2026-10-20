@@ -7,6 +7,7 @@ from .adb import AdbDevice
 from .base import KEYCODES, Device, DeviceError, normalize_key
 from .emulator import EmulatorConsole
 from .emulator_grpc import EmulatorGrpc
+from .emulator_power import EmulatorPower
 from .sim import SimConfig, SimDevice, SimGame, install_sim_templates
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "DeviceError",
     "EmulatorConsole",
     "EmulatorGrpc",
+    "EmulatorPower",
     "SimConfig",
     "SimDevice",
     "SimGame",

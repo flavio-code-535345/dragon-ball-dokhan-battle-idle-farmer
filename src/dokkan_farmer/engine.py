@@ -375,6 +375,10 @@ class Farmer:
             return self.screen_wake()
         return False
 
+    def idle_seconds(self) -> float:
+        """Seconds since the farm stopped or the web UI last looked at or touched the device."""
+        return self.clock() - self._last_use
+
     def mark_watched(self) -> None:
         """Someone is watching: no idle screen-off for now (never touches the device)."""
         self._last_use = self.clock()

@@ -116,6 +116,7 @@
         </div>
         <p id="screen-sleeping" class="notice hidden">Android's screen is off to save power (the emulator stops drawing the game). The farm turns it back on when it needs it. <button class="btn small" data-devkey="WAKEUP" type="button">Turn it on</button></p>
         <p id="screen-offline" class="notice warn hidden">No device connected, so there is no screen to show yet. Pair or connect your phone in the <a href="#device">Device tab</a>.</p>
+      <p id="emulator-off-notice" class="notice warn hidden">The emulator is shut down (to save power). <button class="btn small" id="btn-emulator-start-farm" type="button">▶ Start emulator</button> Starting the farm starts it too.</p>
         <p id="screen-empty" class="muted small">No screenshot yet. Press Refresh.</p>
         <p class="muted small hidden" id="screen-tap"></p>
         <p class="muted small" id="screen-hint">Turn on <b>Touch control</b> to tap, double-tap (double-click) or swipe on the picture. Your keyboard then types into the device too (Esc = Back, arrows, Enter, Backspace).</p>
@@ -256,6 +257,17 @@
         <div class="row space"><h3>Device</h3><button class="btn small" id="btn-device-refresh" type="button">⟳ Check</button></div>
         <dl id="device-info" class="kv"></dl>
         <div id="device-error" class="notice error hidden"></div>
+      </div>
+
+      <div class="card hidden" id="emulator-card">
+        <h3>Emulator</h3>
+        <p id="emulator-state" class="muted small"></p>
+        <div class="buttons">
+          <button class="btn small" id="btn-emulator-start" type="button">▶ Start</button>
+          <button class="btn small" id="btn-emulator-restart" type="button">⟳ Restart</button>
+          <button class="btn small danger" id="btn-emulator-stop" type="button">⏻ Shut down</button>
+        </div>
+        <p class="muted small">Shut down saves the most power: the whole Android stops, its game data stays. It shuts down by itself after <code>EMULATOR_OFF_MINUTES</code> without a farm or anyone using this page, and starts again with the farm (a minute or two to boot). Restart helps when Android hangs; stop the farm first.</p>
       </div>
 
       <div class="card adb-only" id="apps-card">

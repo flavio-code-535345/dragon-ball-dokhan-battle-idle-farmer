@@ -44,18 +44,56 @@ services:
         if [ -n "$$SCREEN" ]; then
           export EXTRA_FLAGS="$$EXTRA_FLAGS -skin $$SCREEN -prop qemu.sf.lcd_density=$$DENSITY"
         fi
-        # On "docker stop": flush Android's disk, then close the emulator cleanly. Killed, it
-        # loses what Android wrote last (game data, settings).
-        stop() {
+        # Power control: the farmer asks for start, stop or restart through two files in the
+        # shared /screens folder (emulator.ctl in, emulator.state out; EMULATOR_OFF_MINUTES
+        # and the web UI's buttons). A stop flushes Android's disk, then closes the emulator
+        # cleanly. Killed, it loses what Android wrote last (game data, settings).
+        ctl=/screens/emulator.ctl
+        state=/screens/emulator.state
+        rm -f "$$ctl"
+        setstate() { echo "$$1" > "$$state.tmp" && mv "$$state.tmp" "$$state"; }
+        launch() {
+          rm -f /tmp/.X0-lock /tmp/.X11-unix/X0; rm -rf /data/android.avd/*.lock
+          /tmp/start-emulator.sh &
+          pid=$$!
+          up=1
+          setstate running
+        }
+        halt() {
+          setstate stopping
           timeout 20 adb -s emulator-5554 shell sync
           timeout 20 adb -s emulator-5554 emu kill
-          wait "$$pid"
+          n=0
+          while kill -0 "$$pid" 2>/dev/null && [ "$$n" -lt 40 ]; do sleep 1; n=$$((n + 1)); done
+          kill "$$pid" 2>/dev/null
+          wait "$$pid" 2>/dev/null
+          if command -v pkill > /dev/null; then pkill -x Xvfb; pkill -f qemu-system; fi
+          up=0
+          setstate stopped
+        }
+        stop() {
+          if [ "$$up" = 1 ]; then halt; fi
           exit 0
         }
         trap stop TERM INT
-        /tmp/start-emulator.sh &
-        pid=$$!
-        wait "$$pid"
+        up=0
+        launch
+        while true; do
+          sleep 2 &
+          wait $$!
+          cmd=
+          if [ -f "$$ctl" ]; then cmd=$$(cat "$$ctl"); rm -f "$$ctl"; fi
+          if [ "$$up" = 1 ] && ! kill -0 "$$pid" 2>/dev/null; then
+            # The emulator ended by itself: leave, so that Docker starts the container again.
+            wait "$$pid"
+            exit $$?
+          fi
+          case "$$cmd" in
+            stop) if [ "$$up" = 1 ]; then halt; fi ;;
+            start) if [ "$$up" = 0 ]; then launch; fi ;;
+            restart) if [ "$$up" = 1 ]; then halt; fi; launch ;;
+          esac
+        done
     # Time for the clean shutdown above (Docker kills after 10 s by default).
     stop_grace_period: 60s
     # At most this many of the server's CPU cores (0 = no limit): Dokkan uses every core it
@@ -114,6 +152,9 @@ services:
       # the live view at the game's frame rate (gRPC; the console is the fallback).
       EMULATOR_CONSOLE: android:5554
       EMULATOR_GRPC: android:8554
+      # Shut the whole emulator down after this many minutes without a farm and without anyone
+      # using the web UI (0 = never); the farm or the web UI's Start button starts it again.
+      EMULATOR_OFF_MINUTES: ${EMULATOR_OFF_MINUTES:-30}
       GAME_PACKAGE: ${GAME_PACKAGE:-global}
       AUTOSTART: ${AUTOSTART:-resume}
       ACTIVE_HOURS: ${ACTIVE_HOURS:-}

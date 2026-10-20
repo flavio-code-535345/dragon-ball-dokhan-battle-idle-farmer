@@ -128,6 +128,11 @@
     return Boolean(ui.status && ui.status.farm && ui.status.farm.screen_off);
   }
 
+  function emulatorIsOff() {
+    const em = ui.status && ui.status.emulator;
+    return Boolean(em && em.available && em.state !== "running");
+  }
+
   function showTab(name) {
     if (!$(`#tab-${name}`)) name = "farm";
     ui.tab = name;
@@ -237,8 +242,44 @@
     $("#screen-offline").classList.toggle("hidden", status.device.connected);
     $("#screen-sleeping").classList.toggle("hidden", !status.farm.screen_off);
     $("#btn-screen-power").textContent = status.farm.screen_off ? "⏻ Screen on" : "⏻ Screen off";
+    renderEmulator(status.emulator);
     if (ui.tab === "device") renderDevice();
   }
+
+  function renderEmulator(em) {
+    const known = Boolean(em && em.available);
+    $("#emulator-card").classList.toggle("hidden", !known);
+    const off = known && em.state === "stopped";
+    $("#emulator-off-notice").classList.toggle("hidden", !off);
+    if (off) $("#screen-offline").classList.add("hidden");
+    if (!known) return;
+    const mins = em.off_minutes;
+    $("#emulator-state").textContent = {
+      running: "Running." + (mins ? ` Shuts down after ${mins} min without a farm or use of this page.` : ""),
+      stopping: "Shutting down…",
+      stopped: "Shut down.",
+    }[em.state] || em.state;
+    $("#btn-emulator-start").disabled = em.state === "running";
+    $("#btn-emulator-restart").disabled = em.state !== "running" || em.busy;
+    $("#btn-emulator-stop").disabled = em.state !== "running" || em.busy;
+  }
+
+  function emulatorAction(action, done) {
+    return run(async () => {
+      const em = await api("/api/emulator", { method: "POST", body: { action } });
+      if (ui.status) ui.status.emulator = em;
+      renderEmulator(em);
+      if (action !== "start") stopStream();
+    }, done);
+  }
+  $("#btn-emulator-start").addEventListener("click", () => emulatorAction("start", "Starting the emulator"));
+  $("#btn-emulator-start-farm").addEventListener("click", () => emulatorAction("start", "Starting the emulator"));
+  $("#btn-emulator-restart").addEventListener("click", () => {
+    if (confirm("Restart the emulator? The game is closed and Android boots again (a minute or two).")) emulatorAction("restart", "Restarting the emulator");
+  });
+  $("#btn-emulator-stop").addEventListener("click", () => {
+    if (confirm("Shut the emulator down? It starts again with the farm or the Start button.")) emulatorAction("stop", "Emulator shutting down");
+  });
 
   function updatePreview(force) {
     const frameId = ui.status && ui.status.farm.frame_id;
@@ -455,7 +496,7 @@
   }
 
   async function refreshScreen(force) {
-    if (screenIsOff()) return; // a fresh screenshot would wake it (no farm running)
+    if (screenIsOff() || emulatorIsOff()) return; // a fresh screenshot would wake it (no farm running)
     if (streamUrl) {
       refreshBoxes(force); // the stream already shows the screen
       return;
@@ -588,7 +629,7 @@
     clearTimeout(liveTimer);
     const fps = liveFps();
     // Screen off (power saving): no live view either, the picture would not change.
-    const showing = screenShown() && !document.hidden && deviceConnected() && !screenIsOff();
+    const showing = screenShown() && !document.hidden && deviceConnected() && !screenIsOff() && !emulatorIsOff();
     if (fps && showing && Date.now() >= streamRetryAt) {
       fitScreen(); // later frames of a stream fire no load event (e.g. after a rotation)
       startStream(fps);
@@ -1456,6 +1497,7 @@
     const settings = [
       ["ADB_SERIAL", s.adb_serial || "–"],
       ["EMULATOR_CONSOLE", s.emulator_console || "–"],
+      ["EMULATOR_OFF_MINUTES", s.emulator_off_minutes || "never"],
       ["GAME_PACKAGE", s.game_package],
       ["ROUTINE", s.routine],
       ["AUTOSTART", s.autostart],

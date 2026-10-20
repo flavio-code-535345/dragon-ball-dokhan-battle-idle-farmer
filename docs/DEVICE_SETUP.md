@@ -164,6 +164,15 @@ only make the game slower. The screen off saves by far the most. What saves powe
   turns on again: when the wait ends, when a farm starts, or when you touch the Screen tab (or
   press *Turn it on* in its notice). With the ACT policy *wait*, most of a farming day is waiting.
   `POWER_SAVE=auto` does this only while the device is this stack's emulator, not a phone.
+- **Shutting the emulator down** (`EMULATOR_OFF_MINUTES`, default 30). After that many minutes
+  without a farm and without anyone using the web UI, the farmer shuts the whole emulator down (a
+  clean stop: Android's disk is flushed, the game's data stays). Starting a farm, or the *Start*
+  button in the Device tab, boots it again (a minute or two; the farm waits for it). The Device
+  tab also has *Restart* (when Android hangs) and *Shut down*. This needs the supervisor in this
+  repo's `docker-compose.emulator.yml`: with an older copy of the stack the buttons stay hidden
+  and nothing is shut down; update the stack in Portainer (*Editor*, paste the new file,
+  *Update the stack*). `EMULATOR_OFF_MINUTES=0` turns the idle shutdown off. A farm that waits
+  (ACT, `ACTIVE_HOURS`) keeps the emulator on, with the screen off.
 - **A smaller screen** (`ANDROID_SCREEN=720x1280` and `ANDROID_FPS=15`, this stack's defaults):
   20 to 50 % less CPU while the game is on screen, and the game runs smoother than at 1080x1920. Took
   templates at another size? The farmer scales them to the screen; if one stops matching (*Test

@@ -89,6 +89,10 @@ class Settings:
     #: with power_save: screen off after this many minutes without a farm and without anyone
     #: looking at or touching the device in the web UI (0 = only during the farm's waits)
     screen_off_minutes: int = 10
+    #: emulator stack: shut the whole emulator down after this many minutes without a farm and
+    #: without anyone using the web UI; it starts again with the farm or the Start button
+    #: (0 = never)
+    emulator_off_minutes: int = 30
     log_level: str = "INFO"
     screenshot_keep: int = 30
 
@@ -131,6 +135,7 @@ class Settings:
             keep_screen_on=_bool(env, "KEEP_SCREEN_ON", True),
             power_save=None if power_save == "auto" else _bool(env, "POWER_SAVE", False),
             screen_off_minutes=max(0, _int(env, "SCREEN_OFF_MINUTES", 10)),
+            emulator_off_minutes=max(0, _int(env, "EMULATOR_OFF_MINUTES", 30)),
             log_level=_text(env, "LOG_LEVEL", "INFO").upper(),
             screenshot_keep=max(0, _int(env, "SCREENSHOT_KEEP", 30)),
         )
@@ -174,6 +179,7 @@ class Settings:
             "keep_screen_on": self.keep_screen_on,
             "power_save": "auto" if self.power_save is None else self.power_save,
             "screen_off_minutes": self.screen_off_minutes,
+            "emulator_off_minutes": self.emulator_off_minutes,
             "mcp_enabled": bool(self.mcp_token),
             "data_dir": str(self.data_dir),
         }

@@ -52,6 +52,14 @@ SLEEP key during `wait_minutes` of 2+ minutes, once when active hours end, and f
 (no farm, paused or idle wait, and no web UI use for `SCREEN_OFF_MINUTES`). Endpoints that take a fresh
 screenshot or send input call `farmer.note_use(touch=...)` and wait `WAKE_SETTLE_UI` if it woke the screen.
 
+**Emulator power.** In the emulator stack, the android container runs a supervisor loop (inline in
+`docker-compose.emulator.yml`) that takes `start`/`stop`/`restart` from `/screens/emulator.ctl` and writes
+`running`/`stopping`/`stopped` to `/screens/emulator.state`; `device/emulator_power.py` is the farmer's end
+(no state file = no supervisor = never shut down). `AppContext.check_emulator_idle` (from the power worker)
+stops the emulator after `EMULATOR_OFF_MINUTES` without a farm and web UI use (`Farmer.idle_seconds`);
+`start_farm` → `ensure_emulator_on` boots it; `/api/emulator` and the Device tab buttons call
+`emulator_command`. An emulator that exits by itself ends the supervisor, so Docker restarts the container.
+
 **Routines and templates.** `routine.py`: pydantic models (`extra="forbid"`), `parse_action` normalises
 YAML shorthands, `$option` references are validated. Bundled routines (`src/dokkan_farmer/routines/*.yaml`)
 are copied into `DATA_DIR/routines` only if missing, never overwritten (the UI's "Restore default").

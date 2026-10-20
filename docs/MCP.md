@@ -14,6 +14,7 @@ fractions, like everywhere in the farmer.
 | `list_templates`, `template_image`, `create_template`, `update_template`, `delete_template` | Templates, one line each (`create_template` crops from a `frame_id`) |
 | `list_routines`, `get_routine`, `save_routine` | Routines: `get_routine` gives options, captured and missing templates (the YAML only with `yaml: true`); `save_routine` takes the whole `yaml` or `edits` (`{old, new}` replacements, each `old` exactly once) and answers in one line |
 | `farm_status`, `start_farm`, `stop_farm` | The farm in a line or a short summary (state, routine, counters, last rule, device) |
+| `emulator` | Emulator stack: `start`, `stop` (shut down) or `restart` the Android emulator; `farm_status` shows its state |
 | `logs` | Log lines, 20 by default; pass the returned `last_id` as `after` to get only new lines |
 
 Answers are short on purpose: everything an assistant reads costs it tokens. To learn which screen

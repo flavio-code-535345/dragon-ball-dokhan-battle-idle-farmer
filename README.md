@@ -152,6 +152,7 @@ All settings are environment variables:
 | `NOTIFY_EVERY_RUNS` | `0` | Also send a progress message every N runs. |
 | `KEEP_SCREEN_ON` | `true` | Enable "stay awake" on the device while farming. |
 | `POWER_SAVE` | `auto` | Turn Android's screen off while nothing happens: during the farm's long waits (`wait_minutes`, e.g. ACT regenerating; outside `ACTIVE_HOURS`) and when no farm runs. The emulator then stops drawing the game: 0.02 instead of 2 to 4 CPU cores. Touching the Screen tab or starting a farm turns it back on. `auto` = on while the device is the emulator stack's emulator, off for phones (a lock screen with a PIN would stop the farm); `true` / `false` to choose. |
+| `EMULATOR_OFF_MINUTES` | `30` | Emulator stack: shut the whole emulator down after this many minutes without a farm and without anyone using the web UI (Android stops completely, its data stays); it starts again with the farm or the Device tab's **Start** button, and boots in a minute or two. `0` = never. Needs the stack file from this repo (its supervisor does the stopping). |
 | `SCREEN_OFF_MINUTES` | `10` | With power saving: screen off after this many minutes without anyone using the Screen tab while nothing happens (no farm, a paused farm, a farm waiting); `0` = only when a wait starts. |
 | `MATCH_SCALE` | `0.5` | Downscaling for template matching (lower = faster, less precise). |
 | `TAP_JITTER` | `0.15` | Random tap offset inside a button, as a fraction of its size. |
