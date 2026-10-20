@@ -326,6 +326,13 @@ colour mode and searched on the whole screen, since the dialog sits at different
 navigator does not react to the first tap (a list scrolled somewhere unexpected), the routine looks
 from the top once before it concludes that nothing is left.
 
+**Map forks.** The arrow rule taps the arrow nearest the screen centre twice; if the fork does not answer
+it taps the other arrow twice (a second colour, `path_arrow_far`), and after four taps without progress it
+starts over. Two rules of two taps, because the engine pauses a rule for 120 s after three taps without
+a visible effect. The arrows are only tapped inside a stage (`in_stage`) and never gated by the lost
+count: a fork looks unrecognised to every other rule, so that count is always high there. The HOME tab
+step of the lost ladder no longer clears `in_stage`.
+
 **Failsafes.** The routine does not tap at an unknown screen forever: after two taps near the top it
 presses Back every ~10 s, and after about two minutes without recognising anything it takes a
 `lost` screenshot, notifies and stops. Every recognised screen resets that count. With `next_event`, an

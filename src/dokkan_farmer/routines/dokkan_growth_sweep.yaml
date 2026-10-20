@@ -143,6 +143,15 @@ colors:
     region: [0, 0.22, 1, 0.46]
     close: 2
     near: [0.5, 0.46]
+  path_arrow_far:
+    description: The same arrows, the one nearest a point lower on the screen (the second try at a fork).
+    hsv_min: [99, 190, 170]
+    hsv_max: [104, 255, 255]
+    min_area: 0.001
+    max_area: 0.03
+    region: [0, 0.22, 1, 0.46]
+    close: 2
+    near: [0.5, 0.62]
 
 templates:
   stage_details:
@@ -358,6 +367,7 @@ rules:
       - reset: lost
       - count: in_stage
       - reset: start_tries
+      - reset: fork_taps
       - tap_xy: [$sphere_x, $sphere_y]
     cooldown: $tap_every
     delay: 0.3
@@ -377,10 +387,36 @@ rules:
       color_visible: path_arrow
       not_visible: [battle_screen, start_button, home_screen, menu_event, stage_details, event_stage_row, navigator_open]
       counter_at_least: {in_stage: 1}
+      counter_below: {fork_taps: 2}
     do:
       - reset: lost
+      - count: fork_taps
       - tap_color: path_arrow
     cooldown: 3
+
+  # Two rules of two taps (the engine pauses a rule for 120 s after three taps without effect, and the
+  # arrows may not answer yet right after they show): the second pair taps the other arrow.
+  - name: Map → choose the other path
+    when:
+      color_visible: path_arrow_far
+      not_visible: [battle_screen, start_button, home_screen, menu_event, stage_details, event_stage_row, navigator_open]
+      counter_at_least: {in_stage: 1, fork_taps: 2}
+      counter_below: {fork_taps: 4}
+    do:
+      - reset: lost
+      - count: fork_taps
+      - tap_color: path_arrow_far
+    cooldown: 3
+
+  - name: Map → fork did not answer, start over
+    when:
+      color_visible: path_arrow
+      idle_for: 12
+      not_visible: [battle_screen, start_button, home_screen, menu_event, stage_details, event_stage_row, navigator_open]
+      counter_at_least: {in_stage: 1, fork_taps: 4}
+    do:
+      - reset: fork_taps
+    cooldown: 12
 
   - name: Map → move
     when:
@@ -389,6 +425,7 @@ rules:
     do:
       - reset: lost
       - count: in_stage
+      - reset: fork_taps
       - tap_xy: [$move_x, $move_y]
     cooldown: 2
 
@@ -828,7 +865,6 @@ rules:
       counter_below: {lost: 12}
     do:
       - count: lost
-      - reset: in_stage
       - tap_xy: [0.09, 0.965]
     cooldown: 5
 

@@ -200,6 +200,15 @@ colors:
     region: [0, 0.22, 1, 0.46]
     close: 2
     near: [0.5, 0.46]
+  path_arrow_far:
+    description: The same arrows, the one nearest a point lower on the screen (the second try at a fork).
+    hsv_min: [99, 190, 170]
+    hsv_max: [104, 255, 255]
+    min_area: 0.001
+    max_area: 0.03
+    region: [0, 0.22, 1, 0.46]
+    close: 2
+    near: [0.5, 0.62]
 
 templates:
   new_mark:
@@ -496,7 +505,7 @@ rules:
 
   - name: Battle → tap a ki sphere
     when: {visible: battle_screen}
-    do: [{reset: lost}, {reset: start_tries}, {count: in_stage}, {tap_xy: [$sphere_x, $sphere_y]}]
+    do: [{reset: lost}, {reset: start_tries}, {count: in_stage}, {reset: fork_taps}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
 
@@ -516,12 +525,40 @@ rules:
       color_visible: path_arrow
       not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen, menu_event, navigator_title]
       counter_at_least: {in_stage: 1}
-    do: [{reset: lost}, {tap_color: path_arrow}]
+      counter_below: {fork_taps: 2}
+    do:
+      - reset: lost
+      - count: fork_taps
+      - tap_color: path_arrow
     cooldown: 3
+
+  # Two rules of two taps (the engine pauses a rule for 120 s after three taps without effect, and the
+  # arrows may not answer yet right after they show): the second pair taps the other arrow.
+  - name: Map → choose the other path
+    when:
+      color_visible: path_arrow_far
+      not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen, menu_event, navigator_title]
+      counter_at_least: {in_stage: 1, fork_taps: 2}
+      counter_below: {fork_taps: 4}
+    do:
+      - reset: lost
+      - count: fork_taps
+      - tap_color: path_arrow_far
+    cooldown: 3
+
+  - name: Map → fork did not answer, start over
+    when:
+      color_visible: path_arrow
+      idle_for: 12
+      not_visible: [battle_screen, stage_list, event_stage_row, start_button, home_screen, menu_event, navigator_title]
+      counter_at_least: {in_stage: 1, fork_taps: 4}
+    do:
+      - reset: fork_taps
+    cooldown: 12
 
   - name: Map → move
     when: {visible: map_screen, not_visible: battle_screen}
-    do: [{reset: lost}, {reset: start_tries}, {count: in_stage}, {tap_xy: [$move_x, $move_y]}]
+    do: [{reset: lost}, {reset: start_tries}, {count: in_stage}, {reset: fork_taps}, {tap_xy: [$move_x, $move_y]}]
     cooldown: 2
 
   - name: Decline friend request
@@ -1193,7 +1230,7 @@ rules:
       not_visible: [act_empty_dialog, defeat_give_up, battle_screen, map_screen, stage_list, event_stage_row, start_button, error_retry, restore_sta, navigator_title, difficulty_normal, difficulty_hard, difficulty_zhard, difficulty_super]
       counter_at_least: {lost: 5}
       counter_below: {lost: 12}
-    do: [{count: lost}, {reset: nav_index}, {reset: nav_page}, {reset: in_stage}, {tap_xy: [0.09, 0.965]}]
+    do: [{count: lost}, {reset: nav_index}, {reset: nav_page}, {tap_xy: [0.09, 0.965]}]
     cooldown: 5
 
   - name: Lost → give up and stop
