@@ -493,8 +493,10 @@ rules:
       - wait_minutes: $act_wait_minutes
 
   # --- Playing a stage -----------------------------------------------------------
+  # With an OK button on the same screen, a tap in the middle does nothing: the OK rule
+  # below takes that screen (and this rule would fire three times before it gave up).
   - name: Stage cleared → results
-    when: {visible: stage_result}
+    when: {visible: stage_result, not_visible: ok_button}
     do: [{reset: lost}, {reset: idle_events}, {reset: start_tries}, {reset: in_stage}, {reset: defeats}, {count: ev_stages}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 

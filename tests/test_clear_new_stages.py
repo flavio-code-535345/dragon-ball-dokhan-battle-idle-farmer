@@ -410,6 +410,38 @@ def test_clears_every_new_stage_on_normal_and_stops(play):
     assert game.forked  # each map's fork was passed by tapping its arrow
 
 
+class OkOnResultsGame(QuestGame):
+    """The real results screen: the STAGE CLEAR banner with an OK button on the same screen,
+    where a tap in the middle does nothing."""
+
+    def __init__(self, cleared: dict[int, set[str]]) -> None:
+        super().__init__(cleared)
+        self.dead_taps = 0
+
+    def render(self) -> np.ndarray:
+        img = super().render()
+        if self.screen == "clear":
+            _button(img, OK, "OK", "ok")
+        return img
+
+    def tap(self, x: float, y: float) -> None:
+        if self.screen == "clear":
+            if not OK.contains(x, y):
+                self.dead_taps += 1
+                return
+            self.screen = "results"  # the OK button of the results, on the banner
+        super().tap(x, y)
+
+
+def test_the_results_ok_button_is_tapped_instead_of_the_middle_of_the_screen(play):
+    cleared = {s: set(DIFFICULTIES) for s in range(8)}
+    cleared[5], cleared[6], cleared[7] = {"NORMAL"}, set(), set()
+    game = OkOnResultsGame(cleared)
+    play(game)
+    assert sorted(game.played) == [(6, "NORMAL"), (7, "NORMAL")]
+    assert game.dead_taps == 0
+
+
 def test_a_new_stage_above_the_screen_is_found(play):
     cleared = {s: set(DIFFICULTIES) for s in range(8)}
     cleared[0] = set()
