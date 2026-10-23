@@ -173,6 +173,7 @@ def test_routine_endpoints(client):
         "dokkan_repeat_stage",
         "dokkan_skill_orbs",
         "dokkan_story",
+        "dokkan_world_tournament",
     ]
     detail = client.get("/api/routines/dokkan_auto_farm").json()
     assert detail["valid"] and detail["ready"] and detail["bundled"]

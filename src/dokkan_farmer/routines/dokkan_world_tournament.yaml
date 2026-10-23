@@ -1,0 +1,289 @@
+# Dokkan World Tournament (first version): plays the rounds of a World Tournament
+# (Preliminary, Quarterfinal, Semifinal, Final) from the board on.
+#
+# Each round is a board game: your unit moves on the tiles with the cards 2, 1 and 1. A tile
+# with a blue capsule starts a battle, the battle is played by tapping ki spheres like in any
+# other battle. The board shows "Ends within N Round(s)" at its bottom left.
+#
+# A card moves the unit as many tiles as its number: each tile is one tap on a blue arrow. The
+# arrow nearest the screen centre is tapped (the game keeps the unit there). The cards are played
+# in order (the left card, the middle one, the right one). This first version does not pick the
+# tile with the most points yet: the log lines "Board: ..." show each move, so the choice can be
+# made from real rounds. Battles on the capsule tiles give most of the points. Start it
+# on the board of a round, or on a battle of the round. It stops at the end of a round when
+# "stop after round" is on (the default), so the rounds can be checked one by one.
+#
+# Ambition, the bracket and the team are not handled: pick the ambition, Next and Start! first.
+name: Dokkan World Tournament
+description: >-
+  Plays the cards of the World Tournament's board (2, 1 and 1 per round, moving right)
+  and taps the ki spheres of its battles. Stops at the end of a round.
+version: 1
+
+options:
+  sphere_x:
+    label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
+    type: number
+    default: 0.5
+    min: 0
+    max: 1
+  sphere_y:
+    label: "Battle: where to tap a ki sphere, y (0 = top, 1 = bottom)"
+    type: number
+    default: 0.5
+    min: 0
+    max: 1
+  tap_every:
+    label: Seconds between taps on the ki spheres
+    type: number
+    default: 1.5
+    min: 0.5
+    max: 10
+  stop_after_round:
+    label: Stop when a round is played
+    type: bool
+    default: true
+  continue_after:
+    label: Seconds of a still screen before tapping to continue
+    type: number
+    default: 6
+    min: 2
+    max: 60
+
+settings:
+  tick_interval: 1.0
+  action_delay: 1.5
+  run_counter: rounds
+  ensure_foreground: true
+  stuck:
+    static_seconds: 180
+    idle_seconds: 300
+    recovery:
+      - key: BACK
+      - wait: 3
+    restart_after: 2
+    max_restarts: 3
+
+colors:
+  # The blue arrows of the board (the same blue as the map's forks). The one nearest the
+  # screen centre is tapped: the game keeps the unit there and the arrows sit next to it.
+  board_arrow:
+    description: The blue move arrows of the World Tournament board.
+    hsv_min: [99, 190, 170]
+    hsv_max: [104, 255, 255]
+    min_area: 0.001
+    max_area: 0.03
+    region: [0, 0.22, 1, 0.46]
+    close: 2
+    near: [0.5, 0.46]
+
+templates:
+  tournament_battle:
+    level: required
+    description: >-
+      The TURN label at the top left of a World Tournament battle (the battle with ki spheres).
+  tournament_engage:
+    level: optional
+    description: >-
+      The "Engage in battle?" dialog when the unit lands on a battle tile. Its Yes button is
+      tapped (the battle is played).
+  tournament_round_result:
+    level: optional
+    description: >-
+      The "Results" tab at the top left of the screen after a round (PRELIMINARY RESULT and
+      so on). The round is over.
+  tournament_results:
+    level: optional
+    description: >-
+      The "Battle Results" title after a battle of the tournament (the ranking). A tap in the
+      middle goes on.
+  tournament_board:
+    level: required
+    description: >-
+      The "Ends within ... Round(s)" text at the bottom left of the World Tournament board, where
+      the cards are played.
+  ok_button:
+    level: recommended
+    description: The OK button of the results and the dialogs.
+  cancel_button:
+    level: recommended
+    description: The Cancel button (declines the friend request).
+  friend_request:
+    level: optional
+    description: The friend request popup. Its Cancel button is tapped, never OK.
+  close_button:
+    level: optional
+    description: A close button (X) of a popup.
+  error_retry:
+    level: optional
+    description: The connection error dialog with its Retry button.
+  back_button:
+    level: optional
+    description: The "<<<" button of a page.
+
+rules:
+  # --- Popups ----------------------------------------------------------------------------
+  - name: Decline friend request
+    when: {visible: [friend_request, cancel_button]}
+    do: [{reset: lost}, {tap: cancel_button}]
+    cooldown: 2
+
+  - name: Close popup
+    when: {visible: close_button, not_visible: [tournament_battle, tournament_board]}
+    do: [{reset: lost}, {tap: close_button}]
+    cooldown: 2
+
+  - name: Connection error → retry
+    when: {visible: error_retry}
+    do: [{reset: lost}, {tap: error_retry}]
+    cooldown: 3
+
+  # --- Battle ----------------------------------------------------------------------------
+  # A battle started from a tile: the armed card is spent with it.
+  # A battle tile: "Engage in battle?" Yes starts it (No would move the unit back a tile).
+  - name: Engage in battle → Yes
+    when: {visible: tournament_engage}
+    do: [{reset: lost}, {reset: armed}, {log: "Board: engage in the battle"}, {tap_xy: [0.72, 0.63]}]
+    cooldown: 3
+
+  # The round is over (PRELIMINARY RESULT and so on): stop, or go on with the next round.
+  - name: Round result → stop
+    when:
+      visible: tournament_round_result
+      option: {stop_after_round: true}
+    do:
+      - reset: lost
+      - count: rounds
+      - stop: "Round finished ({rounds} played in this run). Check the result, then start again for the next round."
+
+  - name: Round result → next
+    when:
+      visible: tournament_round_result
+      option: {stop_after_round: false}
+    do: [{reset: lost}, {count: rounds}, {reset: picks}, {reset: armed}, {tap_xy: [0.5, 0.9]}]
+    cooldown: 3
+
+  # After a battle: the results (the ranking) go on with a tap in the middle.
+  - name: Battle results → tap on
+    when: {visible: tournament_results}
+    do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 2
+
+  - name: Battle → tap a ki sphere
+    when: {visible: tournament_battle}
+    do: [{reset: lost}, {reset: armed}, {tap_xy: [$sphere_x, $sphere_y]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  # --- Board -----------------------------------------------------------------------------
+  # After a card: one tap per tile, as long as arrows show (the card's steps).
+  - name: Board → follow an arrow
+    when:
+      color_visible: board_arrow
+      not_visible: tournament_battle
+      counter_at_least: {armed: 1}
+      counter_below: {moves: 12}
+    do:
+      - reset: lost
+      - count: moves
+      - log: "Board: step {moves} of card {picks}"
+      - tap_color: board_arrow
+    cooldown: 1.5
+
+  # No arrow left: the card's steps are done (or the path ended).
+  - name: Board → card done
+    when:
+      visible: tournament_board
+      not_visible: tournament_battle
+      color_absent: board_arrow
+      counter_at_least: {armed: 1}
+      static_for: 3
+    do:
+      - reset: lost
+      - reset: armed
+      - reset: moves
+      - log: "Board: card {picks} done"
+    cooldown: 2
+
+  - name: Board → card 1 (left)
+    when:
+      visible: tournament_board
+      not_visible: tournament_battle
+      counter_below: {picks: 1}
+    do:
+      - reset: lost
+      - count: picks
+      - count: armed
+      - tap_xy: [0.22, 0.83]
+    cooldown: 3
+
+  - name: Board → card 2 (middle)
+    when:
+      visible: tournament_board
+      not_visible: tournament_battle
+      counter_at_least: {picks: 1}
+      counter_below: {picks: 2}
+    do:
+      - reset: lost
+      - count: picks
+      - count: armed
+      - tap_xy: [0.5, 0.8]
+    cooldown: 3
+
+  - name: Board → card 3 (right)
+    when:
+      visible: tournament_board
+      not_visible: tournament_battle
+      counter_at_least: {picks: 2}
+      counter_below: {picks: 3}
+    do:
+      - reset: lost
+      - count: picks
+      - count: armed
+      - tap_xy: [0.83, 0.79]
+    cooldown: 3
+
+  # All three cards of the round are played: the round is over.
+  - name: Round over → stop
+    when:
+      visible: tournament_board
+      not_visible: tournament_battle
+      counter_at_least: {picks: 3}
+      counter_below: {armed: 1}
+      option: {stop_after_round: true}
+    do:
+      - reset: lost
+      - count: rounds
+      - stop: "Round played: {rounds} rounds so far. Check the board and start again for the next round."
+
+  - name: Round over → next round
+    when:
+      visible: tournament_board
+      not_visible: tournament_battle
+      counter_at_least: {picks: 3}
+      counter_below: {armed: 1}
+      option: {stop_after_round: false}
+    do: [{reset: lost}, {count: rounds}, {reset: picks}]
+    cooldown: 3
+
+  # --- Results and the rest ------------------------------------------------------------------
+  - name: Results → OK
+    when:
+      visible: ok_button
+      not_visible: [tournament_battle, tournament_board, friend_request]
+    do: [{reset: lost}, {tap: ok_button}]
+    cooldown: 2
+
+  - name: Tap to continue
+    when:
+      static_for: $continue_after
+      not_visible: [tournament_battle, tournament_board, ok_button, cancel_button]
+    do: [{tap_xy: [0.5, 0.15]}]
+    cooldown: 4
+
+  - name: Nothing recognised → back
+    when:
+      idle_for: 20
+      not_visible: [tournament_battle, tournament_board, ok_button, cancel_button, friend_request]
+    do: [{reset: lost}, {count: lost}, {tap: back_button}]
+    cooldown: 6
