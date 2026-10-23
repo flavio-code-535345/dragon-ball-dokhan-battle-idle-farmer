@@ -244,6 +244,11 @@ templates:
     description: >-
       The SUPER label of a stage's difficulty list (purple bar). With difficulty =
       highest it is played first: it also pays the stones of the lower ones.
+  difficulty_super3:
+    level: optional
+    description: >-
+      The SUPER3 bar of a stage's difficulty list (red, six stars; International Version
+      stages). Too hard: with difficulty = highest the stage is given up, never played.
   event_stage_row:
     level: optional
     description: >-
@@ -639,6 +644,16 @@ rules:
       any_visible: [stage_list, event_stage_row]
       counter_below: {blocked: 1}
     do: [{reset: lost}, {reset: in_stage}, {tap: new_mark}, {reset: scrolls_down}, {reset: scrolls_up}, {reset: misses}, {reset: skip_scroll}]
+    cooldown: 4
+
+  # SUPER 3 is too hard: with highest, a stage that offers it is given up (as a blocked
+  # stage). Checked before "Pick Super": the SUPER template also matches the SUPER3 bar.
+  - name: Difficulty SUPER 3 → too hard, skip the stage
+    when:
+      visible: difficulty_super3
+      counter_below: {blocked: 1}
+      option: {difficulty: highest}
+    do: [{reset: lost}, {count: blocked}, {tap: back_button}]
     cooldown: 4
 
   # Clearing the highest difficulty of a stage also pays the lower ones' first-clear
