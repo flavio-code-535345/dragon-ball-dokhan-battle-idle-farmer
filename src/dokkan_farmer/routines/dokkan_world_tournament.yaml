@@ -342,7 +342,6 @@ rules:
       visible: tournament_board
       not_visible: tournament_battle
       color_visible: board_arrow
-      counter_at_least: {armed: 1}
       counter_below: {moves: 12}
     do:
       - reset: lost
