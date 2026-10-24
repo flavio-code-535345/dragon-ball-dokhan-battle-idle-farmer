@@ -411,7 +411,7 @@ rules:
     when:
       static_for: $continue_after
       not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
-    do: [{tap_xy: [0.5, 0.92]}]
+    do: [{tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
   # The in-battle menu (its Possessions page): < < < leaves it. Its middle is not tapped (Abandon Quest).
@@ -435,7 +435,7 @@ rules:
       idle_for: 10
       counter_below: {lost: 6}
       not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
-    do: [{count: lost}, {tap_xy: [0.5, 0.92]}]
+    do: [{count: lost}, {tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
   - name: Nothing recognised → back
