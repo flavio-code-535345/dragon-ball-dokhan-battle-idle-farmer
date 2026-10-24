@@ -12,16 +12,18 @@
 # centre (the game keeps the unit there); it does not steer yet.
 #
 # Stamina: each round costs STA (Preliminary 10, Quarterfinal 15, Semifinal 15, Final 20). When the
-# game asks to restore it, the routine either waits (act_policy = wait: cancels, waits
-# act_wait_minutes, tries again) or stops. It never spends Dragon Stones.
+# game asks to restore it, the routine either spends a Dragon Stone (act_policy = stone, up to
+# max_stone_refills per session: "Restore STA with Dragon Stone", one tap, no confirmation), waits
+# (act_policy = wait: cancels, waits act_wait_minutes, tries again) or stops.
 #
 # Start it on the tournament hall, or anywhere in a tournament. The tournament_* templates and the
 # colours card_ready and board_arrow were captured on the emulator. Friend requests: Cancel.
 name: Dokkan World Tournament
 description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
-  popups) and stops after the tournaments asked for. Stamina: waits for it or stops.
-version: 2
+  popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
+  the limit), waits for it or stops.
+version: 3
 
 options:
   tournaments:
@@ -33,15 +35,21 @@ options:
   act_policy:
     label: When stamina runs out
     type: choice
-    choices: [wait, stop]
-    default: wait
+    choices: [stone, wait, stop]
+    default: stone
     help: >-
-      wait = cancel the restore dialog and try again after act_wait_minutes, stop = stop
-      farming. Dragon Stones are never spent.
+      stone = restore with one Dragon Stone (up to max_stone_refills), wait = cancel the restore
+      dialog and try again after act_wait_minutes, stop = stop farming.
+  max_stone_refills:
+    label: Max Dragon Stones spent on stamina per session
+    type: number
+    default: 10
+    min: 0
+    max: 100
   act_wait_minutes:
     label: Minutes to wait for stamina to regenerate
     type: number
-    default: 30
+    default: 5
     min: 1
     max: 1440
   sphere_x:
@@ -180,7 +188,8 @@ templates:
   restore_sta:
     level: optional
     description: >-
-      The "Restore STA" stamina dialog: its Cancel is tapped. No Dragon Stone is ever tapped.
+      The "Restore STA" stamina dialog. Its Dragon Stone row is tapped with act_policy = stone
+      (up to max_stone_refills), otherwise its Cancel is tapped.
   close_button:
     level: optional
     description: A close button (X) of a popup.
@@ -229,6 +238,30 @@ rules:
     cooldown: 3
 
   # --- Stamina ----------------------------------------------------------------------------
+  # The "Restore STA with Dragon Stone" row (its Select button): one tap restores the STA, no
+  # confirmation. Only up to max_stone_refills.
+  - name: Stamina → Dragon Stone limit reached, stop
+    when:
+      visible: restore_sta
+      option: {act_policy: stone}
+      counter_at_least: {stone_refills: $max_stone_refills}
+    do:
+      - reset: lost
+      - tap: cancel_button
+      - stop: "Out of stamina after {started} tournament(s) started and {stone_refills} Dragon Stones spent."
+
+  - name: Stamina → Dragon Stone
+    when:
+      visible: restore_sta
+      option: {act_policy: stone}
+      counter_below: {stone_refills: $max_stone_refills}
+    do:
+      - reset: lost
+      - count: stone_refills
+      - tap_xy: [0.82, 0.41]
+      - notify: "Restored stamina with a Dragon Stone ({stone_refills}/{max_stone_refills})"
+    cooldown: 5
+
   - name: Stamina → stop
     when:
       visible: restore_sta
