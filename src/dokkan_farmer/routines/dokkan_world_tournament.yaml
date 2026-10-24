@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 14
+version: 15
 
 options:
   tournaments:
@@ -193,6 +193,11 @@ templates:
     description: >-
       The "Results" tab at the top left of the screens after a round (the ranking, the breakdown,
       the final result): a tap in the middle goes on.
+  home_tournament_banner:
+    level: optional
+    description: >-
+      The WORLD TOURNAMENT banner of the home screen: a finished tournament leaves you on the home
+      screen, a tap on the banner opens the hall again.
   result_first_place:
     level: optional
     description: >-
@@ -403,6 +408,14 @@ rules:
   # --- The tournament hall ------------------------------------------------------------------
   # A tournament was played and the hall shows PARTICIPATE again: go on with the next one, or
   # stop when the asked number is done.
+  # A tournament that is over leaves you on the home screen: its banner opens the hall.
+  - name: Home → tournament banner
+    when:
+      visible: home_tournament_banner
+      not_visible: [tournament_hall, tournament_board, check_progress, team_page, ambition_list, ambition_confirm]
+    do: [{reset: lost}, {reset: in_run}, {tap_xy: [0.5, 0.855]}]
+    cooldown: 6
+
   - name: Tournaments done → stop
     when:
       visible: [tournament_hall, tournament_participate]
