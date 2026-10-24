@@ -102,6 +102,10 @@ templates:
     level: required
     description: >-
       The "Total Tour. Pts." label of the tournament hall (PARTICIPATE or CONTINUE is tapped).
+  possessions_title:
+    level: optional
+    description: >-
+      The "Possessions" title of the in-battle menu (the page is left with < < <).
   title_tap_to_start:
     level: optional
     description: >-
@@ -403,8 +407,14 @@ rules:
     when:
       static_for: $continue_after
       not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
-    do: [{tap_xy: [0.5, 0.5]}]
+    do: [{tap_xy: [0.5, 0.92]}]
     cooldown: 4
+
+  # The in-battle menu (its Possessions page): < < < leaves it. Its middle is not tapped (Abandon Quest).
+  - name: Menu page → back
+    when: {visible: possessions_title}
+    do: [{reset: lost}, {tap_xy: [0.14, 0.85]}]
+    cooldown: 3
 
   # A screen none of the rules knows (a K.O. or an attack animation): a tap in the middle goes on.
   # Back only after six taps without a known screen.
@@ -413,7 +423,7 @@ rules:
       idle_for: 10
       counter_below: {lost: 6}
       not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
-    do: [{count: lost}, {tap_xy: [0.5, 0.5]}]
+    do: [{count: lost}, {tap_xy: [0.5, 0.92]}]
     cooldown: 4
 
   - name: Nothing recognised → back
