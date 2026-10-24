@@ -1,26 +1,49 @@
-# Dokkan World Tournament (first version): plays the rounds of a World Tournament
-# (Preliminary, Quarterfinal, Semifinal, Final) from the board on.
+# Dokkan World Tournament: plays whole tournaments (Preliminary, Quarterfinal, Semifinal, Final)
+# from the tournament hall on, unattended: the hall's PARTICIPATE, the ambition, the bracket's
+# Next, the team's Start!, the board, the battles, the results and the reward popups.
 #
-# Each round is a board game: your unit moves on the tiles with the cards 2, 1 and 1. A tile
-# with a blue capsule starts a battle, the battle is played by tapping ki spheres like in any
-# other battle. The board shows "Ends within N Round(s)" at its bottom left.
+# The board is a game of cards: a lit card is a number of tiles (its steps). Tap a lit card, then
+# tap the blue arrow for each tile, until no arrow shows. Landing on an enemy tile asks "Engage in
+# battle?": Yes (the battle is always fought: it gives most of the points). Battles are played by
+# tapping the ki spheres ("Remain N charge(s)").
 #
-# A card moves the unit as many tiles as its number: each tile is one tap on a blue arrow. The
-# arrow nearest the screen centre is tapped (the game keeps the unit there). The cards are played
-# in order (the left card, the middle one, the right one). This first version does not pick the
-# tile with the most points yet: the log lines "Board: ..." show each move, so the choice can be
-# made from real rounds. Battles on the capsule tiles give most of the points. Start it
-# on the board of a round, or on a battle of the round. It stops at the end of a round when
-# "stop after round" is on (the default), so the rounds can be checked one by one.
+# Points: each round is worth its battle score, team victory, a turn bonus (more turns left = more)
+# and a pass bonus; the Final adds a win bonus. The routine taps the arrow nearest the screen
+# centre (the game keeps the unit there); it does not steer yet.
 #
-# Ambition, the bracket and the team are not handled: pick the ambition, Next and Start! first.
+# Stamina: each round costs STA (Preliminary 10, Quarterfinal 15, Semifinal 15, Final 20). When the
+# game asks to restore it, the routine either waits (act_policy = wait: cancels, waits
+# act_wait_minutes, tries again) or stops. It never spends Dragon Stones.
+#
+# Start it on the tournament hall, or anywhere in a tournament. The tournament_* templates and the
+# colours card_ready and board_arrow were captured on the emulator. Friend requests: Cancel.
 name: Dokkan World Tournament
 description: >-
-  Plays the cards of the World Tournament's board (2, 1 and 1 per round, moving right)
-  and taps the ki spheres of its battles. Stops at the end of a round.
-version: 1
+  Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
+  popups) and stops after the tournaments asked for. Stamina: waits for it or stops.
+version: 2
 
 options:
+  tournaments:
+    label: Tournaments to play (then stop)
+    type: number
+    default: 1
+    min: 1
+    max: 100
+  act_policy:
+    label: When stamina runs out
+    type: choice
+    choices: [wait, stop]
+    default: wait
+    help: >-
+      wait = cancel the restore dialog and try again after act_wait_minutes, stop = stop
+      farming. Dragon Stones are never spent.
+  act_wait_minutes:
+    label: Minutes to wait for stamina to regenerate
+    type: number
+    default: 30
+    min: 1
+    max: 1440
   sphere_x:
     label: "Battle: where to tap a ki sphere, x (0 = left, 1 = right)"
     type: number
@@ -39,10 +62,6 @@ options:
     default: 1.5
     min: 0.5
     max: 10
-  stop_after_round:
-    label: Stop when a round is played
-    type: bool
-    default: true
   continue_after:
     label: Seconds of a still screen before tapping to continue
     type: number
@@ -53,19 +72,20 @@ options:
 settings:
   tick_interval: 1.0
   action_delay: 1.5
-  run_counter: rounds
   ensure_foreground: true
   stuck:
-    static_seconds: 180
-    idle_seconds: 300
+    static_seconds: 240
+    idle_seconds: 600
     recovery:
       - key: BACK
       - wait: 3
-    restart_after: 2
-    max_restarts: 3
+    restart_after: 3
+    max_restarts: 5
 
 colors:
-  # The blue arrows of the board (the same blue as the map's forks). The one nearest the
+  # The lit cards at the bottom of the board (orange discs; used cards turn grey). The one nearest
+  # the bottom centre is tapped first.
+  # The blue move arrows of the board (the same blue as the map's forks). The one nearest the
   # screen centre is tapped: the game keeps the unit there and the arrows sit next to it.
   board_arrow:
     description: The blue move arrows of the World Tournament board.
@@ -78,39 +98,77 @@ colors:
     near: [0.5, 0.46]
 
 templates:
-  tournament_battle:
+  tournament_hall:
     level: required
     description: >-
-      The TURN label at the top left of a World Tournament battle (the battle with ki spheres).
-  tournament_engage:
+      The "Total Tour. Pts." label of the tournament hall (PARTICIPATE or CONTINUE is tapped).
+  card_lit:
+    level: required
+    description: >-
+      The orange ring of a lit (not yet played) card at the bottom of the board. The number is
+      left out (it changes). A card is tapped, then its arrows.
+  tournament_participate:
     level: optional
     description: >-
-      The "Engage in battle?" dialog when the unit lands on a battle tile. Its Yes button is
-      tapped (the battle is played).
-  tournament_round_result:
-    level: optional
+      The PARTICIPATE button of the hall (a new tournament). Between rounds the same button says
+      CONTINUE, so this template is missing there.
+  ambition_list:
+    level: required
     description: >-
-      The "Results" tab at the top left of the screen after a round (PRELIMINARY RESULT and
-      so on). The round is over.
-  tournament_results:
+      The sentence above the ambition list ("The enemy strength and the amount of Tournament
+      Points earned..."). Its first line, Let's do this! (x1.0), is tapped.
+  ambition_confirm:
+    level: required
+    description: The "Confirm your Ambition" dialog (OK).
+  check_progress:
+    level: required
+    description: The "Check Progress" title of the bracket page (Next is tapped).
+  team_page:
+    level: required
+    description: The "Support Item" heading of a round's team page (Start! is tapped).
+  tournament_begin:
     level: optional
-    description: >-
-      The "Battle Results" title after a battle of the tournament (the ranking). A tap in the
-      middle goes on.
+    description: The "Begin <round>!" line before a round (a tap goes on to the board).
   tournament_board:
     level: required
     description: >-
-      The "Ends within ... Round(s)" text at the bottom left of the World Tournament board, where
-      the cards are played.
+      The "Ends within" text at the bottom left of the World Tournament board, where the cards
+      are played.
+  tournament_battle:
+    level: required
+    description: >-
+      The "charge(s)" text beside the Remain counter of a battle (the battle with ki spheres).
+  tournament_engage:
+    level: optional
+    description: >-
+      The "Engage in battle?" dialog when the unit lands on a battle tile (Yes is tapped).
+  tournament_results:
+    level: optional
+    description: >-
+      The "Battle Results" title after a battle (the ranking). A tap in the middle goes on.
+  tournament_round_result:
+    level: optional
+    description: >-
+      The "Results" tab at the top left of the screens after a round (the ranking, the breakdown,
+      the final result): a tap in the middle goes on.
+  mission_rewards:
+    level: optional
+    description: >-
+      The "Obtain Tournament Mission Rewards" popup of the hall (its OK is tapped).
+  friend_request:
+    level: optional
+    description: >-
+      The friend request popup. Its Cancel is tapped, never OK (OK only when there is no Cancel).
+  cancel_button:
+    level: recommended
+    description: The Cancel button (declines a friend request).
   ok_button:
     level: recommended
     description: The OK button of the results and the dialogs.
-  cancel_button:
-    level: recommended
-    description: The Cancel button (declines the friend request).
-  friend_request:
+  restore_sta:
     level: optional
-    description: The friend request popup. Its Cancel button is tapped, never OK.
+    description: >-
+      The "Restore STA" stamina dialog: its Cancel is tapped. No Dragon Stone is ever tapped.
   close_button:
     level: optional
     description: A close button (X) of a popup.
@@ -122,14 +180,28 @@ templates:
     description: The "<<<" button of a page.
 
 rules:
-  # --- Popups ----------------------------------------------------------------------------
+  # --- Popups -----------------------------------------------------------------------------
   - name: Decline friend request
     when: {visible: [friend_request, cancel_button]}
     do: [{reset: lost}, {tap: cancel_button}]
     cooldown: 2
 
+  - name: Friend request without Cancel → OK
+    when:
+      visible: friend_request
+      not_visible: cancel_button
+    do: [{reset: lost}, {tap: ok_button}]
+    cooldown: 2
+
+  - name: Mission rewards → OK
+    when: {visible: mission_rewards}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.76]}]
+    cooldown: 2
+
   - name: Close popup
-    when: {visible: close_button, not_visible: [tournament_battle, tournament_board]}
+    when:
+      visible: close_button
+      not_visible: [tournament_board, tournament_battle, tournament_hall]
     do: [{reset: lost}, {tap: close_button}]
     cooldown: 2
 
@@ -138,36 +210,31 @@ rules:
     do: [{reset: lost}, {tap: error_retry}]
     cooldown: 3
 
-  # --- Battle ----------------------------------------------------------------------------
-  # A battle started from a tile: the armed card is spent with it.
-  # A battle tile: "Engage in battle?" Yes starts it (No would move the unit back a tile).
+  # --- Stamina ----------------------------------------------------------------------------
+  - name: Stamina → stop
+    when:
+      visible: restore_sta
+      option: {act_policy: stop}
+    do:
+      - reset: lost
+      - tap: cancel_button
+      - stop: "Out of stamina after {started} tournament(s) started. No Dragon Stone was spent."
+
+  - name: Stamina → cancel and wait
+    when:
+      visible: restore_sta
+      option: {act_policy: wait}
+    do:
+      - reset: lost
+      - tap: cancel_button
+      - wait_minutes: $act_wait_minutes
+    cooldown: 5
+
+  # --- Battle -----------------------------------------------------------------------------
   - name: Engage in battle → Yes
     when: {visible: tournament_engage}
     do: [{reset: lost}, {reset: armed}, {log: "Board: engage in the battle"}, {tap_xy: [0.72, 0.63]}]
     cooldown: 3
-
-  # The round is over (PRELIMINARY RESULT and so on): stop, or go on with the next round.
-  - name: Round result → stop
-    when:
-      visible: tournament_round_result
-      option: {stop_after_round: true}
-    do:
-      - reset: lost
-      - count: rounds
-      - stop: "Round finished ({rounds} played in this run). Check the result, then start again for the next round."
-
-  - name: Round result → next
-    when:
-      visible: tournament_round_result
-      option: {stop_after_round: false}
-    do: [{reset: lost}, {count: rounds}, {reset: picks}, {reset: armed}, {tap_xy: [0.5, 0.9]}]
-    cooldown: 3
-
-  # After a battle: the results (the ranking) go on with a tap in the middle.
-  - name: Battle results → tap on
-    when: {visible: tournament_results}
-    do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
-    cooldown: 2
 
   - name: Battle → tap a ki sphere
     when: {visible: tournament_battle}
@@ -175,22 +242,106 @@ rules:
     cooldown: $tap_every
     delay: 0.3
 
-  # --- Board -----------------------------------------------------------------------------
-  # After a card: one tap per tile, as long as arrows show (the card's steps).
+  - name: Battle results → tap on
+    when: {visible: tournament_results}
+    do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 2
+
+  # --- Results and reward pages -----------------------------------------------------------
+  - name: Round result → tap on
+    when:
+      visible: tournament_round_result
+      not_visible: [tournament_board, tournament_battle, tournament_hall]
+    do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  - name: Reward list → OK
+    when:
+      visible: ok_button
+      not_visible: [tournament_board, tournament_battle, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
+    do: [{reset: lost}, {tap: ok_button}]
+    cooldown: 2
+
+  # --- The tournament hall ------------------------------------------------------------------
+  # A tournament was played and the hall shows PARTICIPATE again: go on with the next one, or
+  # stop when the asked number is done.
+  - name: Tournaments done → stop
+    when:
+      visible: [tournament_hall, tournament_participate]
+      counter_at_least: {in_run: 1, started: $tournaments}
+    do:
+      - reset: lost
+      - stop: "{started} World Tournament(s) played, the last one is finished."
+
+  - name: Tournament finished → PARTICIPATE again
+    when:
+      visible: [tournament_hall, tournament_participate]
+      counter_at_least: {in_run: 1}
+      counter_below: {started: $tournaments}
+    do: [{reset: lost}, {reset: in_run}, {tap_xy: [0.5, 0.66]}]
+    cooldown: 4
+
+  # The hall with nothing started yet: PARTICIPATE (or CONTINUE after a restart mid-tournament).
+  - name: Hall → PARTICIPATE or CONTINUE
+    when:
+      visible: tournament_hall
+      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, tournament_battle]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.66]}]
+    cooldown: 4
+
+  # --- Ambition, bracket and team -------------------------------------------------------------
+  - name: Ambition → Let's do this! (x1.0)
+    when: {visible: ambition_list}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.2]}]
+    cooldown: 3
+
+  - name: Ambition → OK
+    when: {visible: ambition_confirm}
+    do: [{reset: lost}, {count: started}, {log: "Tournament {started}: ambition confirmed"}, {tap_xy: [0.717, 0.637]}]
+    cooldown: 3
+
+  - name: Bracket → Next
+    when: {visible: check_progress}
+    do: [{reset: lost}, {tap_xy: [0.83, 0.83]}]
+    cooldown: 3
+
+  - name: Team → Start!
+    when:
+      visible: team_page
+      not_visible: restore_sta
+    do: [{reset: lost}, {reset: armed}, {tap_xy: [0.87, 0.95]}]
+    cooldown: 4
+
+  - name: Begin round → tap on
+    when: {visible: tournament_begin}
+    do: [{reset: lost}, {reset: armed}, {reset: moves}, {count: in_run}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
+  # --- Board -------------------------------------------------------------------------------
+  # A board seen means a tournament is on (also when the routine started in the middle of one).
+  - name: Board seen → in a tournament
+    when:
+      visible: tournament_board
+      counter_below: {in_run: 1}
+    do: [{count: in_run}]
+    cooldown: 5
+
+  # After a lit card: one tap per tile, as long as arrows show (the card's steps).
   - name: Board → follow an arrow
     when:
-      color_visible: board_arrow
+      visible: tournament_board
       not_visible: tournament_battle
+      color_visible: board_arrow
       counter_at_least: {armed: 1}
       counter_below: {moves: 12}
     do:
       - reset: lost
       - count: moves
-      - log: "Board: step {moves} of card {picks}"
+      - log: "Board: step {moves}"
       - tap_color: board_arrow
     cooldown: 1.5
 
-  # No arrow left: the card's steps are done (or the path ended).
+  # No arrow left: the card's steps are done.
   - name: Board → card done
     when:
       visible: tournament_board
@@ -202,88 +353,36 @@ rules:
       - reset: lost
       - reset: armed
       - reset: moves
-      - log: "Board: card {picks} done"
+      - log: "Board: card done"
     cooldown: 2
 
-  - name: Board → card 1 (left)
+  # A lit card (not yet played this turn): tap it, its arrows show next.
+  - name: Board → play a lit card
     when:
-      visible: tournament_board
+      visible: [tournament_board, card_lit]
       not_visible: tournament_battle
-      counter_below: {picks: 1}
-    do:
-      - reset: lost
-      - count: picks
-      - count: armed
-      - tap_xy: [0.22, 0.83]
-    cooldown: 3
-
-  - name: Board → card 2 (middle)
-    when:
-      visible: tournament_board
-      not_visible: tournament_battle
-      counter_at_least: {picks: 1}
-      counter_below: {picks: 2}
-    do:
-      - reset: lost
-      - count: picks
-      - count: armed
-      - tap_xy: [0.5, 0.8]
-    cooldown: 3
-
-  - name: Board → card 3 (right)
-    when:
-      visible: tournament_board
-      not_visible: tournament_battle
-      counter_at_least: {picks: 2}
-      counter_below: {picks: 3}
-    do:
-      - reset: lost
-      - count: picks
-      - count: armed
-      - tap_xy: [0.83, 0.79]
-    cooldown: 3
-
-  # All three cards of the round are played: the round is over.
-  - name: Round over → stop
-    when:
-      visible: tournament_board
-      not_visible: tournament_battle
-      counter_at_least: {picks: 3}
       counter_below: {armed: 1}
-      option: {stop_after_round: true}
     do:
       - reset: lost
-      - count: rounds
-      - stop: "Round played: {rounds} rounds so far. Check the board and start again for the next round."
-
-  - name: Round over → next round
-    when:
-      visible: tournament_board
-      not_visible: tournament_battle
-      counter_at_least: {picks: 3}
-      counter_below: {armed: 1}
-      option: {stop_after_round: false}
-    do: [{reset: lost}, {count: rounds}, {reset: picks}]
+      - count: armed
+      - reset: moves
+      - log: "Board: play a card"
+      - tap: card_lit
     cooldown: 3
 
-  # --- Results and the rest ------------------------------------------------------------------
-  - name: Results → OK
-    when:
-      visible: ok_button
-      not_visible: [tournament_battle, tournament_board, friend_request]
-    do: [{reset: lost}, {tap: ok_button}]
-    cooldown: 2
-
-  - name: Tap to continue
+  # --- Idle -----------------------------------------------------------------------------------
+  # A still screen none of the rules knows (the "Begin" cutscene, a reward page, Tier UP): a tap
+  # in the middle goes on.
+  - name: Still screen → tap on
     when:
       static_for: $continue_after
-      not_visible: [tournament_battle, tournament_board, ok_button, cancel_button]
-    do: [{tap_xy: [0.5, 0.15]}]
+      not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
+    do: [{tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
   - name: Nothing recognised → back
     when:
-      idle_for: 20
-      not_visible: [tournament_battle, tournament_board, ok_button, cancel_button, friend_request]
+      idle_for: 90
+      not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{reset: lost}, {count: lost}, {tap: back_button}]
-    cooldown: 6
+    cooldown: 10
