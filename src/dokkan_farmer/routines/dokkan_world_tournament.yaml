@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 7
+version: 8
 
 options:
   tournaments:
@@ -166,7 +166,9 @@ templates:
   tournament_battle:
     level: required
     description: >-
-      The "charge(s)" text beside the Remain counter of a battle (the battle with ki spheres).
+      The TURN label at the top left of a battle (the battle with ki spheres; the turn number is
+      left out). The board has none. The "charge(s)" text beside the Remain counter was too
+      unreliable (the background shows through).
   tournament_engage:
     level: optional
     description: >-
