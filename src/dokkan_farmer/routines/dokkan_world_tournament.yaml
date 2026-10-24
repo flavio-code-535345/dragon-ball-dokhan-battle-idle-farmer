@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 18
+version: 19
 
 options:
   tournaments:
@@ -89,8 +89,9 @@ options:
 
 settings:
   tick_interval: 1.0
-  # A run is a tournament that is over (counted when the ambition list shows again): the soft
-  # stop button stops the farm right there, before the next ambition is picked.
+  # A run is a tournament whose Final was played (the fourth round; counted when the tournament
+  # is over, i.e. when the ambition list shows again): the soft stop button stops the farm right
+  # there, before the next ambition is picked.
   run_counter: tournaments_done
   action_delay: 1.5
   ensure_foreground: true
@@ -486,12 +487,26 @@ rules:
 
   # --- Ambition, bracket and team -------------------------------------------------------------
   # The ambition list after a tournament was played: that tournament is over (the next one is
-  # about to start). The run of this routine; a soft stop ends the farm here.
-  - name: Tournament over → counted
+  # about to start). With four rounds played (a Final) it is a run of this routine and a soft
+  # stop ends the farm here; one that ended earlier (a lost round) is not counted.
+  - name: Tournament over → Final played, counted
+    when:
+      visible: ambition_list
+      counter_at_least: {in_run: 1, round_no: 4}
+    do:
+      - reset: in_run
+      - reset: round_no
+      - count: tournaments_done
+      - log: "Tournament over after its Final: run {tournaments_done} (tournaments finished this session)"
+    cooldown: 3
+
+  - name: Tournament over → ended early
     when:
       visible: ambition_list
       counter_at_least: {in_run: 1}
-    do: [{reset: in_run}, {count: tournaments_done}, {log: "Tournament over ({tournaments_done} played in this session)"}]
+    do:
+      - reset: in_run
+      - log: "Tournament over after {round_no} round(s): no Final, not counted as a run"
     cooldown: 3
 
   # The list opens at its top. A row is found by its sentence and tapped; while it is not on
@@ -652,12 +667,12 @@ rules:
 
   - name: Ambition → OK
     when: {visible: ambition_confirm}
-    do: [{reset: lost}, {count: started}, {reset: amb_swipes}, {log: "Tournament {started}: ambition x{ambition} confirmed ({firsts} round wins as 1st so far)"}, {tap_xy: [0.717, 0.637]}]
+    do: [{reset: lost}, {count: started}, {reset: round_no}, {reset: amb_swipes}, {log: "Tournament {started}: ambition x{ambition} confirmed ({firsts} round wins as 1st so far)"}, {tap_xy: [0.717, 0.637]}]
     cooldown: 3
 
   - name: Bracket → Next
     when: {visible: check_progress}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.83]}]
+    do: [{reset: lost}, {count: round_no}, {tap_xy: [0.83, 0.83]}]
     cooldown: 3
 
   - name: Team → Start!
