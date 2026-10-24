@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 4
+version: 5
 
 options:
   tournaments:
@@ -383,7 +383,6 @@ rules:
   - name: Board → follow an arrow
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
       color_visible: board_arrow
       counter_below: {moves: 12}
     do:
@@ -398,7 +397,6 @@ rules:
   - name: Board → right arrow by place
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
       color_absent: board_arrow
       counter_at_least: {armed: 1}
       counter_below: {moves: 12}
@@ -414,7 +412,6 @@ rules:
   - name: Board → card done
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
       color_absent: board_arrow
       counter_at_least: {armed: 1}
       static_for: 3
@@ -429,7 +426,6 @@ rules:
   - name: Board → play a lit card
     when:
       visible: card_lit
-      not_visible: tournament_battle
       counter_below: {armed: 1}
     do:
       - reset: lost
