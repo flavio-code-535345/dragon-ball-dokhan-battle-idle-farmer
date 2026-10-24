@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 11
+version: 12
 
 options:
   tournaments:
@@ -314,8 +314,14 @@ rules:
     do: [{reset: lost}, {tap: xb_skip}]
     cooldown: 2
 
+  # A battle is recognised by what the board has NOT: the ITEM button shows on both, the board
+  # also shows its "Ends within" text or a lit card. The type wheel and the TURN label of a battle
+  # both failed on some frames (the wheel's colours change with the enemy type), the ITEM button
+  # never did. A tap in the middle of a board whose marks were missed is harmless.
   - name: Battle → tap a ki sphere
-    when: {any_visible: [tournament_battle, battle_screen]}
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
     do: [{reset: lost}, {reset: armed}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
