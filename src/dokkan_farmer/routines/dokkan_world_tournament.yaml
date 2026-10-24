@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 8
+version: 9
 
 options:
   tournaments:
@@ -169,6 +169,11 @@ templates:
       The TURN label at the top left of a battle (the battle with ki spheres; the turn number is
       left out). The board has none. The "charge(s)" text beside the Remain counter was too
       unreliable (the background shows through).
+  xb_skip:
+    level: optional
+    description: >-
+      The green double-arrow fast forward button at the right of a battle while the attack
+      animations play: a tap skips to the next planning screen.
   tournament_engage:
     level: optional
     description: >-
@@ -297,6 +302,11 @@ rules:
     when: {visible: tournament_engage}
     do: [{reset: lost}, {reset: armed}, {log: "Board: engage in the battle"}, {tap_xy: [0.72, 0.63]}]
     cooldown: 3
+
+  - name: Battle animation → fast forward
+    when: {visible: xb_skip}
+    do: [{reset: lost}, {tap: xb_skip}]
+    cooldown: 2
 
   - name: Battle → tap a ki sphere
     when: {visible: tournament_battle}
