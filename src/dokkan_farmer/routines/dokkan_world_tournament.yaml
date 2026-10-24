@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 16
+version: 17
 
 options:
   tournaments:
@@ -35,12 +35,13 @@ options:
   ambition:
     label: Ambition (victory bonus; the enemies get stronger with it)
     type: choice
-    choices: ["1.0", "2.0", "2.5", "3.0", "3.5", "5.0", "7.0", "10.0", "15.0", "20.0", "25.0"]
+    choices: ["1.0", "2.0", "2.5", "3.0", "3.5", "10.0", "15.0", "20.0", "25.0", "30.0"]
     default: "1.0"
     help: >-
       The ambition picked at the start of every tournament: the victory bonus multiplier of the
-      list (x1.0 "Let's do this!" up to x25.0 "My chance of winning is about 120%!"). The enemy
-      strength grows with it, see the bars of the Confirm your Ambition dialog.
+      list (x1.0 "Let's do this!" up to x30.0 "Looks like the victory is mine!", the higher rows
+      open with the tier). The enemy strength grows with it, see the bars of the Confirm your
+      Ambition dialog. The row is found by its sentence and the list is scrolled up until it shows.
   act_policy:
     label: When stamina runs out
     type: choice
@@ -146,6 +147,46 @@ templates:
     description: >-
       The sentence above the ambition list ("The enemy strength and the amount of Tournament
       Points earned..."). Its first line, Let's do this! (x1.0), is tapped.
+  ambition_x1:
+    level: optional
+    description: >-
+      The x1.0 row of the ambition list: its sentence "Let's do this!" (a tap on it picks the row).
+  ambition_x2:
+    level: optional
+    description: >-
+      The x2.0 row of the ambition list: its sentence "Let's give it a shot!" (a tap on it picks the row).
+  ambition_x2_5:
+    level: optional
+    description: >-
+      The x2.5 row of the ambition list: its sentence "This is so exciting!" (a tap on it picks the row).
+  ambition_x3:
+    level: optional
+    description: >-
+      The x3.0 row of the ambition list: its sentence "Show me what you've got!" (a tap on it picks the row).
+  ambition_x3_5:
+    level: optional
+    description: >-
+      The x3.5 row of the ambition list: its sentence "Like stealing candy from a baby..." (a tap on it picks the row).
+  ambition_x10:
+    level: optional
+    description: >-
+      The x10.0 row of the ambition list: its sentence "I'll fight only using my left arm." (a tap on it picks the row).
+  ambition_x15:
+    level: optional
+    description: >-
+      The x15.0 row of the ambition list: its sentence "Get lost before I send you flying!" (a tap on it picks the row).
+  ambition_x20:
+    level: optional
+    description: >-
+      The x20.0 row of the ambition list: its sentence "Time to go full throttle!" (a tap on it picks the row).
+  ambition_x25:
+    level: optional
+    description: >-
+      The x25.0 row of the ambition list: its sentence "My chance of winning is about 120%!" (a tap on it picks the row).
+  ambition_x30:
+    level: optional
+    description: >-
+      The x30.0 row of the ambition list: its sentence "Looks like the victory is mine!" (a tap on it picks the row).
   ambition_confirm:
     level: required
     description: The "Confirm your Ambition" dialog (OK).
@@ -441,66 +482,165 @@ rules:
     cooldown: 4
 
   # --- Ambition, bracket and team -------------------------------------------------------------
-  # The list opens at its top (x1.0 to x3.5 and half of x5.0); the higher rows need a swipe up
-  # (a swipe on a list already at its end changes nothing). Rows are tapped at their button.
+  # The list opens at its top. A row is found by its sentence and tapped; while it is not on
+  # screen the list is dragged up (inside the list: a drag from below it does nothing) up to six
+  # times, then back down. The rows move when the tier opens a higher one: no fixed positions.
   - name: Ambition → x1.0
-    when: {visible: ambition_list, option: {ambition: "1.0"}}
-    do: [{reset: lost}, {tap_xy: [0.5, 0.2]}]
+    when: {visible: [ambition_list, ambition_x1], option: {ambition: "1.0"}}
+    do: [{reset: lost}, {tap: ambition_x1}]
     cooldown: 3
 
   - name: Ambition → x2.0
-    when: {visible: ambition_list, option: {ambition: "2.0"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.297]}]
+    when: {visible: [ambition_list, ambition_x2], option: {ambition: "2.0"}}
+    do: [{reset: lost}, {tap: ambition_x2}]
     cooldown: 3
 
   - name: Ambition → x2.5
-    when: {visible: ambition_list, option: {ambition: "2.5"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.394]}]
+    when: {visible: [ambition_list, ambition_x2_5], option: {ambition: "2.5"}}
+    do: [{reset: lost}, {tap: ambition_x2_5}]
     cooldown: 3
 
   - name: Ambition → x3.0
-    when: {visible: ambition_list, option: {ambition: "3.0"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.4875]}]
+    when: {visible: [ambition_list, ambition_x3], option: {ambition: "3.0"}}
+    do: [{reset: lost}, {tap: ambition_x3}]
     cooldown: 3
 
   - name: Ambition → x3.5
-    when: {visible: ambition_list, option: {ambition: "3.5"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.586]}]
+    when: {visible: [ambition_list, ambition_x3_5], option: {ambition: "3.5"}}
+    do: [{reset: lost}, {tap: ambition_x3_5}]
     cooldown: 3
 
-  - name: Ambition → x5.0
-    when: {visible: ambition_list, option: {ambition: "5.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.175]}]
-    cooldown: 4
-
-  - name: Ambition → x7.0
-    when: {visible: ambition_list, option: {ambition: "7.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.258]}]
-    cooldown: 4
-
   - name: Ambition → x10.0
-    when: {visible: ambition_list, option: {ambition: "10.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.353]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x10], option: {ambition: "10.0"}}
+    do: [{reset: lost}, {tap: ambition_x10}]
+    cooldown: 3
 
   - name: Ambition → x15.0
-    when: {visible: ambition_list, option: {ambition: "15.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.445]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x15], option: {ambition: "15.0"}}
+    do: [{reset: lost}, {tap: ambition_x15}]
+    cooldown: 3
 
   - name: Ambition → x20.0
-    when: {visible: ambition_list, option: {ambition: "20.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.541]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x20], option: {ambition: "20.0"}}
+    do: [{reset: lost}, {tap: ambition_x20}]
+    cooldown: 3
 
   - name: Ambition → x25.0
-    when: {visible: ambition_list, option: {ambition: "25.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.636]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x25], option: {ambition: "25.0"}}
+    do: [{reset: lost}, {tap: ambition_x25}]
+    cooldown: 3
+
+  - name: Ambition → x30.0
+    when: {visible: [ambition_list, ambition_x30], option: {ambition: "30.0"}}
+    do: [{reset: lost}, {tap: ambition_x30}]
+    cooldown: 3
+
+  - name: Ambition → scroll up to x1.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x1, ambition_confirm]
+      option: {ambition: "1.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x2.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x2, ambition_confirm]
+      option: {ambition: "2.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x2.5
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x2_5, ambition_confirm]
+      option: {ambition: "2.5"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x3.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x3, ambition_confirm]
+      option: {ambition: "3.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x3.5
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x3_5, ambition_confirm]
+      option: {ambition: "3.5"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x10.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x10, ambition_confirm]
+      option: {ambition: "10.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x15.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x15, ambition_confirm]
+      option: {ambition: "15.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x20.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x20, ambition_confirm]
+      option: {ambition: "20.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x25.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x25, ambition_confirm]
+      option: {ambition: "25.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x30.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x30, ambition_confirm]
+      option: {ambition: "30.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → row not found, scroll back
+    when:
+      visible: ambition_list
+      not_visible: ambition_confirm
+      counter_at_least: {amb_swipes: 6}
+    do:
+      - reset: lost
+      - reset: amb_swipes
+      - log: "Ambition x{ambition}: its row was not found, scrolling the list back"
+      - swipe: [0.5, 0.3, 0.5, 0.62, 400]
+      - swipe: [0.5, 0.3, 0.5, 0.62, 400]
+    cooldown: 3
 
   - name: Ambition → OK
     when: {visible: ambition_confirm}
-    do: [{reset: lost}, {count: started}, {log: "Tournament {started}: ambition x{ambition} confirmed ({firsts} round wins as 1st so far)"}, {tap_xy: [0.717, 0.637]}]
+    do: [{reset: lost}, {count: started}, {reset: amb_swipes}, {log: "Tournament {started}: ambition x{ambition} confirmed ({firsts} round wins as 1st so far)"}, {tap_xy: [0.717, 0.637]}]
     cooldown: 3
 
   - name: Bracket → Next
