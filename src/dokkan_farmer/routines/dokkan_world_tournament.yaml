@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 15
+version: 16
 
 options:
   tournaments:
@@ -500,7 +500,7 @@ rules:
 
   - name: Ambition → OK
     when: {visible: ambition_confirm}
-    do: [{reset: lost}, {count: started}, {log: "Tournament {started}: ambition confirmed"}, {tap_xy: [0.717, 0.637]}]
+    do: [{reset: lost}, {count: started}, {log: "Tournament {started}: ambition x{ambition} confirmed ({firsts} round wins as 1st so far)"}, {tap_xy: [0.717, 0.637]}]
     cooldown: 3
 
   - name: Bracket → Next
