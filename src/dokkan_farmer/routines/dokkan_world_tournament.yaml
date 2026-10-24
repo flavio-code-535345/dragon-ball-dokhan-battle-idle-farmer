@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 10
+version: 11
 
 options:
   tournaments:
@@ -169,6 +169,12 @@ templates:
       The coloured type wheel (a diamond of arrows) at the right of a battle while you plan (the
       battle with ki spheres). The board has none. The TURN label and the "charge(s)" text were
       too unreliable: the background shows through them.
+  battle_screen:
+    level: optional
+    description: >-
+      The TURN label at the top left of a battle (the turn number is left out). A second battle
+      mark: the type wheel (tournament_battle) hides behind a big enemy at times, this label
+      hides on some backgrounds. Either one counts.
   xb_skip:
     level: optional
     description: >-
@@ -244,7 +250,7 @@ rules:
   - name: Close popup
     when:
       visible: close_button
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall]
     do: [{reset: lost}, {tap: close_button}]
     cooldown: 2
 
@@ -309,7 +315,7 @@ rules:
     cooldown: 2
 
   - name: Battle → tap a ki sphere
-    when: {visible: tournament_battle}
+    when: {any_visible: [tournament_battle, battle_screen]}
     do: [{reset: lost}, {reset: armed}, {tap_xy: [$sphere_x, $sphere_y]}]
     cooldown: $tap_every
     delay: 0.3
@@ -323,14 +329,14 @@ rules:
   - name: Round result → tap on
     when:
       visible: tournament_round_result
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall]
     do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Reward list → OK
     when:
       visible: ok_button
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
     do: [{reset: lost}, {tap: ok_button}]
     cooldown: 2
 
@@ -357,7 +363,7 @@ rules:
   - name: Hall → PARTICIPATE or CONTINUE
     when:
       visible: tournament_hall
-      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, board_item_button, tournament_battle]
+      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, board_item_button, tournament_battle, battle_screen]
     do: [{reset: lost}, {tap_xy: [0.5, 0.66]}]
     cooldown: 4
 
@@ -454,7 +460,7 @@ rules:
   - name: Board → follow an arrow
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       color_visible: board_arrow
       counter_below: {moves: 12}
     do:
@@ -469,7 +475,7 @@ rules:
   - name: Board → right arrow by place
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       color_absent: board_arrow
       counter_at_least: {armed: 1}
       counter_below: {moves: 12}
@@ -485,7 +491,7 @@ rules:
   - name: Board → card done
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       color_absent: board_arrow
       counter_at_least: {armed: 1}
       static_for: 3
@@ -500,7 +506,7 @@ rules:
   - name: Board → play a lit card
     when:
       visible: card_lit
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       counter_below: {armed: 1}
     do:
       - reset: lost
@@ -516,7 +522,7 @@ rules:
   - name: Still screen → tap on
     when:
       static_for: $continue_after
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
     do: [{tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
@@ -530,7 +536,7 @@ rules:
   - name: Menu → close
     when:
       visible: menu_title
-      not_visible: [possessions_title, tournament_battle]
+      not_visible: [possessions_title, tournament_battle, battle_screen]
     do: [{reset: lost}, {tap_xy: [0.167, 0.84]}]
     cooldown: 3
 
@@ -540,7 +546,7 @@ rules:
     when:
       idle_for: 10
       counter_below: {lost: 6}
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{count: lost}, {tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
@@ -548,6 +554,6 @@ rules:
     when:
       idle_for: 10
       counter_at_least: {lost: 6}
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{reset: lost}, {tap: back_button}]
     cooldown: 10
