@@ -75,7 +75,7 @@ with `EmulatorGrpc` and `EmulatorConsole`. `AdbDevice.screenshot()` tries the em
 `getScreenshot`, then its console (`screenrecord screenshot` into the shared `EMULATOR_SCREENSHOTS` folder,
 which it empties of `*.png`), then adb `screencap`; the fast paths need the serial's host to equal the
 port's host (`_is_emulator_host`, also behind `is_emulator`), rotation 0 and a working adb.
-`emulator_grpc.py` hand-encodes the few protobuf fields it needs (no protobuf dependency); its frames come
+`EMULATOR_TOUCH` (off by default) sends taps and swipes through the gRPC `sendTouch` instead of `adb shell input` (milliseconds instead of a few hundred; adb takes over for a minute after a failed call). `emulator_grpc.py` hand-encodes the few protobuf fields it needs (no protobuf dependency); its frames come
 top-down although the proto says bottom-up. UI device access goes through `Farmer.device_call` (lock + one
 reconnect), the farm loop through `_with_device` (lock only); the gRPC stream reader and the installer
 deliberately skip the lock. `installer.py` installs APKs/bundles from `apkpure:`, `fdroid:` or URLs.

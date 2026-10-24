@@ -878,7 +878,7 @@
 
   // A tap waits DOUBLE_TAP_MS for a second one on the same spot: the two then go to Android
   // as one double tap (sent separately they would land too far apart).
-  const DOUBLE_TAP_MS = 250;
+  const DOUBLE_TAP_MS = 180;
   let heldTap = null;
 
   function sendTap(x, y, count) {
@@ -1497,6 +1497,7 @@
     const settings = [
       ["ADB_SERIAL", s.adb_serial || "–"],
       ["EMULATOR_CONSOLE", s.emulator_console || "–"],
+      ["EMULATOR_TOUCH", s.emulator_touch ? "gRPC (fast taps)" : "adb"],
       ["EMULATOR_OFF_MINUTES", s.emulator_off_minutes || "never"],
       ["GAME_PACKAGE", s.game_package],
       ["ROUTINE", s.routine],

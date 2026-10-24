@@ -8,7 +8,7 @@ import shlex
 import struct
 import subprocess
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,12 @@ _ORIENTATION_RE = re.compile(r"SurfaceOrientation:\s*(\d)")
 #: How often (seconds) to check Android's screen rotation while the emulator console takes
 #: the screenshots: its frames are never turned, so a rotated screen goes through adb.
 ROTATION_CHECK_SECONDS = 3.0
+#: Touch input through gRPC: how long a tap holds, the gap of a double tap, the time a swipe
+#: waits between two points, and how long adb takes over after a failed call.
+TOUCH_HOLD_SECONDS = 0.04
+DOUBLE_TAP_GAP_SECONDS = 0.08
+SWIPE_STEP_MS = 16
+TOUCH_RETRY_SECONDS = 60.0
 
 
 def validate_serial(serial: str) -> str:
@@ -90,6 +96,7 @@ class AdbDevice(Device):
         timeout: float = 20.0,
         console: EmulatorConsole | None = None,
         grpc: EmulatorGrpc | None = None,
+        touch_grpc: bool = False,
     ) -> None:
         self._serial = validate_serial(serial) if serial.strip() else ""
         self.adb_path = adb_path
@@ -102,6 +109,11 @@ class AdbDevice(Device):
         self.grpc = grpc
         self._grpc_ok = False
         self._grpc_retry_at = 0.0
+        #: Taps and swipes through that gRPC port instead of `adb shell input` (milliseconds
+        #: instead of a few hundred); adb again for a minute after a failure.
+        self.touch_grpc = touch_grpc
+        self._touch_ok = False
+        self._touch_retry_at = 0.0
         #: The last adb command for this device worked. Console screenshots skip adb, so after
         #: an adb failure they wait until adb answers again: a dead link must not look alive.
         self._adb_ok = True
@@ -356,16 +368,68 @@ class AdbDevice(Device):
             raise DeviceError("screencap returned no image (is the device unlocked?)")
         return image
 
+    def _use_touch(self) -> bool:
+        return (
+            self.touch_grpc
+            and self.grpc is not None
+            and self._is_emulator_host(self.grpc.host)
+            and time.monotonic() >= self._touch_retry_at
+            and self._adb_ok
+            and self._screen_rotation() == 0
+        )
+
+    def _touch(self, gesture: Callable[[EmulatorGrpc], None]) -> bool:
+        """Play a gesture through the emulator's gRPC port; False if adb has to do it."""
+        if not self._use_touch():
+            return False
+        assert self.grpc is not None
+        try:
+            gesture(self.grpc)
+        except DeviceError as exc:
+            self._touch_ok = False
+            self._touch_retry_at = time.monotonic() + TOUCH_RETRY_SECONDS
+            log.warning("Touch input through gRPC failed, adb for a minute: %s", exc)
+            return False
+        if not self._touch_ok:
+            log.info("Touch input: through the emulator's gRPC port %s", self.grpc.address)
+            self._touch_ok = True
+        return True
+
+    @staticmethod
+    def _grpc_tap(grpc: EmulatorGrpc, x: int, y: int) -> None:
+        grpc.touch(x, y, True)
+        time.sleep(TOUCH_HOLD_SECONDS)
+        grpc.touch(x, y, False)
+
     def tap(self, x: int, y: int) -> None:
+        if self._touch(lambda g: self._grpc_tap(g, x, y)):
+            return
         self.shell("input", "tap", str(int(x)), str(int(y)))
 
     def double_tap(self, x: int, y: int) -> None:
+        def gesture(g: EmulatorGrpc) -> None:
+            self._grpc_tap(g, x, y)
+            time.sleep(DOUBLE_TAP_GAP_SECONDS)
+            self._grpc_tap(g, x, y)
+
+        if self._touch(gesture):
+            return
         # Each `input` takes a few hundred ms to start: one after the other, the taps land too
         # far apart for a double tap. Started 80 ms apart, they land about 80 ms apart.
         tap = f"input tap {int(x)} {int(y)}"
         self.shell(f"{tap} & sleep 0.08; {tap}; wait")
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> None:
+        def gesture(g: EmulatorGrpc) -> None:
+            steps = max(2, min(30, int(duration_ms) // SWIPE_STEP_MS))
+            pause = max(1, duration_ms) / steps / 1000
+            g.touch(x1, y1, True)
+            for i in range(1, steps + 1):
+                time.sleep(pause)
+                g.touch(x1 + (x2 - x1) * i // steps, y1 + (y2 - y1) * i // steps, i < steps)
+
+        if self._touch(gesture):
+            return
         coords = [str(int(v)) for v in (x1, y1, x2, y2, max(1, duration_ms))]
         self.shell("input", "swipe", *coords)
 
