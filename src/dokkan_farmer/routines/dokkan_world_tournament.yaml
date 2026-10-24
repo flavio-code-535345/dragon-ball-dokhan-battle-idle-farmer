@@ -102,6 +102,10 @@ templates:
     level: required
     description: >-
       The "Total Tour. Pts." label of the tournament hall (PARTICIPATE or CONTINUE is tapped).
+  menu_title:
+    level: optional
+    description: >-
+      The "Menu" title of the in-battle menu (its < < < closes the menu; Abandon Quest is never tapped).
   possessions_title:
     level: optional
     description: >-
@@ -412,8 +416,16 @@ rules:
 
   # The in-battle menu (its Possessions page): < < < leaves it. Its middle is not tapped (Abandon Quest).
   - name: Menu page → back
-    when: {visible: possessions_title}
+    when: {visible: [possessions_title]}
     do: [{reset: lost}, {tap_xy: [0.14, 0.85]}]
+    cooldown: 3
+
+  # The in-battle menu itself: < < < (the spot of the Menu title's button) closes it.
+  - name: Menu → close
+    when:
+      visible: menu_title
+      not_visible: [possessions_title, tournament_battle]
+    do: [{reset: lost}, {tap_xy: [0.167, 0.84]}]
     cooldown: 3
 
   # A screen none of the rules knows (a K.O. or an attack animation): a tap in the middle goes on.
