@@ -215,7 +215,7 @@ rules:
   - name: Close popup
     when:
       visible: close_button
-      not_visible: [tournament_board, tournament_battle, tournament_hall]
+      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall]
     do: [{reset: lost}, {tap: close_button}]
     cooldown: 2
 
@@ -265,14 +265,14 @@ rules:
   - name: Round result → tap on
     when:
       visible: tournament_round_result
-      not_visible: [tournament_board, tournament_battle, tournament_hall]
+      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall]
     do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Reward list → OK
     when:
       visible: ok_button
-      not_visible: [tournament_board, tournament_battle, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
+      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
     do: [{reset: lost}, {tap: ok_button}]
     cooldown: 2
 
@@ -299,7 +299,7 @@ rules:
   - name: Hall → PARTICIPATE or CONTINUE
     when:
       visible: tournament_hall
-      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, tournament_battle]
+      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, board_item_button, tournament_battle]
     do: [{reset: lost}, {tap_xy: [0.5, 0.66]}]
     cooldown: 4
 
@@ -335,7 +335,7 @@ rules:
   # A board seen means a tournament is on (also when the routine started in the middle of one).
   - name: Board seen → in a tournament
     when:
-      visible: tournament_board
+      any_visible: [tournament_board, board_item_button]
       counter_below: {in_run: 1}
     do: [{count: in_run}]
     cooldown: 5
@@ -343,7 +343,7 @@ rules:
   # After a lit card: one tap per tile, as long as arrows show (the card's steps).
   - name: Board → follow an arrow
     when:
-      visible: tournament_board
+      any_visible: [tournament_board, board_item_button]
       not_visible: tournament_battle
       color_visible: board_arrow
       counter_below: {moves: 12}
@@ -358,7 +358,7 @@ rules:
   # with no arrow found, the right arrow's place is tapped. Nothing happens when there is none.
   - name: Board → right arrow by place
     when:
-      visible: tournament_board
+      any_visible: [tournament_board, board_item_button]
       not_visible: tournament_battle
       color_absent: board_arrow
       counter_at_least: {armed: 1}
@@ -374,7 +374,7 @@ rules:
   # No arrow left: the card's steps are done.
   - name: Board → card done
     when:
-      visible: tournament_board
+      any_visible: [tournament_board, board_item_button]
       not_visible: tournament_battle
       color_absent: board_arrow
       counter_at_least: {armed: 1}
@@ -389,7 +389,7 @@ rules:
   # A lit card (not yet played this turn): tap it, its arrows show next.
   - name: Board → play a lit card
     when:
-      visible: [tournament_board, card_lit]
+      visible: card_lit
       not_visible: tournament_battle
       counter_below: {armed: 1}
     do:
@@ -406,7 +406,7 @@ rules:
   - name: Still screen → tap on
     when:
       static_for: $continue_after
-      not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
+      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
     do: [{tap_xy: [0.5, 0.92]}]
     cooldown: 4
 
@@ -422,7 +422,7 @@ rules:
     when:
       idle_for: 10
       counter_below: {lost: 6}
-      not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
+      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{count: lost}, {tap_xy: [0.5, 0.92]}]
     cooldown: 4
 
@@ -430,6 +430,6 @@ rules:
     when:
       idle_for: 10
       counter_at_least: {lost: 6}
-      not_visible: [tournament_board, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
+      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{reset: lost}, {tap: back_button}]
     cooldown: 10
