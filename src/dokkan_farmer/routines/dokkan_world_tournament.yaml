@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 13
+version: 14
 
 options:
   tournaments:
@@ -193,6 +193,11 @@ templates:
     description: >-
       The "Results" tab at the top left of the screens after a round (the ranking, the breakdown,
       the final result): a tap in the middle goes on.
+  result_first_place:
+    level: optional
+    description: >-
+      The 1st place badge (medal and "1st" under the round's name) of a round's result page. Only
+      used to log the placement: Round result: 1st place.
   mission_rewards:
     level: optional
     description: >-
@@ -374,6 +379,13 @@ rules:
     cooldown: 2
 
   # --- Results and reward pages -----------------------------------------------------------
+  - name: Round result (1st place) → tap on
+    when:
+      visible: [tournament_round_result, result_first_place]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall]
+    do: [{reset: lost}, {reset: armed}, {count: firsts}, {log: "Round result: 1st place ({firsts} so far)"}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
   - name: Round result → tap on
     when:
       visible: tournament_round_result
