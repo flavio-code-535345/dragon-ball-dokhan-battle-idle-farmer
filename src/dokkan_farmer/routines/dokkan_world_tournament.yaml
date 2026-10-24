@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 12
+version: 13
 
 options:
   tournaments:
@@ -318,11 +318,53 @@ rules:
   # also shows its "Ends within" text or a lit card. The type wheel and the TURN label of a battle
   # both failed on some frames (the wheel's colours change with the enemy type), the ITEM button
   # never did. A tap in the middle of a board whose marks were missed is harmless.
+  # The spheres move: tap five places in turn (the middle of the screen alone can sit between
+  # them, and the no-effect guard then pauses the rule for two minutes).
   - name: Battle → tap a ki sphere
     when:
       any_visible: [tournament_battle, battle_screen, board_item_button]
       not_visible: [tournament_board, card_lit]
-    do: [{reset: lost}, {reset: armed}, {tap_xy: [$sphere_x, $sphere_y]}]
+      counter_below: {sp: 1}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [$sphere_x, $sphere_y]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (left)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 1}
+      counter_below: {sp: 2}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [0.27, 0.4]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (right)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 2}
+      counter_below: {sp: 3}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [0.62, 0.46]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (top)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 3}
+      counter_below: {sp: 4}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [0.45, 0.34]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (far right)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 4}
+    do: [{reset: lost}, {reset: armed}, {reset: sp}, {tap_xy: [0.82, 0.5]}]
     cooldown: $tap_every
     delay: 0.3
 
