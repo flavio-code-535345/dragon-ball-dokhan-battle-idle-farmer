@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 6
+version: 7
 
 options:
   tournaments:
@@ -32,6 +32,15 @@ options:
     default: 1
     min: 1
     max: 100
+  ambition:
+    label: Ambition (victory bonus; the enemies get stronger with it)
+    type: choice
+    choices: ["1.0", "2.0", "2.5", "3.0", "3.5", "5.0", "7.0", "10.0", "15.0", "20.0", "25.0"]
+    default: "1.0"
+    help: >-
+      The ambition picked at the start of every tournament: the victory bonus multiplier of the
+      list (x1.0 "Let's do this!" up to x25.0 "My chance of winning is about 120%!"). The enemy
+      strength grows with it, see the bars of the Confirm your Ambition dialog.
   act_policy:
     label: When stamina runs out
     type: choice
@@ -341,10 +350,62 @@ rules:
     cooldown: 4
 
   # --- Ambition, bracket and team -------------------------------------------------------------
-  - name: Ambition → Let's do this! (x1.0)
-    when: {visible: ambition_list}
+  # The list opens at its top (x1.0 to x3.5 and half of x5.0); the higher rows need a swipe up
+  # (a swipe on a list already at its end changes nothing). Rows are tapped at their button.
+  - name: Ambition → x1.0
+    when: {visible: ambition_list, option: {ambition: "1.0"}}
     do: [{reset: lost}, {tap_xy: [0.5, 0.2]}]
     cooldown: 3
+
+  - name: Ambition → x2.0
+    when: {visible: ambition_list, option: {ambition: "2.0"}}
+    do: [{reset: lost}, {tap_xy: [0.83, 0.297]}]
+    cooldown: 3
+
+  - name: Ambition → x2.5
+    when: {visible: ambition_list, option: {ambition: "2.5"}}
+    do: [{reset: lost}, {tap_xy: [0.83, 0.394]}]
+    cooldown: 3
+
+  - name: Ambition → x3.0
+    when: {visible: ambition_list, option: {ambition: "3.0"}}
+    do: [{reset: lost}, {tap_xy: [0.83, 0.4875]}]
+    cooldown: 3
+
+  - name: Ambition → x3.5
+    when: {visible: ambition_list, option: {ambition: "3.5"}}
+    do: [{reset: lost}, {tap_xy: [0.83, 0.586]}]
+    cooldown: 3
+
+  - name: Ambition → x5.0
+    when: {visible: ambition_list, option: {ambition: "5.0"}}
+    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.175]}]
+    cooldown: 4
+
+  - name: Ambition → x7.0
+    when: {visible: ambition_list, option: {ambition: "7.0"}}
+    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.258]}]
+    cooldown: 4
+
+  - name: Ambition → x10.0
+    when: {visible: ambition_list, option: {ambition: "10.0"}}
+    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.353]}]
+    cooldown: 4
+
+  - name: Ambition → x15.0
+    when: {visible: ambition_list, option: {ambition: "15.0"}}
+    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.445]}]
+    cooldown: 4
+
+  - name: Ambition → x20.0
+    when: {visible: ambition_list, option: {ambition: "20.0"}}
+    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.541]}]
+    cooldown: 4
+
+  - name: Ambition → x25.0
+    when: {visible: ambition_list, option: {ambition: "25.0"}}
+    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.636]}]
+    cooldown: 4
 
   - name: Ambition → OK
     when: {visible: ambition_confirm}
