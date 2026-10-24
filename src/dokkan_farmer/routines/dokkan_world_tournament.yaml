@@ -102,6 +102,10 @@ templates:
     level: required
     description: >-
       The "Total Tour. Pts." label of the tournament hall (PARTICIPATE or CONTINUE is tapped).
+  title_tap_to_start:
+    level: optional
+    description: >-
+      The "TAP TO START" line of the title screen (after the game was restarted).
   card_lit:
     level: required
     description: >-
@@ -181,6 +185,12 @@ templates:
 
 rules:
   # --- Popups -----------------------------------------------------------------------------
+  # The game was restarted (the title screen): tap to start; a suspended game is resumed by the OK.
+  - name: Title screen → tap to start
+    when: {visible: title_tap_to_start}
+    do: [{reset: lost}, {tap_xy: [0.5, 0.47]}]
+    cooldown: 8
+
   - name: Decline friend request
     when: {visible: [friend_request, cancel_button]}
     do: [{reset: lost}, {tap: cancel_button}]
