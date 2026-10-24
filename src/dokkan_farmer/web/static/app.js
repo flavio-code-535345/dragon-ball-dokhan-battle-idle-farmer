@@ -14,6 +14,7 @@
     routineId: null,
     routineDetail: null,
     optionsDirty: false,
+    softStop: false,
     editorId: null,
     editorDirty: false,
     templates: [],
@@ -206,6 +207,7 @@
     if (active) {
       if (farm.last_rule) facts.push(`Last action: <b>${esc(farm.last_rule)}</b> (${ago(farm.last_rule_at)})`);
       facts.push(`Last run: <b>${ago(farm.last_run_at)}</b>`);
+      if (farm.soft_stop) facts.push(`<b>Soft stop:</b> stops after the run in progress`);
       const extra = Object.entries(farm.counters || {}).filter(([k]) => k !== farm.run_counter);
       for (const [key, value] of extra) facts.push(`${esc(key.replace(/_/g, " "))}: <b>${value}</b>`);
       if (farm.recoveries) facts.push(`Recoveries: <b>${farm.recoveries}</b>`);
@@ -221,6 +223,9 @@
     $("#btn-pause").classList.toggle("hidden", !active || farm.state === "paused");
     $("#btn-resume").classList.toggle("hidden", farm.state !== "paused");
     $("#btn-stop").classList.toggle("hidden", !active);
+    ui.softStop = active && Boolean(farm.soft_stop);
+    $("#btn-soft-stop").classList.toggle("hidden", !active);
+    $("#btn-soft-stop").textContent = ui.softStop ? "✕ Cancel soft stop" : "⏹ Stop after this run";
     $("#routine-select").disabled = active;
     $$("#options-form input, #options-form select").forEach((el) => { el.disabled = active; });
     $("#btn-save-options").disabled = active;
@@ -310,6 +315,10 @@
   }, "Farm started"));
   $("#btn-stop").addEventListener("click", () => run(
     () => api("/api/farm/stop", { method: "POST" }), "Farm stopped",
+  ));
+  $("#btn-soft-stop").addEventListener("click", () => run(
+    () => api("/api/farm/soft-stop", { method: "POST", body: { enabled: !ui.softStop } }),
+    ui.softStop ? "Soft stop cancelled" : "Soft stop: the farm stops after the run in progress",
   ));
   $("#btn-pause").addEventListener("click", () => run(() => api("/api/farm/pause", { method: "POST" })));
   $("#btn-resume").addEventListener("click", () => run(() => api("/api/farm/resume", { method: "POST" })));

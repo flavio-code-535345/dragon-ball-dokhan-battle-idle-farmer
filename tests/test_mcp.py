@@ -55,7 +55,8 @@ def test_handshake_and_tool_list(client):
     )
     assert note.status_code == 202
     names = {t["name"] for t in rpc(client, "tools/list")["result"]["tools"]}
-    assert {"screenshot", "tap", "create_template", "find_templates", "start_farm"} <= names
+    wanted = {"screenshot", "tap", "create_template", "find_templates", "start_farm"}
+    assert wanted | {"soft_stop_farm"} <= names
     assert rpc(client, "nope")["error"]["code"] == -32601
     # The token decides, not a login.
     assert client.post("/mcp/wrong-token-0123456789", json={}).status_code == 404
@@ -148,6 +149,17 @@ def test_farm_status_and_logs(client):
     logging.getLogger("dokkan_farmer.test").warning("a new line")
     newer = call(client, "logs", after=last_id)[0][0]["text"].splitlines()
     assert newer[0].endswith("WARNING a new line") and len(newer) == 2
+
+
+def test_soft_stop_through_mcp(client):
+    content, error = call(client, "soft_stop_farm")  # nothing runs
+    assert not error and content[0]["text"].startswith("stopped")
+    call(client, "start_farm", routine="dokkan_auto_farm")
+    content, error = call(client, "soft_stop_farm")
+    assert not error and "soft stop pending" in content[0]["text"]
+    content, error = call(client, "soft_stop_farm", enabled=False)
+    assert not error and "soft stop pending" not in content[0]["text"]
+    call(client, "stop_farm")
 
 
 def test_token_setting():

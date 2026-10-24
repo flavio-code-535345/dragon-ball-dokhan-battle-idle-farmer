@@ -55,6 +55,71 @@ def test_stop_after_runs(make_sim):
     assert env.clock.t - 1_000_000 < 30 * 60  # stopped early
 
 
+def test_soft_stop_finishes_the_run_in_progress(make_sim):
+    env = make_sim()
+    farmer = env.make_farmer()
+    asked: list[int] = []
+
+    def ask_once() -> None:
+        session = farmer._session
+        if not asked and session is not None and session.runs >= 2:
+            asked.append(session.runs)
+            assert farmer.soft_stop() is True
+            assert farmer.snapshot()["soft_stop"] is True
+
+    summary = env.run(minutes=30, farmer=farmer, on_tick=ask_once)
+    assert asked, "the soft stop was asked for"
+    # Stopped by the next finished run, not at once and not never.
+    assert summary["runs"] == asked[0] + 1
+    assert summary["reason"].startswith("Soft stop: the run in progress is finished")
+    assert not summary["error"]
+    assert env.clock.t - 1_000_000 < 30 * 60
+    assert farmer.snapshot()["state"] == "stopped"
+    assert farmer.soft_stop() is False  # no session any more
+
+
+def test_a_cancelled_soft_stop_goes_on(make_sim):
+    env = make_sim()
+    farmer = env.make_farmer()
+    steps: list[str] = []
+
+    def toggle() -> None:
+        session = farmer._session
+        if session is None:
+            return
+        if not steps and session.runs >= 1:
+            steps.append("asked")
+            farmer.soft_stop()
+        elif steps == ["asked"]:
+            steps.append("cancelled")
+            assert farmer.soft_stop(False) is False
+            assert farmer.snapshot()["soft_stop"] is False
+
+    summary = env.run(minutes=8, farmer=farmer, on_tick=toggle)
+    assert steps == ["asked", "cancelled"]
+    assert summary["runs"] >= 3 and "Soft stop" not in summary["reason"]
+
+
+def test_soft_stop_while_waiting_stops_at_once(make_sim):
+    env = make_sim(SimConfig(act_max=10, act_cost=10, act_regen_seconds=10_000))
+    farmer = env.make_farmer()
+    seen: list[str] = []
+
+    sleep = farmer._sleeper
+
+    def sleep_and_ask(seconds: float) -> None:
+        # The wait is inside one tick: ask from the sleep itself.
+        if farmer.snapshot()["state"] == "waiting" and not seen:
+            seen.append("waiting")
+            farmer.soft_stop()
+        sleep(seconds)
+
+    farmer._sleeper = sleep_and_ask
+    summary = env.run(minutes=30, options={"act_wait_minutes": 20}, farmer=farmer)
+    assert seen and summary["reason"] == "Soft stop: nothing was in progress"
+    assert env.clock.t - 1_000_000 < 30 * 60
+
+
 def test_act_wait_policy(make_sim):
     env = make_sim(SimConfig(act_max=20, act_cost=10, act_regen_seconds=120))
     summary = env.run(minutes=30, options={"act_wait_minutes": 10})

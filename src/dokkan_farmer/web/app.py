@@ -118,6 +118,11 @@ class ScreenPowerRequest(BaseModel):
     on: bool
 
 
+class SoftStopRequest(BaseModel):
+    #: False takes a pending soft stop back.
+    enabled: bool = True
+
+
 class EmulatorPowerRequest(BaseModel):
     action: Literal["start", "stop", "restart"]
 
@@ -376,6 +381,13 @@ def create_app(ctx: AppContext) -> FastAPI:
     @app.post("/api/farm/stop")
     def farm_stop() -> dict[str, Any]:
         ctx.farmer.stop("Stopped by user")
+        return ctx.farmer.snapshot()
+
+    @app.post("/api/farm/soft-stop")
+    def farm_soft_stop(body: SoftStopRequest | None = None) -> dict[str, Any]:
+        """Stop gracefully: after the run in progress (a clear, a tournament...); at once if the
+        farm is only waiting. ``{"enabled": false}`` cancels a pending soft stop."""
+        ctx.farmer.soft_stop(body.enabled if body is not None else True)
         return ctx.farmer.snapshot()
 
     @app.post("/api/farm/pause")
@@ -894,6 +906,8 @@ def create_app(ctx: AppContext) -> FastAPI:
                 line += f": {farm['routine_name']} ({farm.get('routine_id')})"
             if farm.get("message"):
                 line += f" - {farm['message']}"
+            if farm.get("soft_stop"):
+                line += "; soft stop pending (stops after the run in progress)"
             disabled = [r["name"] for r in farm.get("disabled_rules") or []]
             if disabled:
                 line += f"; disabled rules: {', '.join(disabled)}"
@@ -1182,6 +1196,16 @@ def create_app(ctx: AppContext) -> FastAPI:
         @server.tool("Stop farming.")
         def mcp_stop_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
             farm_stop()
+            return [mcp_text(farm_line())]
+
+        @server.tool(
+            "Stop farming gracefully: the run in progress (a clear, a tournament...) is finished "
+            "first, then the farm stops; at once if it is only waiting. enabled=false cancels a "
+            "pending soft stop.",
+            {"enabled": {"type": "boolean"}},
+        )
+        def mcp_soft_stop_farm(args: dict[str, Any]) -> list[dict[str, Any]]:
+            farm_soft_stop(SoftStopRequest(enabled=bool(args.get("enabled", True))))
             return [mcp_text(farm_line())]
 
         @server.tool(

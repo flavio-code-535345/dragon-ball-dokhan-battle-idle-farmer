@@ -223,6 +223,18 @@ def test_farm_start_and_stop(client):
     assert any("Farm started" in line["msg"] for line in lines)
 
 
+def test_soft_stop_endpoint(client):
+    # Nothing runs: nothing to stop softly.
+    idle = client.post("/api/farm/soft-stop")
+    assert idle.status_code == 200 and not idle.json().get("soft_stop")
+    client.post("/api/farm/start", json={"routine": "dokkan_auto_farm"})
+    assert wait_for(lambda: client.get("/api/status").json()["farm"]["state"] == "running")
+    assert client.post("/api/farm/soft-stop").json()["soft_stop"] is True
+    assert client.get("/api/status").json()["farm"]["soft_stop"] is True
+    assert client.post("/api/farm/soft-stop", json={"enabled": False}).json()["soft_stop"] is False
+    client.post("/api/farm/stop")
+
+
 def test_farm_start_errors(client):
     assert client.post("/api/farm/start", json={"routine": "missing"}).status_code == 404
     bad = client.post(

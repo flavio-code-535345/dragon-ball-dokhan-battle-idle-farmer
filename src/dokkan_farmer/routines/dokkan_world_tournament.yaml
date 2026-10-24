@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 17
+version: 18
 
 options:
   tournaments:
@@ -89,6 +89,9 @@ options:
 
 settings:
   tick_interval: 1.0
+  # A run is a tournament that is over (counted when the ambition list shows again): the soft
+  # stop button stops the farm right there, before the next ambition is picked.
+  run_counter: tournaments_done
   action_delay: 1.5
   ensure_foreground: true
   stuck:
@@ -454,7 +457,7 @@ rules:
     when:
       visible: home_tournament_banner
       not_visible: [tournament_hall, tournament_board, check_progress, team_page, ambition_list, ambition_confirm]
-    do: [{reset: lost}, {reset: in_run}, {tap_xy: [0.5, 0.855]}]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.855]}]
     cooldown: 6
 
   - name: Tournaments done → stop
@@ -482,6 +485,15 @@ rules:
     cooldown: 4
 
   # --- Ambition, bracket and team -------------------------------------------------------------
+  # The ambition list after a tournament was played: that tournament is over (the next one is
+  # about to start). The run of this routine; a soft stop ends the farm here.
+  - name: Tournament over → counted
+    when:
+      visible: ambition_list
+      counter_at_least: {in_run: 1}
+    do: [{reset: in_run}, {count: tournaments_done}, {log: "Tournament over ({tournaments_done} played in this session)"}]
+    cooldown: 3
+
   # The list opens at its top. A row is found by its sentence and tapped; while it is not on
   # screen the list is dragged up (inside the list: a drag from below it does nothing) up to six
   # times, then back down. The rows move when the tier opens a higher one: no fixed positions.

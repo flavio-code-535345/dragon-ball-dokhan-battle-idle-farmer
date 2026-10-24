@@ -224,6 +224,10 @@ class Farmer:
         self._last_summary: dict[str, Any] | None = None
         self._stop_request: str | None = None
         self._resume_later = False
+        #: A soft stop was asked for: the farm stops when the run in progress is finished (the
+        #: routine's run counter goes up past ``_soft_stop_runs``).
+        self._soft_stop = False
+        self._soft_stop_runs = 0
         #: The farmer turned Android's screen off to save power (and turns it back on).
         self._screen_off = False
         #: When the web UI last looked at or touched the device.
@@ -250,6 +254,7 @@ class Farmer:
         self._pause_event.clear()
         self._stop_request = None
         self._resume_later = False
+        self._soft_stop = False
         self._set_state(FarmState.STARTING, f"Starting {routine.name}")
         self._thread = threading.Thread(
             target=self._thread_main, args=(routine_id, routine, values), name="farmer", daemon=True
@@ -266,6 +271,30 @@ class Farmer:
         thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=wait)
+
+    def soft_stop(self, enabled: bool = True) -> bool:
+        """Stop gracefully: go on until the run in progress is finished, then stop.
+
+        A run is what the routine's run counter counts (a clear, a tournament...). With nothing
+        in progress (the farm is waiting) it stops at once. ``enabled=False`` takes the request
+        back. Returns whether a soft stop is pending afterwards.
+        """
+        session = self._session
+        if session is None:
+            return False
+        if not enabled:
+            if self._soft_stop:
+                log.info("Soft stop cancelled")
+            self._soft_stop = False
+            return False
+        if not self._soft_stop:
+            log.info("Soft stop: the farm stops when the run in progress is finished")
+        self._soft_stop_runs = session.runs
+        self._soft_stop = True
+        if self._state is FarmState.WAITING:
+            self.stop("Soft stop: nothing was in progress")
+            return False
+        return True
 
     def pause(self) -> None:
         if self.is_running:
@@ -303,6 +332,7 @@ class Farmer:
                 last_rule=session.last_rule,
                 last_rule_at=session.last_rule_wall,
                 last_run_at=session.last_run_wall,
+                soft_stop=self._soft_stop,
                 recoveries=session.recoveries,
                 restarts=session.restarts,
                 disabled_rules=[
@@ -663,6 +693,11 @@ class Farmer:
 
     def _check_limits(self, session: Session, now: float) -> bool:
         settings = session.routine.settings
+        if self._soft_stop and session.runs > self._soft_stop_runs:
+            session.stop_reason = (
+                f"Soft stop: the run in progress is finished ({session.runs} runs)"
+            )
+            return True
         max_runs = resolve_number(settings.stop_after_runs, session.options)
         if max_runs > 0 and session.runs >= max_runs:
             session.stop_reason = f"Finished: reached {int(max_runs)} runs"
@@ -1001,6 +1036,7 @@ class Farmer:
     def _finish(self, session: Session) -> dict[str, Any]:
         self._last_use = self.clock()  # the idle countdown starts when the farm stops
         self._idle_wait = self._off_hours = False
+        self._soft_stop = False
         reason = session.stop_reason or self._stop_request or "Stopped"
         elapsed = self.clock() - session.started
         summary = {
