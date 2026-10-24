@@ -120,6 +120,14 @@ each): from its gRPC port (`EMULATOR_GRPC`, raw pixels, no PNG), or its console
 stream of the frames the emulator draws, up to 30 fps; behind a proxy that holds streams back it
 falls back to single frames. With *Touch control* on, your keyboard types into Android.
 
+**Fast taps.** `adb shell input tap` starts a program on Android for every tap, a few hundred
+milliseconds. With `EMULATOR_TOUCH=true` (needs `EMULATOR_GRPC`) taps and swipes of the web UI
+and of the farm go through the emulator's gRPC port instead (`sendTouch`, a few milliseconds);
+after a failed call adb takes over for a minute (the log says which one is in use: "Touch input:
+through the emulator's gRPC port"). It is off by default: switch it on, then tap in the Screen
+tab's live view and watch that the game reacts. For a smoother picture too, `ANDROID_FPS=30` (the
+game runs at most at 30 fps) and, on a CPU with many cores, `ANDROID_CORES=6`.
+
 **The game says "insufficient space" / the download stops.** Android's storage is full: the
 emulator image creates Android with 6 GB, too little for Dokkan's data. The stack gives a *new*
 Android 32 GB (`ANDROID_STORAGE_MB`), but an existing one keeps its size: Android encrypts its

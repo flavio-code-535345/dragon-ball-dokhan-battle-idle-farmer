@@ -59,11 +59,15 @@ class FakeEmulator:
         self.frames = frames
         self.interval = interval
         self.requests: list[bytes] = []
+        #: (x, y, pressure) of every Touch of every sendTouch call
+        self.touches: list[tuple[int, int, int]] = []
+        self.touch_error: grpc.StatusCode | None = None
         self.streams_open = 0
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
         handlers = {
             "getScreenshot": grpc.unary_unary_rpc_method_handler(self._shot),
             "streamScreenshot": grpc.unary_stream_rpc_method_handler(self._stream),
+            "sendTouch": grpc.unary_unary_rpc_method_handler(self._touch),
         }
         self.server.add_generic_rpc_handlers(
             (
@@ -78,6 +82,15 @@ class FakeEmulator:
     def _shot(self, request: bytes, context) -> bytes:
         self.requests.append(request)
         return image_message(screen())
+
+    def _touch(self, request: bytes, context) -> bytes:
+        if self.touch_error is not None:
+            context.abort(self.touch_error, "no touch today")
+        for number, value in eg._fields(memoryview(request)):
+            assert number == 1 and isinstance(value, memoryview)  # TouchEvent.touches
+            touch = dict(eg._fields(value))
+            self.touches.append((touch.get(1, 0), touch.get(2, 0), touch.get(4, 0)))
+        return b""  # Empty
 
     def _stream(self, request: bytes, context):
         self.requests.append(request)
@@ -173,10 +186,30 @@ def test_a_finished_or_unreachable_stream_raises(fake):
         gone.screenshot()
 
 
+def test_touch_events_are_encoded_like_the_proto():
+    down = eg.encode_touch_event(100, 200, True)
+    assert down == field(1, int_field(1, 100) + int_field(2, 200) + int_field(4, eg.TOUCH_PRESSURE))
+    assert eg.encode_touch_event(100, 200, False) == field(1, int_field(1, 100) + int_field(2, 200))
+    assert eg.encode_touch_event(0, 0, False) == b"\x0a\x00"  # an empty Touch: proto3 zeros
+
+
+def test_touch_reaches_the_emulator(fake):
+    client = EmulatorGrpc(f"127.0.0.1:{fake.port}")
+    client.touch(360, 640, True)
+    client.touch(360, 640, False)
+    assert fake.touches == [(360, 640, eg.TOUCH_PRESSURE), (360, 640, 0)]
+    fake.touch_error = grpc.StatusCode.UNIMPLEMENTED
+    with pytest.raises(DeviceError, match="UNIMPLEMENTED"):
+        client.touch(1, 1, True)
+    client.close()
+
+
 # -------------------------------------------------------------------- device
 FAKE_ADB = """
 import sys
 args = " ".join(sys.argv[1:])
+if "shell input " in args:
+    open({log!r}, "a").write(args + "\\n")
 if "dumpsys" in args:
     print("SurfaceOrientation: 0")
 elif "exec-out" in args:
@@ -189,7 +222,8 @@ def adb(tmp_path) -> Path:
     png = tmp_path / "adb.png"
     cv2.imwrite(str(png), np.full((40, 30, 3), 90, np.uint8))  # grey: from adb
     script = tmp_path / "adb"
-    script.write_text(f"#!{sys.executable}\n" + FAKE_ADB.format(png=str(png)))
+    log = tmp_path / "adb.log"
+    script.write_text(f"#!{sys.executable}\n" + FAKE_ADB.format(png=str(png), log=str(log)))
     script.chmod(0o755)
     return script
 
@@ -207,6 +241,71 @@ def test_adb_device_prefers_grpc(fake, adb):
     assert device.live_stream(20) is None
     assert tuple(device.screenshot()[0, 0]) == (90, 90, 90)
     device.close()
+
+
+def adb_inputs(adb: Path) -> list[str]:
+    log = adb.parent / "adb.log"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
+def test_taps_and_swipes_go_through_grpc_when_asked(fake, adb):
+    device = AdbDevice(
+        "127.0.0.1:5555",
+        adb_path=str(adb),
+        grpc=EmulatorGrpc(f"127.0.0.1:{fake.port}"),
+        touch_grpc=True,
+    )
+    device.tap(300, 400)
+    device.double_tap(10, 20)
+    device.swipe(100, 200, 100, 600, 100)
+    press = eg.TOUCH_PRESSURE
+    assert fake.touches[:2] == [(300, 400, press), (300, 400, 0)]
+    assert fake.touches[2:6] == [(10, 20, press), (10, 20, 0), (10, 20, press), (10, 20, 0)]
+    swipe = fake.touches[6:]
+    assert swipe[0] == (100, 200, press) and swipe[-1] == (100, 600, 0)  # down ... lifted there
+    assert all(p == press for _, _, p in swipe[:-1]) and len(swipe) >= 3
+    assert [y for _, y, _ in swipe] == sorted(y for _, y, _ in swipe)  # moves down the screen
+    assert adb_inputs(adb) == []  # nothing went through `adb shell input`
+    device.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fake adb is a POSIX script")
+def test_touch_through_grpc_is_off_by_default_and_adb_takes_over_on_errors(fake, adb):
+    grpc_port = EmulatorGrpc(f"127.0.0.1:{fake.port}")
+    device = AdbDevice("127.0.0.1:5555", adb_path=str(adb), grpc=grpc_port)  # not asked for
+    device.tap(1, 2)
+    assert fake.touches == [] and adb_inputs(adb) == ["-s 127.0.0.1:5555 shell input tap 1 2"]
+
+    device = AdbDevice("127.0.0.1:5555", adb_path=str(adb), grpc=grpc_port, touch_grpc=True)
+    fake.touch_error = grpc.StatusCode.UNAVAILABLE
+    device.tap(3, 4)  # gRPC fails: adb does it
+    device.tap(5, 6)  # and keeps doing it for a minute
+    assert adb_inputs(adb)[1:] == [
+        "-s 127.0.0.1:5555 shell input tap 3 4",
+        "-s 127.0.0.1:5555 shell input tap 5 6",
+    ]
+    fake.touch_error = None
+    device._touch_retry_at = 0.0  # the minute is over
+    device.tap(7, 8)
+    assert fake.touches[0][:2] == (7, 8) and len(adb_inputs(adb)) == 3
+
+    device.set_serial("192.168.1.50:5555")  # a phone: never the emulator's touchscreen
+    device.tap(9, 9)
+    assert len(adb_inputs(adb)) == 4 and len(fake.touches) == 2
+    device.close()
+
+
+def test_the_touch_setting_reaches_the_device():
+    from dokkan_farmer.device import create_device
+
+    on = Settings.from_env({"EMULATOR_GRPC": "android:8554", "EMULATOR_TOUCH": "true"})
+    assert on.emulator_touch and on.public_dict()["emulator_touch"] is True
+    assert create_device(on).touch_grpc is True
+    assert Settings.from_env({"EMULATOR_GRPC": "android:8554"}).emulator_touch is False
+    # Without the gRPC port there is nothing to send touches to.
+    no_port = Settings.from_env({"EMULATOR_TOUCH": "true"})
+    assert create_device(no_port).touch_grpc is False
 
 
 # ----------------------------------------------------------------------- web

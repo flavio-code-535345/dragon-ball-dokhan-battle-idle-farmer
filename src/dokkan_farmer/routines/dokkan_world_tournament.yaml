@@ -23,7 +23,7 @@ description: >-
   Plays World Tournaments (hall, ambition, bracket, team, board, battles, results and reward
   popups) and stops after the tournaments asked for. Stamina: refills with a Dragon Stone (up to
   the limit), waits for it or stops.
-version: 10
+version: 19
 
 options:
   tournaments:
@@ -35,12 +35,13 @@ options:
   ambition:
     label: Ambition (victory bonus; the enemies get stronger with it)
     type: choice
-    choices: ["1.0", "2.0", "2.5", "3.0", "3.5", "5.0", "7.0", "10.0", "15.0", "20.0", "25.0"]
+    choices: ["1.0", "2.0", "2.5", "3.0", "3.5", "10.0", "15.0", "20.0", "25.0", "30.0"]
     default: "1.0"
     help: >-
       The ambition picked at the start of every tournament: the victory bonus multiplier of the
-      list (x1.0 "Let's do this!" up to x25.0 "My chance of winning is about 120%!"). The enemy
-      strength grows with it, see the bars of the Confirm your Ambition dialog.
+      list (x1.0 "Let's do this!" up to x30.0 "Looks like the victory is mine!", the higher rows
+      open with the tier). The enemy strength grows with it, see the bars of the Confirm your
+      Ambition dialog. The row is found by its sentence and the list is scrolled up until it shows.
   act_policy:
     label: When stamina runs out
     type: choice
@@ -88,6 +89,10 @@ options:
 
 settings:
   tick_interval: 1.0
+  # A run is a tournament whose Final was played (the fourth round; counted when the tournament
+  # is over, i.e. when the ambition list shows again): the soft stop button stops the farm right
+  # there, before the next ambition is picked.
+  run_counter: tournaments_done
   action_delay: 1.5
   ensure_foreground: true
   stuck:
@@ -146,6 +151,46 @@ templates:
     description: >-
       The sentence above the ambition list ("The enemy strength and the amount of Tournament
       Points earned..."). Its first line, Let's do this! (x1.0), is tapped.
+  ambition_x1:
+    level: optional
+    description: >-
+      The x1.0 row of the ambition list: its sentence "Let's do this!" (a tap on it picks the row).
+  ambition_x2:
+    level: optional
+    description: >-
+      The x2.0 row of the ambition list: its sentence "Let's give it a shot!" (a tap on it picks the row).
+  ambition_x2_5:
+    level: optional
+    description: >-
+      The x2.5 row of the ambition list: its sentence "This is so exciting!" (a tap on it picks the row).
+  ambition_x3:
+    level: optional
+    description: >-
+      The x3.0 row of the ambition list: its sentence "Show me what you've got!" (a tap on it picks the row).
+  ambition_x3_5:
+    level: optional
+    description: >-
+      The x3.5 row of the ambition list: its sentence "Like stealing candy from a baby..." (a tap on it picks the row).
+  ambition_x10:
+    level: optional
+    description: >-
+      The x10.0 row of the ambition list: its sentence "I'll fight only using my left arm." (a tap on it picks the row).
+  ambition_x15:
+    level: optional
+    description: >-
+      The x15.0 row of the ambition list: its sentence "Get lost before I send you flying!" (a tap on it picks the row).
+  ambition_x20:
+    level: optional
+    description: >-
+      The x20.0 row of the ambition list: its sentence "Time to go full throttle!" (a tap on it picks the row).
+  ambition_x25:
+    level: optional
+    description: >-
+      The x25.0 row of the ambition list: its sentence "My chance of winning is about 120%!" (a tap on it picks the row).
+  ambition_x30:
+    level: optional
+    description: >-
+      The x30.0 row of the ambition list: its sentence "Looks like the victory is mine!" (a tap on it picks the row).
   ambition_confirm:
     level: required
     description: The "Confirm your Ambition" dialog (OK).
@@ -169,6 +214,12 @@ templates:
       The coloured type wheel (a diamond of arrows) at the right of a battle while you plan (the
       battle with ki spheres). The board has none. The TURN label and the "charge(s)" text were
       too unreliable: the background shows through them.
+  battle_screen:
+    level: optional
+    description: >-
+      The TURN label at the top left of a battle (the turn number is left out). A second battle
+      mark: the type wheel (tournament_battle) hides behind a big enemy at times, this label
+      hides on some backgrounds. Either one counts.
   xb_skip:
     level: optional
     description: >-
@@ -187,6 +238,16 @@ templates:
     description: >-
       The "Results" tab at the top left of the screens after a round (the ranking, the breakdown,
       the final result): a tap in the middle goes on.
+  home_tournament_banner:
+    level: optional
+    description: >-
+      The WORLD TOURNAMENT banner of the home screen: a finished tournament leaves you on the home
+      screen, a tap on the banner opens the hall again.
+  result_first_place:
+    level: optional
+    description: >-
+      The 1st place badge (medal and "1st" under the round's name) of a round's result page. Only
+      used to log the placement: Round result: 1st place.
   mission_rewards:
     level: optional
     description: >-
@@ -244,7 +305,7 @@ rules:
   - name: Close popup
     when:
       visible: close_button
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall]
     do: [{reset: lost}, {tap: close_button}]
     cooldown: 2
 
@@ -308,9 +369,57 @@ rules:
     do: [{reset: lost}, {tap: xb_skip}]
     cooldown: 2
 
+  # A battle is recognised by what the board has NOT: the ITEM button shows on both, the board
+  # also shows its "Ends within" text or a lit card. The type wheel and the TURN label of a battle
+  # both failed on some frames (the wheel's colours change with the enemy type), the ITEM button
+  # never did. A tap in the middle of a board whose marks were missed is harmless.
+  # The spheres move: tap five places in turn (the middle of the screen alone can sit between
+  # them, and the no-effect guard then pauses the rule for two minutes).
   - name: Battle → tap a ki sphere
-    when: {visible: tournament_battle}
-    do: [{reset: lost}, {reset: armed}, {tap_xy: [$sphere_x, $sphere_y]}]
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_below: {sp: 1}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [$sphere_x, $sphere_y]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (left)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 1}
+      counter_below: {sp: 2}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [0.27, 0.4]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (right)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 2}
+      counter_below: {sp: 3}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [0.62, 0.46]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (top)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 3}
+      counter_below: {sp: 4}
+    do: [{reset: lost}, {reset: armed}, {count: sp}, {tap_xy: [0.45, 0.34]}]
+    cooldown: $tap_every
+    delay: 0.3
+
+  - name: Battle → tap a ki sphere (far right)
+    when:
+      any_visible: [tournament_battle, battle_screen, board_item_button]
+      not_visible: [tournament_board, card_lit]
+      counter_at_least: {sp: 4}
+    do: [{reset: lost}, {reset: armed}, {reset: sp}, {tap_xy: [0.82, 0.5]}]
     cooldown: $tap_every
     delay: 0.3
 
@@ -320,23 +429,38 @@ rules:
     cooldown: 2
 
   # --- Results and reward pages -----------------------------------------------------------
+  - name: Round result (1st place) → tap on
+    when:
+      visible: [tournament_round_result, result_first_place]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall]
+    do: [{reset: lost}, {reset: armed}, {count: firsts}, {log: "Round result: 1st place ({firsts} so far)"}, {tap_xy: [0.5, 0.5]}]
+    cooldown: 3
+
   - name: Round result → tap on
     when:
       visible: tournament_round_result
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall]
     do: [{reset: lost}, {reset: armed}, {tap_xy: [0.5, 0.5]}]
     cooldown: 3
 
   - name: Reward list → OK
     when:
       visible: ok_button
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, friend_request, team_page, check_progress, ambition_list, ambition_confirm]
     do: [{reset: lost}, {tap: ok_button}]
     cooldown: 2
 
   # --- The tournament hall ------------------------------------------------------------------
   # A tournament was played and the hall shows PARTICIPATE again: go on with the next one, or
   # stop when the asked number is done.
+  # A tournament that is over leaves you on the home screen: its banner opens the hall.
+  - name: Home → tournament banner
+    when:
+      visible: home_tournament_banner
+      not_visible: [tournament_hall, tournament_board, check_progress, team_page, ambition_list, ambition_confirm]
+    do: [{reset: lost}, {tap_xy: [0.5, 0.855]}]
+    cooldown: 6
+
   - name: Tournaments done → stop
     when:
       visible: [tournament_hall, tournament_participate]
@@ -357,76 +481,198 @@ rules:
   - name: Hall → PARTICIPATE or CONTINUE
     when:
       visible: tournament_hall
-      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, board_item_button, tournament_battle]
+      not_visible: [ambition_list, ambition_confirm, check_progress, team_page, tournament_board, board_item_button, tournament_battle, battle_screen]
     do: [{reset: lost}, {tap_xy: [0.5, 0.66]}]
     cooldown: 4
 
   # --- Ambition, bracket and team -------------------------------------------------------------
-  # The list opens at its top (x1.0 to x3.5 and half of x5.0); the higher rows need a swipe up
-  # (a swipe on a list already at its end changes nothing). Rows are tapped at their button.
+  # The ambition list after a tournament was played: that tournament is over (the next one is
+  # about to start). With four rounds played (a Final) it is a run of this routine and a soft
+  # stop ends the farm here; one that ended earlier (a lost round) is not counted.
+  - name: Tournament over → Final played, counted
+    when:
+      visible: ambition_list
+      counter_at_least: {in_run: 1, round_no: 4}
+    do:
+      - reset: in_run
+      - reset: round_no
+      - count: tournaments_done
+      - log: "Tournament over after its Final: run {tournaments_done} (tournaments finished this session)"
+    cooldown: 3
+
+  - name: Tournament over → ended early
+    when:
+      visible: ambition_list
+      counter_at_least: {in_run: 1}
+    do:
+      - reset: in_run
+      - log: "Tournament over after {round_no} round(s): no Final, not counted as a run"
+    cooldown: 3
+
+  # The list opens at its top. A row is found by its sentence and tapped; while it is not on
+  # screen the list is dragged up (inside the list: a drag from below it does nothing) up to six
+  # times, then back down. The rows move when the tier opens a higher one: no fixed positions.
   - name: Ambition → x1.0
-    when: {visible: ambition_list, option: {ambition: "1.0"}}
-    do: [{reset: lost}, {tap_xy: [0.5, 0.2]}]
+    when: {visible: [ambition_list, ambition_x1], option: {ambition: "1.0"}}
+    do: [{reset: lost}, {tap: ambition_x1}]
     cooldown: 3
 
   - name: Ambition → x2.0
-    when: {visible: ambition_list, option: {ambition: "2.0"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.297]}]
+    when: {visible: [ambition_list, ambition_x2], option: {ambition: "2.0"}}
+    do: [{reset: lost}, {tap: ambition_x2}]
     cooldown: 3
 
   - name: Ambition → x2.5
-    when: {visible: ambition_list, option: {ambition: "2.5"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.394]}]
+    when: {visible: [ambition_list, ambition_x2_5], option: {ambition: "2.5"}}
+    do: [{reset: lost}, {tap: ambition_x2_5}]
     cooldown: 3
 
   - name: Ambition → x3.0
-    when: {visible: ambition_list, option: {ambition: "3.0"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.4875]}]
+    when: {visible: [ambition_list, ambition_x3], option: {ambition: "3.0"}}
+    do: [{reset: lost}, {tap: ambition_x3}]
     cooldown: 3
 
   - name: Ambition → x3.5
-    when: {visible: ambition_list, option: {ambition: "3.5"}}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.586]}]
+    when: {visible: [ambition_list, ambition_x3_5], option: {ambition: "3.5"}}
+    do: [{reset: lost}, {tap: ambition_x3_5}]
     cooldown: 3
 
-  - name: Ambition → x5.0
-    when: {visible: ambition_list, option: {ambition: "5.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.175]}]
-    cooldown: 4
-
-  - name: Ambition → x7.0
-    when: {visible: ambition_list, option: {ambition: "7.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.258]}]
-    cooldown: 4
-
   - name: Ambition → x10.0
-    when: {visible: ambition_list, option: {ambition: "10.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.353]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x10], option: {ambition: "10.0"}}
+    do: [{reset: lost}, {tap: ambition_x10}]
+    cooldown: 3
 
   - name: Ambition → x15.0
-    when: {visible: ambition_list, option: {ambition: "15.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.445]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x15], option: {ambition: "15.0"}}
+    do: [{reset: lost}, {tap: ambition_x15}]
+    cooldown: 3
 
   - name: Ambition → x20.0
-    when: {visible: ambition_list, option: {ambition: "20.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.541]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x20], option: {ambition: "20.0"}}
+    do: [{reset: lost}, {tap: ambition_x20}]
+    cooldown: 3
 
   - name: Ambition → x25.0
-    when: {visible: ambition_list, option: {ambition: "25.0"}}
-    do: [{reset: lost}, {swipe: [0.5, 0.7, 0.5, 0.25, 400]}, {wait: 1}, {tap_xy: [0.83, 0.636]}]
-    cooldown: 4
+    when: {visible: [ambition_list, ambition_x25], option: {ambition: "25.0"}}
+    do: [{reset: lost}, {tap: ambition_x25}]
+    cooldown: 3
+
+  - name: Ambition → x30.0
+    when: {visible: [ambition_list, ambition_x30], option: {ambition: "30.0"}}
+    do: [{reset: lost}, {tap: ambition_x30}]
+    cooldown: 3
+
+  - name: Ambition → scroll up to x1.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x1, ambition_confirm]
+      option: {ambition: "1.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x2.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x2, ambition_confirm]
+      option: {ambition: "2.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x2.5
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x2_5, ambition_confirm]
+      option: {ambition: "2.5"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x3.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x3, ambition_confirm]
+      option: {ambition: "3.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x3.5
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x3_5, ambition_confirm]
+      option: {ambition: "3.5"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x10.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x10, ambition_confirm]
+      option: {ambition: "10.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x15.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x15, ambition_confirm]
+      option: {ambition: "15.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x20.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x20, ambition_confirm]
+      option: {ambition: "20.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x25.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x25, ambition_confirm]
+      option: {ambition: "25.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → scroll up to x30.0
+    when:
+      visible: ambition_list
+      not_visible: [ambition_x30, ambition_confirm]
+      option: {ambition: "30.0"}
+      counter_below: {amb_swipes: 6}
+    do: [{reset: lost}, {count: amb_swipes}, {swipe: [0.5, 0.6, 0.5, 0.35, 500]}]
+    cooldown: 2
+
+  - name: Ambition → row not found, scroll back
+    when:
+      visible: ambition_list
+      not_visible: ambition_confirm
+      counter_at_least: {amb_swipes: 6}
+    do:
+      - reset: lost
+      - reset: amb_swipes
+      - log: "Ambition x{ambition}: its row was not found, scrolling the list back"
+      - swipe: [0.5, 0.3, 0.5, 0.62, 400]
+      - swipe: [0.5, 0.3, 0.5, 0.62, 400]
+    cooldown: 3
 
   - name: Ambition → OK
     when: {visible: ambition_confirm}
-    do: [{reset: lost}, {count: started}, {log: "Tournament {started}: ambition confirmed"}, {tap_xy: [0.717, 0.637]}]
+    do: [{reset: lost}, {count: started}, {reset: round_no}, {reset: amb_swipes}, {log: "Tournament {started}: ambition x{ambition} confirmed ({firsts} round wins as 1st so far)"}, {tap_xy: [0.717, 0.637]}]
     cooldown: 3
 
   - name: Bracket → Next
     when: {visible: check_progress}
-    do: [{reset: lost}, {tap_xy: [0.83, 0.83]}]
+    do: [{reset: lost}, {count: round_no}, {tap_xy: [0.83, 0.83]}]
     cooldown: 3
 
   - name: Team → Start!
@@ -454,7 +700,7 @@ rules:
   - name: Board → follow an arrow
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       color_visible: board_arrow
       counter_below: {moves: 12}
     do:
@@ -469,7 +715,7 @@ rules:
   - name: Board → right arrow by place
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       color_absent: board_arrow
       counter_at_least: {armed: 1}
       counter_below: {moves: 12}
@@ -485,7 +731,7 @@ rules:
   - name: Board → card done
     when:
       any_visible: [tournament_board, board_item_button]
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       color_absent: board_arrow
       counter_at_least: {armed: 1}
       static_for: 3
@@ -500,7 +746,7 @@ rules:
   - name: Board → play a lit card
     when:
       visible: card_lit
-      not_visible: tournament_battle
+      not_visible: [tournament_battle, battle_screen]
       counter_below: {armed: 1}
     do:
       - reset: lost
@@ -516,7 +762,7 @@ rules:
   - name: Still screen → tap on
     when:
       static_for: $continue_after
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, tournament_begin, friend_request, cancel_button, restore_sta, tournament_engage, tournament_results, tournament_round_result, ok_button]
     do: [{tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
@@ -530,7 +776,7 @@ rules:
   - name: Menu → close
     when:
       visible: menu_title
-      not_visible: [possessions_title, tournament_battle]
+      not_visible: [possessions_title, tournament_battle, battle_screen]
     do: [{reset: lost}, {tap_xy: [0.167, 0.84]}]
     cooldown: 3
 
@@ -540,7 +786,7 @@ rules:
     when:
       idle_for: 10
       counter_below: {lost: 6}
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{count: lost}, {tap_xy: [0.5, 0.5]}]
     cooldown: 4
 
@@ -548,6 +794,6 @@ rules:
     when:
       idle_for: 10
       counter_at_least: {lost: 6}
-      not_visible: [tournament_board, board_item_button, tournament_battle, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
+      not_visible: [tournament_board, board_item_button, tournament_battle, battle_screen, tournament_hall, team_page, check_progress, ambition_list, ambition_confirm, friend_request, cancel_button, ok_button, restore_sta]
     do: [{reset: lost}, {tap: back_button}]
     cooldown: 10

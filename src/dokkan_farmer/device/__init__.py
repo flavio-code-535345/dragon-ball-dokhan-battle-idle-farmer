@@ -40,4 +40,5 @@ def create_device(settings: Settings, serial: str | None = None) -> Device:
         adb_path=settings.adb_path,
         console=console,
         grpc=grpc,
+        touch_grpc=settings.emulator_touch and grpc is not None,
     )

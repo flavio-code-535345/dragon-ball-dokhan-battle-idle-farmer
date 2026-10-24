@@ -69,6 +69,9 @@ class Settings:
     emulator_screenshots: str = "/screens"
     #: host:port of the emulator's gRPC port (emulator stack): live view at the game's frame rate
     emulator_grpc: str = ""
+    #: taps and swipes through that gRPC port instead of `adb shell input` (milliseconds, not
+    #: hundreds of): needs emulator_grpc, adb takes over when a call fails
+    emulator_touch: bool = False
     game_package: str = GAME_PACKAGES["global"]
     routine: str = "dokkan_auto_farm"
     autostart: str = "resume"
@@ -121,6 +124,7 @@ class Settings:
             emulator_console=_text(env, "EMULATOR_CONSOLE", ""),
             emulator_screenshots=_text(env, "EMULATOR_SCREENSHOTS", "/screens"),
             emulator_grpc=_text(env, "EMULATOR_GRPC", ""),
+            emulator_touch=_bool(env, "EMULATOR_TOUCH", False),
             game_package=resolve_game_package(_text(env, "GAME_PACKAGE", "global")),
             routine=_text(env, "ROUTINE", "dokkan_auto_farm"),
             autostart=autostart,
@@ -168,6 +172,7 @@ class Settings:
             "adb_serial": self.adb_serial,
             "emulator_console": self.emulator_console,
             "emulator_grpc": self.emulator_grpc,
+            "emulator_touch": self.emulator_touch,
             "game_package": self.game_package,
             "routine": self.routine,
             "autostart": self.autostart,

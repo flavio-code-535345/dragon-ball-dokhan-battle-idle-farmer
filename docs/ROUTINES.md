@@ -52,7 +52,7 @@ settings:
   action_delay: 1.5              # pause after a rule fired
   stop_after_runs: $max_runs     # 0 = never; "$name" refers to an option
   stop_after_minutes: 0
-  run_counter: runs              # which counter counts as "runs" (stats, stop, notifications)
+  run_counter: runs              # which counter counts as "runs" (stats, stop, soft stop, notifications)
   ensure_foreground: true        # relaunch the game if another app is in front
   foreground_check_seconds: 30
   stuck:
@@ -407,6 +407,12 @@ On top of your rules the engine:
 - **Pauses rules that have no effect.** A rule that fires 3 times in a row while the screen stays
   identical is skipped for 2 minutes, so lower rules (fallbacks) get a chance. Example: the "use ACT
   item" button when you have no items left.
+- **Soft stop.** The web UI's *Stop after this run* button (also the API's `POST
+  /api/farm/soft-stop` and the MCP tool `soft_stop_farm`) lets the farm finish the run in
+  progress and then stop: the first time the `run_counter` counts up after the request. With
+  nothing in progress (a `wait_minutes` wait) it stops at once. A routine whose run counter never
+  counts up cannot be stopped softly, so give it one (`dokkan_world_tournament` counts a finished
+  tournament, when the ambition list shows again).
 - **Keeps the game in front.** If another app is in front twice in a row, it relaunches the game.
 - **Wakes the screen.** After a few black screenshots it sends `WAKEUP`.
 - **Reconnects.** When the device is unreachable it retries with back-off (5 s up to 60 s) and

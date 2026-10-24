@@ -152,6 +152,9 @@ services:
       # the live view at the game's frame rate (gRPC; the console is the fallback).
       EMULATOR_CONSOLE: android:5554
       EMULATOR_GRPC: android:8554
+      # Taps and swipes through that gRPC port too (milliseconds, `adb shell input` takes a few
+      # hundred each): the web UI and the farm respond faster. adb takes over when a call fails.
+      EMULATOR_TOUCH: ${EMULATOR_TOUCH:-false}
       # Shut the whole emulator down after this many minutes without a farm and without anyone
       # using the web UI (0 = never); the farm or the web UI's Start button starts it again.
       EMULATOR_OFF_MINUTES: ${EMULATOR_OFF_MINUTES:-30}

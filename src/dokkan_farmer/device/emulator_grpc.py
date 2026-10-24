@@ -6,7 +6,10 @@ scaled: on request (``getScreenshot``) or each time Android draws a new frame
 game's own frame rate. The emulator stack opens the service without a token (``-grpc``),
 reachable only inside the stack's network.
 
-The two messages used are encoded by hand (a few protobuf fields of
+Taps and swipes can go the same way (``sendTouch``): a few milliseconds instead of the few
+hundred ``adb shell input`` takes to start.
+
+The messages used are encoded by hand (a few protobuf fields of
 ``emulator_controller.proto``) to keep protobuf out of the dependencies.
 """
 
@@ -35,6 +38,10 @@ IDLE_SECONDS = 30.0
 #: The game's sound: 16-bit stereo PCM at this rate (AudioFormat of the proto).
 AUDIO_RATE = 44100
 AUDIO_CHANNELS = 2
+#: ``Touch.pressure`` of a finger that is down (0 = lifted).
+TOUCH_PRESSURE = 1024
+#: A touch call takes milliseconds: waiting long for a dead emulator would stall the farm.
+TOUCH_TIMEOUT = 3.0
 
 
 # ------------------------------------------------------------------ protobuf
@@ -100,6 +107,17 @@ def encode_image_format(width: int = 0, height: int = 0, fmt: int = RGB888) -> b
         if value:  # proto3 leaves zeros out
             out += _varint(number << 3) + _varint(value)
     return out
+
+
+def encode_touch_event(x: int, y: int, pressed: bool, identifier: int = 0) -> bytes:
+    """A ``TouchEvent`` with one ``Touch`` (x = 1, y = 2, identifier = 3, pressure = 4)."""
+    touch = encode_fields(
+        (1, max(0, int(x))),
+        (2, max(0, int(y))),
+        (3, identifier),
+        (4, TOUCH_PRESSURE if pressed else 0),
+    )
+    return _varint(1 << 3 | 2) + _varint(len(touch)) + touch  # touches = 1 (repeated)
 
 
 @dataclass(frozen=True)
@@ -202,6 +220,14 @@ class EmulatorGrpc:
         if frame is None:
             raise DeviceError("The emulator sent an empty screenshot (is its display on?)")
         return frame.to_bgr()
+
+    def touch(self, x: int, y: int, pressed: bool) -> None:
+        """A finger down (or moved, while it is down) at pixel (x, y), or lifted there."""
+        call = self._rpc_channel().unary_unary(_SERVICE + "sendTouch")
+        try:
+            call(encode_touch_event(x, y, pressed), timeout=min(self.timeout, TOUCH_TIMEOUT))
+        except grpc.RpcError as exc:
+            raise self._error(exc) from exc
 
     def audio(self) -> Iterator[bytes]:
         """The game's sound as it plays: 16-bit little-endian stereo PCM at AUDIO_RATE.
